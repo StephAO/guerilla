@@ -66,7 +66,7 @@ def neural_net(channels):
     # placeholders
     data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
     data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
-    real_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
+    true_value = tf.placeholder(tf.float32, shape=[1])
 
     sess.run(tf.initialize_all_variables())
 
@@ -90,11 +90,13 @@ def neural_net(channels):
     o_fc_2 = tf.nn.relu(tf.matmul(o_fc_1, W_fc_2) + b_fc_2)
 
     # final_output
-    pred_value = tf.tanh(tf.matmul(o_fc_2, W) + b)
+    pred_value = tf.sigmoid(tf.matmul(o_fc_2, W) + b)
 
-    log_l = (-1)*(pred_value)
+    
+    # Minimize cross_entropy. Read up on cross_entropy b/c i remember very little apparently
+    x_ent = (-1)*(true_value*tf.log(pred_value) + (1-true_value)*tf.log(1-pred_value))
 
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(log_l)
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(x_ent)
 
     # a,b,c,d = sess.run([o_grid, o_rank, o_file, o_diag], feed_dict={data: channels, data_diags: diagonals})
     # print np.shape(a)
@@ -115,14 +117,15 @@ def neural_net(channels):
 
 
 
-def epd_to_channels(epd):
+def fen_to_channels(epd):
     """
-    Converts and epd string to channels for neural net.
+    Converts a fen string to channels for neural net.
+    Always assumes that it's white's turn
     @TODO deal with en passant and castling
 
     Inputs:
         epd:
-            epd or fen string describing current state (no distinction has been made yet)
+            epd or fen string describing current state.
 
     Output:
         Channels:
@@ -137,11 +140,11 @@ def epd_to_channels(epd):
         In order they are Pawns, Rooks, Knights, Bishops, Queens, Kings.
     """
 
-    epd = epd.split(' ')
-    board_str = epd[0]
-    turn = epd[1]
-    castling = epd[2]
-    en_passant = epd[3]
+    fen = fen.split(' ')
+    board_str = fen[0]
+    turn = fen[1]
+    castling = fen[2]
+    en_passant = fen[3]
 
     channels = np.zeros((8,8,NUM_CHANNELS))
 
@@ -157,7 +160,7 @@ def epd_to_channels(epd):
             file += int(char)
             continue
         else:
-            my_piece = (char.islower() and turn == 'w') or (char.isupper() and turn == 'b')
+            my_piece = char.islower()
             char = char.lower()
             if my_piece:
                 channels[rank, file, piece_indices[char]] = 1
@@ -207,18 +210,45 @@ def get_diagonals(channels):
     return diagonals
 
 
+def get_stockfish_values(boards):
+    ''' Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
+        the scores to a winning probability between 0 and 1 (see sigmoid_array for how the sigmoid was chosen)
 
+        inputs:
+            boards:
+                list of board fens
+
+        outputs:
+            values:
+                a list of values for each board ranging between 0 and 1
+    '''
+
+        
+    cp = []
+    for b in boards:
+    # cp = centipawns advantage
+        cp.append(sf.stockfish_scores(true_scores, seconds = 1))
+    cp = np.array(cp)
+    return sigmoid_array(cp)
+
+def sigmoid_array(values):
+    ''' From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
+        1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a few data point
+        and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided on (by me, deal with it)
+        Ideally this fitter function is learned, but this is just for testing so...'''
+    return 1./(1. + np.exp(-0.00547*values))
 
 
 
 board = chess.Board(chess.STARTING_FEN, chess960=False)
 print board.epd()
 # channels = np.zeros((BATCH_SIZE,8,8,NUM_CHANNELS))
-# channels[0] = epd_to_channels(board.epd())
+# channels[0] = fen_to_channels(board.epd())
 
 # print channels[0][0][0]
 
 # neural_net(channels)
 # for i in xrange(1,10):
-print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1) # "4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r" mate in 2 if whtie
+# print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
+print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie
 

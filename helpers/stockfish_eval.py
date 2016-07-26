@@ -37,8 +37,8 @@ def stockfish_scores(fen, seconds=1, threads=None, memory=None, all_scores=False
     # Shell out to Stockfish
     cmd =  ' '.join( ['./stockfish_eval.sh' ,fen, str(seconds) , binary, str(threads), str(memory) ] )
     output = subprocess.check_output(cmd, shell=True).strip().split('\n')
-    
+
     if len(output) == 2:
-        return 100 if int(output[1]) > 0 else -100
+        return 10000 if int(output[1]) > 0 else -10000
     else:
-        return float(output[0])/100.0
+        return float(output[0])

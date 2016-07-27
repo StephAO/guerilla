@@ -1,7 +1,11 @@
+import sys
+sys.path.insert(0, 'helpers/')
+
 import tensorflow as tf
 import numpy as np
 import chess
-import stockfish_eval as sf
+from chess_game_parser import get_fens
+# import stockfish_eval as sf
 
 def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
@@ -21,6 +25,7 @@ def conv8x1_line(x, W): # includes ranks, files, and diags
 NUM_FEAT = 10
 BATCH_SIZE = 100
 NUM_HIDDEN = 1024
+LEARNING_RATE = 0.001
 
 NUM_CHANNELS = 6*2
 piece_indices = {
@@ -34,9 +39,7 @@ piece_indices = {
 
 def neural_net(channels):
 
-    diagonals = np.zeros((BATCH_SIZE,10,8,NUM_CHANNELS))
-    for i in xrange(BATCH_SIZE):
-        diagonals[i] = get_diagonals(channels[i])
+    
 
     sess = tf.InteractiveSession()
     # weights
@@ -60,13 +63,13 @@ def neural_net(channels):
     b_fc_2 = bias_variable([NUM_HIDDEN])
 
     # Ouput layer
-    W_final = weight_variable([NUM_HIDDEN])
+    W_final = weight_variable([NUM_HIDDEN,1])
     b_final = bias_variable([1])
 
     # placeholders
     data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
     data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
-    true_value = tf.placeholder(tf.float32, shape=[1])
+    true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
 
     sess.run(tf.initialize_all_variables())
 
@@ -90,13 +93,17 @@ def neural_net(channels):
     o_fc_2 = tf.nn.relu(tf.matmul(o_fc_1, W_fc_2) + b_fc_2)
 
     # final_output
-    pred_value = tf.sigmoid(tf.matmul(o_fc_2, W) + b)
+    pred_value = tf.sigmoid(tf.matmul(o_fc_2, W_final) + b_final)
 
     
-    # Minimize cross_entropy. Read up on cross_entropy b/c i remember very little apparently
-    x_ent = (-1)*(true_value*tf.log(pred_value) + (1-true_value)*tf.log(1-pred_value))
+    # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
+    # Using squared error instead
+    cost = tf.reduce_sum(tf.pow(tf.sub(pred_value, true_value), 2))
 
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(x_ent)
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+
+    # for i in xrange(num_batch*ne):  
+    #     _, loss = sess.run([train_step, log_l], feed_dict={x: batch[i%num_batch], y: batchl[i%num_batch]})
 
     # a,b,c,d = sess.run([o_grid, o_rank, o_file, o_diag], feed_dict={data: channels, data_diags: diagonals})
     # print np.shape(a)
@@ -105,19 +112,20 @@ def neural_net(channels):
     # print np.shape(d)
 
 
-    print np.shape(o_grid.eval(feed_dict={data: channels, data_diags: diagonals}))
-    print np.shape(o_rank.eval(feed_dict={data: channels, data_diags: diagonals}))
-    print np.shape(o_file.eval(feed_dict={data: channels, data_diags: diagonals}))
-    print np.shape(o_diag.eval(feed_dict={data: channels, data_diags: diagonals}))
-    print np.shape(o_conn.eval(feed_dict={data: channels, data_diags: diagonals}))
+    # print np.shape(o_grid.eval(feed_dict={data: channels, data_diags: diagonals}))
+    # print np.shape(o_rank.eval(feed_dict={data: channels, data_diags: diagonals}))
+    # print np.shape(o_file.eval(feed_dict={data: channels, data_diags: diagonals}))
+    # print np.shape(o_diag.eval(feed_dict={data: channels, data_diags: diagonals}))
+    # print np.shape(o_conn.eval(feed_dict={data: channels, data_diags: diagonals}))
 
-    print np.shape(o_fc_1.eval(feed_dict={data: channels, data_diags: diagonals}))
+    print np.shape(pred_value.eval(feed_dict={data: channels, data_diags: diagonals}))
+
 
     ## FEED THE PLACEHOLDER'S THEY'RE HUNGRY
 
 
 
-def fen_to_channels(epd):
+def fen_to_channels(fen):
     """
     Converts a fen string to channels for neural net.
     Always assumes that it's white's turn
@@ -240,15 +248,22 @@ def sigmoid_array(values):
 
 
 
-board = chess.Board(chess.STARTING_FEN, chess960=False)
-print board.epd()
+fens = get_fens(2)
+print len(fens)
+
 # channels = np.zeros((BATCH_SIZE,8,8,NUM_CHANNELS))
 # channels[0] = fen_to_channels(board.epd())
 
-# print channels[0][0][0]
+# diagonals = np.zeros((BATCH_SIZE,10,8,NUM_CHANNELS))
+# for i in xrange(BATCH_SIZE):
+#     diagonals[i] = get_diagonals(channels[i])
+
+
+
+# # print channels[0][0][0]
 
 # neural_net(channels)
 # for i in xrange(1,10):
 # print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
-print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie
+# print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie
 

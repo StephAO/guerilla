@@ -43,9 +43,11 @@ def flip_board(fen):
             new_fen += char.upper()
         else:
             new_fen += char
+    new_fen_list = new_fen.split('/')
+    new_fen = '/'.join(new_fen_list[::-1])
     return new_fen
 
-def get_fens(num_games):
+def get_fens(num_games=-1):
     ''' Returns a list of fens from games. Will either read from num_games games or all games in folder /pgn_files/single_game_pgns
         inputs:
             num_games:
@@ -54,11 +56,10 @@ def get_fens(num_games):
             fens:
                 list of fen strings from games
     '''
-
     path = '/home/stephane/guerilla/helpers/pgn_files/single_game_pgns'
     files = [f for f in listdir(path)[:num_games] if isfile(join(path, f))]
     fens = []
-    for f in files[0:num_games]:
+    for f in files[:num_games]:
         fens.extend(read_pgn(join(path, f)))
     return fens
 # print len(read_pgn('ct-Aronian, Levon-Carlsen, Magnus-2014.2.4__2.pgn'))

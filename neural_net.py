@@ -4,8 +4,9 @@ sys.path.insert(0, 'helpers/')
 import tensorflow as tf
 import numpy as np
 import chess
+import pickle
 from chess_game_parser import get_fens
-# import stockfish_eval as sf
+import stockfish_eval as sf
 
 def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
@@ -23,7 +24,7 @@ def conv8x1_line(x, W): # includes ranks, files, and diags
 
 
 NUM_FEAT = 10
-BATCH_SIZE = 100
+BATCH_SIZE = 5
 NUM_HIDDEN = 1024
 LEARNING_RATE = 0.001
 
@@ -37,9 +38,7 @@ piece_indices = {
     'k' : 5,
 }
 
-def neural_net(channels):
-
-    
+def neural_net(boards, diagonals, true_values, save_end_weights=True):
 
     sess = tf.InteractiveSession()
     # weights
@@ -102,27 +101,40 @@ def neural_net(channels):
 
     train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
 
-    # for i in xrange(num_batch*ne):  
-    #     _, loss = sess.run([train_step, log_l], feed_dict={x: batch[i%num_batch], y: batchl[i%num_batch]})
+    print sess.run(W_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-    # a,b,c,d = sess.run([o_grid, o_rank, o_file, o_diag], feed_dict={data: channels, data_diags: diagonals})
-    # print np.shape(a)
-    # print np.shape(b)
-    # print np.shape(c)
-    # print np.shape(d)
+    for i in xrange(np.shape(boards)[0]):  
+        sess.run([train_step], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
 
+    print sess.run(W_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-    # print np.shape(o_grid.eval(feed_dict={data: channels, data_diags: diagonals}))
-    # print np.shape(o_rank.eval(feed_dict={data: channels, data_diags: diagonals}))
-    # print np.shape(o_file.eval(feed_dict={data: channels, data_diags: diagonals}))
-    # print np.shape(o_diag.eval(feed_dict={data: channels, data_diags: diagonals}))
-    # print np.shape(o_conn.eval(feed_dict={data: channels, data_diags: diagonals}))
+    if save_end_weights:
+        weights = {}
+        weights['W_grid'] = sess.run(W_grid, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['W_rank'] = sess.run(W_rank, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['W_file'] = sess.run(W_file, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['W_diag'] = sess.run(W_diag, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-    print np.shape(pred_value.eval(feed_dict={data: channels, data_diags: diagonals}))
+        weights['W_fc_1'] = sess.run(W_fc_1, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['W_fc_2'] = sess.run(W_fc_2, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['W_final'] = sess.run(W_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+
+        weights['b_grid'] = sess.run(b_grid, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['b_rank'] = sess.run(b_rank, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['b_file'] = sess.run(b_file, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['b_diag'] = sess.run(b_diag, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+
+        weights['b_fc_1'] = sess.run(b_fc_1, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['b_fc_2'] = sess.run(b_fc_2, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weights['b_final'] = sess.run(b_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+
+        pickle.dump(weights, open('weights.p', 'wb'))
 
 
     ## FEED THE PLACEHOLDER'S THEY'RE HUNGRY
-
+def load_data(filename = 'weights.p'):
+    weights = pickle.load(open(filename, 'rb'))
+    print weights['W_final']
 
 
 def fen_to_channels(fen):
@@ -133,7 +145,7 @@ def fen_to_channels(fen):
 
     Inputs:
         epd:
-            epd or fen string describing current state.
+            epd or fen string describing current state. Currently only using board state
 
     Output:
         Channels:
@@ -148,18 +160,18 @@ def fen_to_channels(fen):
         In order they are Pawns, Rooks, Knights, Bishops, Queens, Kings.
     """
 
-    fen = fen.split(' ')
-    board_str = fen[0]
-    turn = fen[1]
-    castling = fen[2]
-    en_passant = fen[3]
+    # fen = fen.split(' ')
+    # board_str = fen[0]
+    # turn = fen[1]
+    # castling = fen[2]
+    # en_passant = fen[3]
 
     channels = np.zeros((8,8,NUM_CHANNELS))
 
     file = 0
     rank = 0
     empty_char = False
-    for char in board_str:
+    for char in fen:
         if char == '/':
             file = 0
             rank += 1
@@ -229,14 +241,13 @@ def get_stockfish_values(boards):
         outputs:
             values:
                 a list of values for each board ranging between 0 and 1
-    '''
-
-        
+    '''        
     cp = []
     for b in boards:
     # cp = centipawns advantage
-        cp.append(sf.stockfish_scores(true_scores, seconds = 1))
+        cp.append(sf.stockfish_scores(b, seconds = 1))
     cp = np.array(cp)
+    print cp
     return sigmoid_array(cp)
 
 def sigmoid_array(values):
@@ -248,21 +259,32 @@ def sigmoid_array(values):
 
 
 
-fens = get_fens(2)
-print len(fens)
+fens = get_fens(num_games=2)
+fens = fens[:20]
 
-# channels = np.zeros((BATCH_SIZE,8,8,NUM_CHANNELS))
-# channels[0] = fen_to_channels(board.epd())
+num_batches = len(fens)/BATCH_SIZE
 
-# diagonals = np.zeros((BATCH_SIZE,10,8,NUM_CHANNELS))
-# for i in xrange(BATCH_SIZE):
-#     diagonals[i] = get_diagonals(channels[i])
+boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
+diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
+print "finished loading"
+true_values = np.reshape(get_stockfish_values(fens), (num_batches, BATCH_SIZE))
+print "finished getting stockfish values"
 
+for i in xrange(num_batches*BATCH_SIZE):
+    batch_num = i/BATCH_SIZE
+    batch_idx = i % BATCH_SIZE
+    boards[batch_num][batch_idx] = fen_to_channels(fens[i])
 
+    for i in xrange(BATCH_SIZE):
+        diagonals[batch_num][batch_idx] = get_diagonals(boards[batch_num][batch_idx])
+
+print np.shape(boards)
+print np.shape(diagonals)
+print np.shape(true_values)
 
 # # print channels[0][0][0]
 
-# neural_net(channels)
+neural_net(boards, diagonals, true_values)
 # for i in xrange(1,10):
 # print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
 # print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie

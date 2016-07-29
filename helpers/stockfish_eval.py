@@ -35,7 +35,7 @@ def stockfish_scores(fen, seconds=1, threads=None, memory=None, all_scores=False
     binary = 'linux'
 
     # Shell out to Stockfish
-    cmd =  ' '.join( ['./stockfish_eval.sh' ,fen, str(seconds) , binary, str(threads), str(memory) ] )
+    cmd =  ' '.join( ['./helpers/stockfish_eval.sh' ,fen, str(seconds) , binary, str(threads), str(memory) ] )
     output = subprocess.check_output(cmd, shell=True).strip().split('\n')
 
     if len(output) == 2:

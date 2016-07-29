@@ -242,12 +242,13 @@ def get_stockfish_values(boards):
             values:
                 a list of values for each board ranging between 0 and 1
     '''        
-    cp = []
+    cps = []
     for b in boards:
     # cp = centipawns advantage
-        cp.append(sf.stockfish_scores(b, seconds = 1))
+        cp = sf.stockfish_scores(b, seconds = 1)
+        if cp is not None:
+            cps.append(cp)
     cp = np.array(cp)
-    print cp
     return sigmoid_array(cp)
 
 def sigmoid_array(values):
@@ -258,17 +259,20 @@ def sigmoid_array(values):
     return 1./(1. + np.exp(-0.00547*values))
 
 
+print 'This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)'
+raw_input()
+print 'Training data. Will save weights to pickle'
 
-fens = get_fens(num_games=2)
-fens = fens[:20]
+fens = get_fens(num_games=500)
+print "Finished retrieving fens.\nBegin retrieving stockfish values.\n"
 
 num_batches = len(fens)/BATCH_SIZE
 
 boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
 diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
-print "finished loading"
+
 true_values = np.reshape(get_stockfish_values(fens), (num_batches, BATCH_SIZE))
-print "finished getting stockfish values"
+print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
 
 for i in xrange(num_batches*BATCH_SIZE):
     batch_num = i/BATCH_SIZE
@@ -277,10 +281,6 @@ for i in xrange(num_batches*BATCH_SIZE):
 
     for i in xrange(BATCH_SIZE):
         diagonals[batch_num][batch_idx] = get_diagonals(boards[batch_num][batch_idx])
-
-print np.shape(boards)
-print np.shape(diagonals)
-print np.shape(true_values)
 
 # # print channels[0][0][0]
 

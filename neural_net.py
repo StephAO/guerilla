@@ -38,9 +38,8 @@ piece_indices = {
     'k' : 5,
 }
 
-def neural_net(boards, diagonals, true_values, save_end_weights=True):
+def neural_net(sess, data, data_diags, true_value):
 
-    sess = tf.InteractiveSession()
     # weights
     W_grid = weight_variable([5,5,NUM_CHANNELS,NUM_FEAT])
     W_rank = weight_variable([8,1,NUM_CHANNELS,NUM_FEAT])
@@ -65,10 +64,24 @@ def neural_net(boards, diagonals, true_values, save_end_weights=True):
     W_final = weight_variable([NUM_HIDDEN,1])
     b_final = bias_variable([1])
 
-    # placeholders
-    data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
-    data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
-    true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
+    weights = {}
+    weights['W_grid'] = W_grid
+    weights['W_rank'] = W_rank
+    weights['W_file'] = W_file
+    weights['W_diag'] = W_diag
+
+    weights['W_fc_1'] = W_fc_1
+    weights['W_fc_2'] = W_fc_2
+    weights['W_final'] = W_final
+
+    weights['b_grid'] = b_grid
+    weights['b_rank'] = b_rank
+    weights['b_file'] = b_file
+    weights['b_diag'] = b_diag
+
+    weights['b_fc_1'] = b_fc_1
+    weights['b_fc_2'] = b_fc_2
+    weights['b_final'] = b_final
 
     sess.run(tf.initialize_all_variables())
 
@@ -94,48 +107,62 @@ def neural_net(boards, diagonals, true_values, save_end_weights=True):
     # final_output
     pred_value = tf.sigmoid(tf.matmul(o_fc_2, W_final) + b_final)
 
-    
+    return pred_value, weights
+
+def train(boards, diagonals, true_values, save_end_weights=True):
+
+    sess = tf.InteractiveSession()
+
+    # placeholders
+    data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
+    data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
+    true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
+
+    pred_value, weights = neural_net(sess, data, data_diags, true_value)
     # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
     # Using squared error instead
     cost = tf.reduce_sum(tf.pow(tf.sub(pred_value, true_value), 2))
 
     train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
 
-    print sess.run(W_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+    print sess.run(weights['W_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
     for i in xrange(np.shape(boards)[0]):  
         sess.run([train_step], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
 
-    print sess.run(W_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+    print sess.run(weights['W_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
     if save_end_weights:
-        weights = {}
-        weights['W_grid'] = sess.run(W_grid, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['W_rank'] = sess.run(W_rank, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['W_file'] = sess.run(W_file, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['W_diag'] = sess.run(W_diag, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values = {}
+        weight_values['W_grid'] = sess.run(weights['W_grid'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['W_rank'] = sess.run(weights['W_rank'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['W_file'] = sess.run(weights['W_file'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['W_diag'] = sess.run(weights['W_diag'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-        weights['W_fc_1'] = sess.run(W_fc_1, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['W_fc_2'] = sess.run(W_fc_2, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['W_final'] = sess.run(W_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['W_fc_1'] = sess.run(weights['W_fc_1'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['W_fc_2'] = sess.run(weights['W_fc_2'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['W_final'] = sess.run(weights['W_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-        weights['b_grid'] = sess.run(b_grid, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['b_rank'] = sess.run(b_rank, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['b_file'] = sess.run(b_file, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['b_diag'] = sess.run(b_diag, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_grid'] = sess.run(weights['b_grid'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_rank'] = sess.run(weights['b_rank'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_file'] = sess.run(weights['b_file'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_diag'] = sess.run(weights['b_diag'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-        weights['b_fc_1'] = sess.run(b_fc_1, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['b_fc_2'] = sess.run(b_fc_2, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-        weights['b_final'] = sess.run(b_final, feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_fc_1'] = sess.run(weights['b_fc_1'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_fc_2'] = sess.run(weights['b_fc_2'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
+        weight_values['b_final'] = sess.run(weights['b_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-        pickle.dump(weights, open('weights.p', 'wb'))
+        pickle.dump(weight_values, open('weights.p', 'wb'))
 
 
     ## FEED THE PLACEHOLDER'S THEY'RE HUNGRY
-def load_data(filename = 'weights.p'):
-    weights = pickle.load(open(filename, 'rb'))
-    print weights['W_final']
+def load_weight_values(filename = 'weight_values.p'):
+    weight_values = pickle.load(open(filename, 'rb'))
+    return weight_values
 
+def load_stockfish_values(filename = 'true_values.p'):
+    stockfish_values = pickle.load(open(filename, 'rb'))
+    return stockfish_values
 
 def fen_to_channels(fen):
     """
@@ -180,7 +207,7 @@ def fen_to_channels(fen):
             file += int(char)
             continue
         else:
-            my_piece = char.islower()
+            my_piece = char.islower() # double check this. Normal fen, black is lower, but stockfish seems use to lower as current move
             char = char.lower()
             if my_piece:
                 channels[rank, file, piece_indices[char]] = 1
@@ -243,13 +270,15 @@ def get_stockfish_values(boards):
                 a list of values for each board ranging between 0 and 1
     '''        
     cps = []
+    i = 0
     for b in boards:
     # cp = centipawns advantage
         cp = sf.stockfish_scores(b, seconds = 1)
         if cp is not None:
             cps.append(cp)
-    cp = np.array(cp)
-    return sigmoid_array(cp)
+    cps = np.array(cps)
+    print np.shape(cps)
+    return sigmoid_array(cps)
 
 def sigmoid_array(values):
     ''' From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
@@ -259,11 +288,11 @@ def sigmoid_array(values):
     return 1./(1. + np.exp(-0.00547*values))
 
 
-print 'This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)'
-raw_input()
+raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
+
 print 'Training data. Will save weights to pickle'
 
-fens = get_fens(num_games=500)
+fens = get_fens(num_games=1000)
 print "Finished retrieving fens.\nBegin retrieving stockfish values.\n"
 
 num_batches = len(fens)/BATCH_SIZE
@@ -271,7 +300,12 @@ num_batches = len(fens)/BATCH_SIZE
 boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
 diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
 
-true_values = np.reshape(get_stockfish_values(fens), (num_batches, BATCH_SIZE))
+true_values = get_stockfish_values(fens[:num_batches*BATCH_SIZE])
+
+# save stockfish_values
+pickle.dump(true_values, open('true_values.p', 'wb'))
+
+true_values = np.reshape(true_values, (num_batches, BATCH_SIZE))
 print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
 
 for i in xrange(num_batches*BATCH_SIZE):
@@ -284,7 +318,7 @@ for i in xrange(num_batches*BATCH_SIZE):
 
 # # print channels[0][0][0]
 
-neural_net(boards, diagonals, true_values)
+train(boards, diagonals, true_values)
 # for i in xrange(1,10):
 # print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
 # print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie

@@ -13,12 +13,13 @@ def read_pgn(filename):
                 list of fen strings
     '''
     fens = []
+    i = 0
     with open(filename, 'r') as pgn:
         game = chess.pgn.read_game(pgn)
         while not game.is_end():
             fen = game.board().fen()
             fen = fen.split(' ')
-            if fen[1] == 'b':
+            if fen[1] == 'w':
                 fen = flip_board(fen[0])
             else:
                 fen = fen[0]

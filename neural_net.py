@@ -38,7 +38,15 @@ piece_indices = {
     'k' : 5,
 }
 
-def neural_net(sess, data, data_diags, true_value):
+def get_session():
+    sess = tf.get_default_session()
+    if sess is None:
+        sess = tf.InteractiveSession()
+    return sess
+
+def neural_net(data, data_diags, true_value):
+
+    sess = get_session()
 
     # weights
     W_grid = weight_variable([5,5,NUM_CHANNELS,NUM_FEAT])
@@ -111,26 +119,22 @@ def neural_net(sess, data, data_diags, true_value):
 
 def train(boards, diagonals, true_values, save_end_weights=True):
 
-    sess = tf.InteractiveSession()
+    sess = get_session()
 
     # placeholders
     data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
     data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
     true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
 
-    pred_value, weights = neural_net(sess, data, data_diags, true_value)
+    pred_value, weights = neural_net(data, data_diags, true_value)
     # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
     # Using squared error instead
     cost = tf.reduce_sum(tf.pow(tf.sub(pred_value, true_value), 2))
 
     train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
 
-    print sess.run(weights['W_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
-
     for i in xrange(np.shape(boards)[0]):  
         sess.run([train_step], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
-
-    print sess.run(weights['W_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
     if save_end_weights:
         weight_values = {}
@@ -153,6 +157,23 @@ def train(boards, diagonals, true_values, save_end_weights=True):
         weight_values['b_final'] = sess.run(weights['b_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
         pickle.dump(weight_values, open('weights.p', 'wb'))
+
+def eval(boards, diagonals, true_values):
+
+    sess = get_session()
+
+    pred_value = neural_net()
+
+    error = tf.sub(true_values, pred_values)
+
+    mean_error = tf.reduce_mean(error)
+
+    guess_whos_winning = tf.equal(tf.round(true_values), tf.round(pred_values))
+    accuracy = tf.reduce_mean(tf.cast(prediction, tf.float32)) 
+    final_acc = accuracy.eval(feed_dict={x: ximg, y: xlab})
+
+    for i in xrange(np.shape(boards)[0]):
+        pred_values = sess.run([pred_value], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
 
 
     ## FEED THE PLACEHOLDER'S THEY'RE HUNGRY
@@ -274,6 +295,7 @@ def get_stockfish_values(boards):
     for b in boards:
     # cp = centipawns advantage
         cp = sf.stockfish_scores(b, seconds = 1)
+        print cp
         if cp is not None:
             cps.append(cp)
     cps = np.array(cps)
@@ -292,8 +314,8 @@ raw_input('This will overwrite your old weights\' pickle, do you still want to p
 
 print 'Training data. Will save weights to pickle'
 
-fens = get_fens(num_games=1000)
-print "Finished retrieving fens.\nBegin retrieving stockfish values.\n"
+fens = get_fens(num_games=1)[:10]
+print "Finished retrieving %d fens.\nBegin retrieving stockfish values.\n" % (len(fens))
 
 num_batches = len(fens)/BATCH_SIZE
 

@@ -37,6 +37,7 @@ def stockfish_scores(fen, seconds=1, threads=None, memory=None, all_scores=False
 
     # Shell out to Stockfish
     cmd =  ' '.join( ['./helpers/stockfish_eval.sh' ,fen, str(seconds), binary, str(threads), str(memory) ] )
+    # print cmd
     # try:
     output = subprocess.check_output(cmd, shell=True).strip().split('\n')
     # except subprocess.CalledProcessError e:

@@ -19,4 +19,4 @@ sleep $seconds
 ) | stockfish > analysis.txt
 cat analysis.txt | grep -ohE "score cp (-?[0-9]+)" | tail -1 | cut -d' ' -f3
 cat analysis.txt | grep -ohE "score mate (-?[0-9]+)" | tail -1 | cut -d' ' -f3
-# rm -rf analysis.txt
+rm -rf analysis.txt

@@ -156,24 +156,41 @@ def train(boards, diagonals, true_values, save_end_weights=True):
         weight_values['b_fc_2'] = sess.run(weights['b_fc_2'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
         weight_values['b_final'] = sess.run(weights['b_final'], feed_dict={data: boards[0], data_diags: diagonals[0], true_value: true_values[0]})
 
-        pickle.dump(weight_values, open('weights.p', 'wb'))
+        pickle.dump(weight_values, open('weight_values.p', 'wb'))
 
-def eval(boards, diagonals, true_values):
+def evaluate(boards, diagonals, true_values):
+
+    total_boards = 0
+    right_boards = 0
+    mean_error = 0
 
     sess = get_session()
 
-    pred_value = neural_net()
+    # placeholders
+    data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
+    data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
+    true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
 
-    error = tf.sub(true_values, pred_values)
+    pred_value, weights = neural_net(data, data_diags, true_value)
 
-    mean_error = tf.reduce_mean(error)
+    err = tf.sub(true_value, pred_value)
 
-    guess_whos_winning = tf.equal(tf.round(true_values), tf.round(pred_values))
-    accuracy = tf.reduce_mean(tf.cast(prediction, tf.float32)) 
-    final_acc = accuracy.eval(feed_dict={x: ximg, y: xlab})
+    err_sum = tf.reduce_sum(err)
+
+    guess_whos_winning = tf.equal(tf.round(true_value), tf.round(pred_value))
+    num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32)) 
 
     for i in xrange(np.shape(boards)[0]):
-        pred_values = sess.run([pred_value], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
+        es, nr, gww = sess.run([err_sum, num_right, guess_whos_winning], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
+        print gww
+        print nr
+        print len(true_values[i])
+        total_boards += len(true_values[i])
+        right_boards += nr
+        mean_error += es
+
+    mean_error = mean_error/total_boards
+    print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (mean_error, right_boards, total_boards)
 
 
     ## FEED THE PLACEHOLDER'S THEY'RE HUNGRY
@@ -294,7 +311,7 @@ def get_stockfish_values(boards):
     i = 0
     for b in boards:
     # cp = centipawns advantage
-        cp = sf.stockfish_scores(b, seconds = 1)
+        cp = sf.stockfish_scores(b, seconds=2)
         print cp
         if cp is not None:
             cps.append(cp)
@@ -310,6 +327,7 @@ def sigmoid_array(values):
     return 1./(1. + np.exp(-0.00547*values))
 
 
+load_true_values = True
 raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
 
 print 'Training data. Will save weights to pickle'
@@ -322,10 +340,12 @@ num_batches = len(fens)/BATCH_SIZE
 boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
 diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
 
-true_values = get_stockfish_values(fens[:num_batches*BATCH_SIZE])
-
-# save stockfish_values
-pickle.dump(true_values, open('true_values.p', 'wb'))
+if load_true_values:
+    true_values = load_stockfish_values()
+else:
+    true_values = get_stockfish_values(fens[:num_batches*BATCH_SIZE])
+    # save stockfish_values
+    pickle.dump(true_values, open('true_values.p', 'wb'))
 
 true_values = np.reshape(true_values, (num_batches, BATCH_SIZE))
 print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
@@ -341,6 +361,8 @@ for i in xrange(num_batches*BATCH_SIZE):
 # # print channels[0][0][0]
 
 train(boards, diagonals, true_values)
+# print true_values
+evaluate(boards, diagonals, true_values)
 # for i in xrange(1,10):
 # print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
 # print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie

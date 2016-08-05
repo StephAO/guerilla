@@ -173,6 +173,8 @@ def evaluate(boards, diagonals, true_values):
 
     pred_value, weights = neural_net(data, data_diags, true_value)
 
+    pred_value = tf.reshape(pred_value, [-1])
+
     err = tf.sub(true_value, pred_value)
 
     err_sum = tf.reduce_sum(err)
@@ -181,10 +183,9 @@ def evaluate(boards, diagonals, true_values):
     num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32)) 
 
     for i in xrange(np.shape(boards)[0]):
-        es, nr, gww = sess.run([err_sum, num_right, guess_whos_winning], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
-        print gww
-        print nr
-        print len(true_values[i])
+        es, nr, gww, pv = sess.run([err_sum, num_right, guess_whos_winning, pred_value], feed_dict={data: boards[i], data_diags: diagonals[i], true_value: true_values[i]})
+        print pv
+        print true_values[i]
         total_boards += len(true_values[i])
         right_boards += nr
         mean_error += es

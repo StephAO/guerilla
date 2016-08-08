@@ -4,6 +4,7 @@ sys.path.insert(0, 'helpers/')
 import numpy as np
 import chess
 from chess_game_parser import get_fens
+from neural_net import *
 import stockfish_eval as sf
 
 def fen_to_channels(fen):
@@ -98,7 +99,6 @@ def get_diagonals(channels):
 
     return diagonals
 
-
 def get_stockfish_values(boards):
     ''' Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
         the scores to a winning probability between 0 and 1 (see sigmoid_array for how the sigmoid was chosen)
@@ -123,6 +123,10 @@ def get_stockfish_values(boards):
     print np.shape(cps)
     return sigmoid_array(cps)
 
+def load_stockfish_values(filename = 'true_values.p'):
+    stockfish_values = pickle.load(open(filename, 'rb'))
+    return stockfish_values
+
 def sigmoid_array(values):
     ''' From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
         1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a few data point
@@ -132,6 +136,7 @@ def sigmoid_array(values):
 
 
 load_true_values = True
+load_weight_values = True
 raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
 
 print 'Training data. Will save weights to pickle'
@@ -154,8 +159,11 @@ else:
 true_values = np.reshape(true_values, (num_batches, BATCH_SIZE))
 print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
 
+
+nn = NeuralNet()
+
 if load_weight_values:
-    load_weight_values()
+    nn.load_weight_values()
 else:
     for i in xrange(num_batches*BATCH_SIZE):
         batch_num = i/BATCH_SIZE
@@ -164,12 +172,13 @@ else:
 
         for i in xrange(BATCH_SIZE):
             diagonals[batch_num][batch_idx] = get_diagonals(boards[batch_num][batch_idx])
+    train(nn, boards, diagonals, true_values)
 
 # # print channels[0][0][0]
 
-train(boards, diagonals, true_values)
+
 # print true_values
-evaluate(boards, diagonals, true_values)
+evaluate(nn, boards, diagonals, true_values)
 # for i in xrange(1,10):
 # print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
 # print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie

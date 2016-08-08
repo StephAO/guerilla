@@ -9,25 +9,22 @@ import stockfish_eval as sf
 
 def fen_to_channels(fen):
     """
-    Converts a fen string to channels for neural net.
-    Always assumes that it's white's turn
-    @TODO deal with en passant and castling
+        Converts a fen string to channels for neural net.
+        Always assumes that it's white's turn
+        @TODO deal with en passant and castling
 
-    Inputs:
-        epd:
-            epd or fen string describing current state. Currently only using board state
+        Inputs:
+            fen[string]:
+                fen string describing current state. 
+                Currently only using board state
 
-    Output:
-        Channels:
+        Output:
+            Channels[ndarray]:
 
-        Consists of 3 6x8x8 channels (6 8x8 chess boards)
-        The three channels are:
-        1. your pieces
-        2. opponents pieces
-        3. all pieces
-
-        Each channel has 6 boards, for each of the 6 types of pieces.
-        In order they are Pawns, Rooks, Knights, Bishops, Queens, Kings.
+                Consists of 12 8x8 channels (12 8x8 chess boards)
+                12 Channels: 6 for each you and your opponents piece types
+                Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
+                First 6 channels are your pieces, last 6 are opponents.
     """
 
     # fen = fen.split(' ')
@@ -66,12 +63,15 @@ def fen_to_channels(fen):
 
 def get_diagonals(channels):
     """
-    Retrieves and returns the diagonals from the board
+        Retrieves and returns the diagonals from the board
 
-    Ouput:
-        3 Channels: your pieces, opponents pieces, all pieces
-        Each channel has 6 arrays for each piece, in order: Pawns, Rooks, Knights, Bishops, Queens, King
-        Each piece array has 10 diagonals with max size of 8 (shorter diagonasl are 0 padded)
+        Ouput:
+            Diagonals[ndarray]:
+                12 Channels: 6 for each you and your opponents piece types
+                Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
+                First 6 channels are your pieces, last 6 are opponents.
+                Each piece array has 10 diagonals with max size of 8 
+                (shorter diagonasl are 0 padded)
     """
     diagonals = np.zeros((10, 8, NUM_CHANNELS))
     for piece_idx in piece_indices.values():
@@ -100,15 +100,16 @@ def get_diagonals(channels):
     return diagonals
 
 def get_stockfish_values(boards):
-    ''' Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
+    ''' 
+        Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
         the scores to a winning probability between 0 and 1 (see sigmoid_array for how the sigmoid was chosen)
 
-        inputs:
-            boards:
+        Inputs:
+            boards[list of strings]:
                 list of board fens
 
-        outputs:
-            values:
+        Outputs:
+            values[list of floats]:
                 a list of values for each board ranging between 0 and 1
     '''        
     cps = []
@@ -123,7 +124,13 @@ def get_stockfish_values(boards):
     print np.shape(cps)
     return sigmoid_array(cps)
 
-def load_stockfish_values(filename = 'true_values.p'):
+def load_stockfish_values(filename='true_values.p'):
+    ''' 
+        Load stockfish values from a pickle file
+        Inputs:
+            filename[string]:
+                pickle file to load values from
+    '''
     stockfish_values = pickle.load(open(filename, 'rb'))
     return stockfish_values
 
@@ -136,7 +143,7 @@ def sigmoid_array(values):
 
 
 load_true_values = True
-load_weight_values = True
+load_weight_values = False
 raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
 
 print 'Training data. Will save weights to pickle'
@@ -160,11 +167,9 @@ true_values = np.reshape(true_values, (num_batches, BATCH_SIZE))
 print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
 
 
-nn = NeuralNet()
+nn = NeuralNet(load_weights = load_weight_values)
 
-if load_weight_values:
-    nn.load_weight_values()
-else:
+if not load_weight_values:
     for i in xrange(num_batches*BATCH_SIZE):
         batch_num = i/BATCH_SIZE
         batch_idx = i % BATCH_SIZE

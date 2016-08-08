@@ -1,6 +1,9 @@
 # Chess data files
 *.pgn
 
+# Pickle files
+*.p
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,21 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import pickle
+from hyper_parameters import *
 
-NUM_FEAT = 10
-BATCH_SIZE = 5
-NUM_HIDDEN = 1024
-LEARNING_RATE = 0.001
-
-NUM_CHANNELS = 6*2
-piece_indices = {
-    'p' : 0,
-    'r' : 1,
-    'n' : 2,
-    'b' : 3,
-    'q' : 4,
-    'k' : 5,
-}
 
 def weight_variable(shape):
         initial = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
@@ -226,9 +213,6 @@ def evaluate(nn, boards, diagonals, true_values):
 
     for i in xrange(np.shape(boards)[0]):
         es, nr, gww, pv = nn.sess.run([err_sum, num_right, guess_whos_winning, pred_value], feed_dict={nn.data: boards[i], nn.data_diags: diagonals[i], nn.true_value: true_values[i]})
-        print pv
-        print true_values[i]
-        print gww
         total_boards += len(true_values[i])
         right_boards += nr
         mean_error += es

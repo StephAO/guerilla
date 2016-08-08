@@ -1,4 +1,9 @@
+import sys
+sys.path.insert(0, '../pickles/')
+
 import chess.pgn
+import pickle
+import sys
 from os import listdir
 from os.path import isfile, join
 
@@ -57,10 +62,30 @@ def get_fens(num_games=-1):
             fens:
                 list of fen strings from games
     '''
+    # @TODO fix this shitty file path
     path = '/home/stephanearoca-ouellette/guerilla/helpers/pgn_files/single_game_pgns'
     files = [f for f in listdir(path)[:num_games] if isfile(join(path, f))]
     fens = []
     for f in files[:num_games]:
         fens.extend(read_pgn(join(path, f)))
+    
     return fens
-# print len(read_pgn('ct-Aronian, Levon-Carlsen, Magnus-2014.2.4__2.pgn'))
+
+def load_fens(filename='fens.p'):
+    return pickle.load(open(filename, 'rb'))
+
+def main():
+    number_of_games = -1
+    if len(sys.argv) > 1:
+        number_of_games = sys.argv[1]
+    
+    fens = get_fens(num_games=number_of_games)
+    
+    if len(sys.argv) > 2:
+        number_of_fens = sys.argv[2]
+        fens = fens[:number_of_fens]
+
+    pickle.dump(fens, open('fens.p', 'wb'))
+
+if __name__ == "__main__":
+    main()

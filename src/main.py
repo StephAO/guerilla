@@ -1,11 +1,14 @@
 import sys
-sys.path.insert(0, 'helpers/')
+sys.path.insert(0, '../helpers/')
+sys.path.insert(0, '../pickles/')
 
-import numpy as np
+
 import chess
-from chess_game_parser import get_fens
-from neural_net import *
+import numpy as np
 import stockfish_eval as sf
+import chess_game_parser as cgp
+from hyper_parameters import *
+
 
 def fen_to_channels(fen):
     """
@@ -124,15 +127,7 @@ def get_stockfish_values(boards):
     print np.shape(cps)
     return sigmoid_array(cps)
 
-def load_stockfish_values(filename='true_values.p'):
-    ''' 
-        Load stockfish values from a pickle file
-        Inputs:
-            filename[string]:
-                pickle file to load values from
-    '''
-    stockfish_values = pickle.load(open(filename, 'rb'))
-    return stockfish_values
+
 
 def sigmoid_array(values):
     ''' From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
@@ -142,34 +137,27 @@ def sigmoid_array(values):
     return 1./(1. + np.exp(-0.00547*values))
 
 
-load_true_values = True
-load_weight_values = False
-raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
+train_nn = True
 
-print 'Training data. Will save weights to pickle'
+fens = cgp.load_fens()
 
-fens = get_fens(num_games=1)[:10]
-print "Finished retrieving %d fens.\nBegin retrieving stockfish values.\n" % (len(fens))
+true_values = load_stockfish_values()
+true_values = np.reshape(true_values[:num_batches*BATCH_SIZE], (num_batches, BATCH_SIZE))
+    
+
+print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
 
 num_batches = len(fens)/BATCH_SIZE
 
 boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
 diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
 
-if load_true_values:
-    true_values = load_stockfish_values()
-else:
-    true_values = get_stockfish_values(fens[:num_batches*BATCH_SIZE])
-    # save stockfish_values
-    pickle.dump(true_values, open('true_values.p', 'wb'))
+nn = NeuralNet(load_weights=(not load_weight_values))
 
-true_values = np.reshape(true_values, (num_batches, BATCH_SIZE))
-print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
+if train_nn:
+    raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
+    print 'Training data. Will save weights to pickle'
 
-
-nn = NeuralNet(load_weights = load_weight_values)
-
-if not load_weight_values:
     for i in xrange(num_batches*BATCH_SIZE):
         batch_num = i/BATCH_SIZE
         batch_idx = i % BATCH_SIZE
@@ -186,5 +174,5 @@ if not load_weight_values:
 evaluate(nn, boards, diagonals, true_values)
 # for i in xrange(1,10):
 # print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
-# print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if whtie
+# print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if white
 

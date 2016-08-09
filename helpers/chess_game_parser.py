@@ -1,12 +1,9 @@
 import sys
-sys.path.insert(0, '../pickles/')
-
 import chess.pgn
 import pickle
 import sys
-from os import listdir
+import os
 from os.path import isfile, join
-
 
 def read_pgn(filename):
     ''' given a pgn filename, reads the file and returns a fen for each position in the game
@@ -64,7 +61,7 @@ def get_fens(num_games=-1):
     '''
     # @TODO fix this shitty file path
     path = '/home/stephanearoca-ouellette/guerilla/helpers/pgn_files/single_game_pgns'
-    files = [f for f in listdir(path)[:num_games] if isfile(join(path, f))]
+    files = [f for f in os.listdir(path)[:num_games] if isfile(join(path, f))]
     fens = []
     for f in files[:num_games]:
         fens.extend(read_pgn(join(path, f)))
@@ -72,20 +69,25 @@ def get_fens(num_games=-1):
     return fens
 
 def load_fens(filename='fens.p'):
-    return pickle.load(open(filename, 'rb'))
+    full_path = dir_path + "/../pickles/" + filename
+    return pickle.load(open(full_path, 'rb'))
 
 def main():
     number_of_games = -1
     if len(sys.argv) > 1:
-        number_of_games = sys.argv[1]
+        number_of_games = int(sys.argv[1])
     
     fens = get_fens(num_games=number_of_games)
     
     if len(sys.argv) > 2:
-        number_of_fens = sys.argv[2]
+        number_of_fens = int(sys.argv[2])
         fens = fens[:number_of_fens]
 
-    pickle.dump(fens, open('fens.p', 'wb'))
+    pickle_path = dir_path + '/../pickles/fens.p'
+    pickle.dump(fens, open(pickle_path, 'wb'))
 
+dir_path = os.path.dirname(__file__)
 if __name__ == "__main__":
     main()
+
+    

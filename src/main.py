@@ -1,12 +1,13 @@
 import sys
-sys.path.insert(0, '../helpers/')
-sys.path.insert(0, '../pickles/')
-
+import os
+dir_path = os.path.dirname(__file__)
+sys.path.insert(0, dir_path + '/../helpers/')
 
 import chess
 import numpy as np
 import stockfish_eval as sf
 import chess_game_parser as cgp
+import neural_net as nn
 from hyper_parameters import *
 
 
@@ -137,24 +138,23 @@ def sigmoid_array(values):
     return 1./(1. + np.exp(-0.00547*values))
 
 
-train_nn = True
+train = True
 
 fens = cgp.load_fens()
 
-true_values = load_stockfish_values()
+num_batches = len(fens)/BATCH_SIZE
+
+true_values = sf.load_stockfish_values()
 true_values = np.reshape(true_values[:num_batches*BATCH_SIZE], (num_batches, BATCH_SIZE))
     
-
 print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
-
-num_batches = len(fens)/BATCH_SIZE
 
 boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
 diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
 
-nn = NeuralNet(load_weights=(not load_weight_values))
+net = nn.NeuralNet(load_weights=(not train))
 
-if train_nn:
+if train:
     raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
     print 'Training data. Will save weights to pickle'
 
@@ -165,14 +165,8 @@ if train_nn:
 
         for i in xrange(BATCH_SIZE):
             diagonals[batch_num][batch_idx] = get_diagonals(boards[batch_num][batch_idx])
-    train(nn, boards, diagonals, true_values)
+    nn.train(net, boards, diagonals, true_values)
 
-# # print channels[0][0][0]
+nn.evaluate(net, boards, diagonals, true_values)
 
-
-# print true_values
-evaluate(nn, boards, diagonals, true_values)
-# for i in xrange(1,10):
-# print sf.stockfish_scores(board.fen().split(' ')[0], seconds = 1)
-# print sf.stockfish_scores("4R1K1/PPP1NR2/3Q2P1/3p4/3nk1p1/1q1p3p/pp1b2b1/rn5r", seconds = 1) #  mate in 2 if white
 

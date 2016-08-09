@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import pickle
+import os
 from hyper_parameters import *
 
 
@@ -30,6 +31,7 @@ class NeuralNet:
                     If true, the neural net will load weights saved from a file
                     instead of initializing them from a normal distribution.
         '''
+        self.dir_path = os.path.dirname(__file__)
         # create session
         self.set_session()
 
@@ -90,7 +92,8 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to load weight values from
         '''
-        weight_values = pickle.load(open(filename, 'rb'))
+        pickle_path = self.dir_path + '/../pickles/' + filename
+        weight_values = pickle.load(open(pickle_path, 'rb'))
 
         self.W_grid = tf.Variable(weight_values['W_grid'])
         self.W_rank = tf.Variable(weight_values['W_rank']) 
@@ -122,7 +125,8 @@ class NeuralNet:
         self.sess.run( [ self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final, \
                     self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final ] )
 
-        pickle.dump(weight_values, open(filename, 'wb'))
+        pickle_path = self.dir_path + '/../pickles/' + filename
+        pickle.dump(weight_values, open(pickle_path, 'wb'))
 
     def neural_net(self):
         '''
@@ -219,4 +223,3 @@ def evaluate(nn, boards, diagonals, true_values):
 
     mean_error = mean_error/total_boards
     print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (mean_error, right_boards, total_boards)
-

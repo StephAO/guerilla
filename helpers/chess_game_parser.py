@@ -60,7 +60,7 @@ def get_fens(num_games=-1):
                 list of fen strings from games
     '''
     # @TODO fix this shitty file path
-    path = '/home/stephanearoca-ouellette/guerilla/helpers/pgn_files/single_game_pgns'
+    path = dir_path + '/pgn_files/single_game_pgns'
     files = [f for f in os.listdir(path)[:num_games] if isfile(join(path, f))]
     fens = []
     for f in files[:num_games]:

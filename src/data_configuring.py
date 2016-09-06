@@ -3,13 +3,13 @@ import os
 dir_path = os.path.dirname(__file__)
 sys.path.insert(0, dir_path + '/../helpers/')
 
+# double check that there aren't unecessary imports
+
 import chess
 import numpy as np
 import stockfish_eval as sf
 import chess_game_parser as cgp
-import neural_net as nn
 from hyper_parameters import *
-
 
 def fen_to_channels(fen):
     """
@@ -63,7 +63,6 @@ def fen_to_channels(fen):
         if rank == 7 and file == 8:
             break
     return channels
-
 
 def get_diagonals(channels):
     """
@@ -128,45 +127,9 @@ def get_stockfish_values(boards):
     print np.shape(cps)
     return sigmoid_array(cps)
 
-
-
 def sigmoid_array(values):
     ''' From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
         1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a few data point
         and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided on (by me, deal with it)
         Ideally this fitter function is learned, but this is just for testing so...'''
     return 1./(1. + np.exp(-0.00547*values))
-
-
-train = True
-
-fens = cgp.load_fens()
-
-num_batches = len(fens)/BATCH_SIZE
-
-true_values = sf.load_stockfish_values()
-true_values = np.reshape(true_values[:num_batches*BATCH_SIZE], (num_batches, BATCH_SIZE))
-    
-print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
-
-boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
-diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
-
-net = nn.NeuralNet(load_weights=(not train))
-
-if train:
-    raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
-    print 'Training data. Will save weights to pickle'
-
-    for i in xrange(num_batches*BATCH_SIZE):
-        batch_num = i/BATCH_SIZE
-        batch_idx = i % BATCH_SIZE
-        boards[batch_num][batch_idx] = fen_to_channels(fens[i])
-
-        for i in xrange(BATCH_SIZE):
-            diagonals[batch_num][batch_idx] = get_diagonals(boards[batch_num][batch_idx])
-    nn.train(net, boards, diagonals, true_values)
-
-nn.evaluate(net, boards, diagonals, true_values)
-
-

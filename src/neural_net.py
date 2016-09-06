@@ -85,7 +85,7 @@ class NeuralNet:
         self.W_final = weight_variable([NUM_HIDDEN,1])
         self.b_final = bias_variable([1])
         
-    def load_weight_values(self, filename = 'weight_values.p'):
+    def load_weight_values(self, filename = 'weights_1000.p'):
         ''' 
             Sets all variables to values loaded from a file
             Input: 
@@ -156,70 +156,3 @@ class NeuralNet:
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
 
-def train(nn, boards, diagonals, true_values, save_weights=True):
-    '''
-        Train neural net
-
-        Inputs:
-            nn[NeuralNet]:
-                Neural net to train
-            boards[ndarray]:
-                Chess board states to train neural net on. Must in correct input
-                format - See fen_to_channels in main.py
-            diagonals[ndarray]:
-                Diagonals of chess board states to train neural net on. Must in 
-                correct input format - See get_diagonals in main.py
-            true_values[ndarray]:
-                Expected output for each chess board state (between 0 and 1)
-            save_weights[Bool] (optional - default = True):
-                Save weights to file after training
-    '''
-
-    # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
-    # Using squared error instead
-    cost = tf.reduce_sum(tf.pow(tf.sub(nn.pred_value, nn.true_value), 2))
-
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
-
-    for i in xrange(np.shape(boards)[0]):  
-        nn.sess.run([train_step], feed_dict={nn.data: boards[i], nn.data_diags: diagonals[i], nn.true_value: true_values[i]})
-
-    if save_weights:
-        nn.save_weight_values()
-
-def evaluate(nn, boards, diagonals, true_values):
-    ''' 
-        Evaluate neural net
-
-        Inputs:
-            nn[NeuralNet]:
-                Neural net to evaluate
-            boards[ndarray]:
-                Chess board states to evaluate neural net on. Must in correct 
-                input format - See fen_to_channels in main.py
-            diagonals[ndarray]:
-                Diagonals of chess board states to evaluate neural net on. 
-                Must in correct input format - See get_diagonals in main.py
-            true_values[ndarray]:
-                Expected output for each chess board state (between 0 and 1)
-    '''
-
-    total_boards = 0
-    right_boards = 0
-    mean_error = 0
-
-    pred_value = tf.reshape(nn.pred_value, [-1])
-    err = tf.sub(nn.true_value, pred_value)
-    err_sum = tf.reduce_sum(err)
-
-    guess_whos_winning = tf.equal(tf.round(nn.true_value), tf.round(pred_value))
-    num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32)) 
-
-    for i in xrange(np.shape(boards)[0]):
-        es, nr, gww, pv = nn.sess.run([err_sum, num_right, guess_whos_winning, pred_value], feed_dict={nn.data: boards[i], nn.data_diags: diagonals[i], nn.true_value: true_values[i]})
-        total_boards += len(true_values[i])
-        right_boards += nr
-        mean_error += es
-
-    mean_error = mean_error/total_boards
-    print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (mean_error, right_boards, total_boards)

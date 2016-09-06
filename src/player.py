@@ -8,20 +8,5 @@ class Player:
 		return 'Error - you should never see this'
 		
 	@abstractmethod
-	def get_move(self):
+	def get_move(self, board):
 		return 'Error - you should never see this'
-
-
-class Guerilla(Player):
-	
-	def __init__(self, _name):
-		self._name = _name
-
-	@property
-	def name(self):
-		return self._name
-
-
-A.register(B)
-b = B()
-print b.name

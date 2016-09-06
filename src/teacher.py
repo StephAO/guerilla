@@ -4,12 +4,23 @@ import data_configure as dc
 
 class Teacher:
 
-    # action is an enum of different training/evaluations
+    # dictionary of different training/evaluation methods
+    actions_dict = {
+        'train_bootstrap' : train_bootstrap,
+    }
 
-    def __init__(self, guerilla, action):
+    def __init__(self, guerilla, actions):
         self.guerilla = guerilla
         self.nn = guerilla.nn
         self.dir_path = os.path.dirname(__file__)
+        self.actions = actions
+
+    def run(self):
+        for action in self.actions():
+            if action in actions_dict:
+                actions_dict[action]()
+            else:
+                print "Error - %s is not a valid command" % (action)
 
     def train_bootstrap(self, save_weights=True):
         """

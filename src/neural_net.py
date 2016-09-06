@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 import os
 from hyper_parameters import *
+import data_configure as dc
 
 
 def weight_variable(shape):
@@ -155,4 +156,11 @@ class NeuralNet:
 
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
+
+    def evaluate(self, fen):
+        # ensure that only fen is used
+        fen = fen.split()[0]
+        board = dc.fen_to_channels(fen)
+        diagonal = dc.get_diagonals(board)
+        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session: self.sess);
 

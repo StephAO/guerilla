@@ -6,7 +6,8 @@ class Guerilla(Player):
     
     def __init__(self, _name):
         self._name = _name
-        # self.nn = Neu
+        self.nn = NeuralNet()
+        self.search = Search(self.nn.evaluate())
 
     @property
     def name(self):

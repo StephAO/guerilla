@@ -2,16 +2,12 @@ import player
 import neural_net
 import search
 
-class Guerilla(Player):
+class Guerilla(player.Player):
     
-    def __init__(self, _name):
-        self._name = _name
-        self.nn = NeuralNet()
-        self.search = Search(self.nn.evaluate())
-
-    @property
-    def name(self):
-        return self._name
+    def __init__(self, name, colour):
+        super(Guerilla, self).__init__(name, colour)
+        self.nn = neural_net.NeuralNet()
+        self.search = search.Search(self.nn.evaluate)
 
     def get_move(self, board):
         return 1

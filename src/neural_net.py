@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 import os
 from hyper_parameters import *
-import data_configure as dc
+import data_configuring as dc
 
 
 def weight_variable(shape):
@@ -20,7 +20,6 @@ def conv5x5_grid(x, W):
 def conv8x1_line(x, W): # includes ranks, files, and diags
     return tf.nn.conv2d(x, W, strides=[1,1,1,1], padding='VALID')
 
-
 class NeuralNet:
 
     def __init__(self, load_weights=False):
@@ -32,7 +31,7 @@ class NeuralNet:
                     If true, the neural net will load weights saved from a file
                     instead of initializing them from a normal distribution.
         '''
-        self.dir_path = os.path.dirname(__file__)
+        self.dir_path = os.path.dirname(os.path.abspath(__file__))
         # create session
         self.set_session()
 
@@ -162,5 +161,5 @@ class NeuralNet:
         fen = fen.split()[0]
         board = dc.fen_to_channels(fen)
         diagonal = dc.get_diagonals(board)
-        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session: self.sess);
+        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal, session: self.sess});
 

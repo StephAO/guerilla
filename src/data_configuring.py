@@ -1,6 +1,6 @@
 import sys
 import os
-dir_path = os.path.dirname(__file__)
+dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
 # double check that there aren't unecessary imports

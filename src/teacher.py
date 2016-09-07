@@ -12,7 +12,7 @@ class Teacher:
     def __init__(self, guerilla, actions):
         self.guerilla = guerilla
         self.nn = guerilla.nn
-        self.dir_path = os.path.dirname(__file__)
+        self.dir_path = os.path.dirname(os.path.abspath(__file__))
         self.actions = actions
 
     def run(self):

@@ -1,12 +1,12 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 class Player:
-	__metaclass__ = ABCMeta
+    __metaclass__ = ABCMeta
+        
+    def __init__(self, name, colour):
+        self.name = name
+        self.colour = colour
 
-	@abstractproperty
-	def name(self):
-		return 'Error - you should never see this'
-		
-	@abstractmethod
-	def get_move(self, board):
-		return 'Error - you should never see this'
+    @abstractmethod
+    def get_move(self, board):
+        return "Error: you should never see this"

@@ -10,6 +10,6 @@ class Guerilla(player.Player):
         self.search = search.Search(self.nn.evaluate)
 
     def get_move(self, board):
-        return 1
+        return self.search.minimax(board)
 
 player.Player.register(Guerilla)

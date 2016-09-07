@@ -117,5 +117,3 @@ def search_test():
     else:
         print "Test failed. Expected [Score, Move]: [6, b3b4] got [%d, %s]" % (score, move)
         return False
-
-search_test()

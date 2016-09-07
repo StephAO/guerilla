@@ -9,4 +9,5 @@ class Player:
 
     @abstractmethod
     def get_move(self, board):
-        return "Error: you should never see this"
+        raise NotImplementedError("You should never see this")
+        return NotImplemented

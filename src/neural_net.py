@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 import os
 from hyper_parameters import *
+import data_configuring as dc
 
 
 def weight_variable(shape):
@@ -61,16 +62,16 @@ class NeuralNet:
 
         # initialize variables
         if load_weights:
-            self.load_weight_values()
+            self.load_weight_values(load_file)
         else:
             self.initialize_tf_variables()
 
         self.sess.run(tf.initialize_all_variables())
 
         # create placeholders
-        self.data = tf.placeholder(tf.float32, shape=[BATCH_SIZE, 8, 8, NUM_CHANNELS])
-        self.data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE, 10, 8, NUM_CHANNELS])
-        self.true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
+        self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, NUM_CHANNELS])
+        self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, NUM_CHANNELS])
+        self.true_value = tf.placeholder(tf.float32, shape=[None])
 
         # create neural net structure
         self.neural_net()
@@ -163,6 +164,7 @@ class NeuralNet:
             Sets member variable 'pred_value' to the tensor representing the
             output of neural net.
         """
+        batch_size = tf.shape(self.data)[0]
 
         # outputs to convolutional layer
         o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
@@ -170,10 +172,10 @@ class NeuralNet:
         o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
         o_diag = tf.nn.relu(conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
 
-        o_grid = tf.reshape(o_grid, [BATCH_SIZE, 64 * NUM_FEAT])
-        o_rank = tf.reshape(o_rank, [BATCH_SIZE, 8 * NUM_FEAT])
-        o_file = tf.reshape(o_file, [BATCH_SIZE, 8 * NUM_FEAT])
-        o_diag = tf.reshape(o_diag, [BATCH_SIZE, 10 * NUM_FEAT])
+        o_grid = tf.reshape(o_grid, [batch_size, 64 * NUM_FEAT])
+        o_rank = tf.reshape(o_rank, [batch_size, 8 * NUM_FEAT])
+        o_file = tf.reshape(o_file, [batch_size, 8 * NUM_FEAT])
+        o_diag = tf.reshape(o_diag, [batch_size, 10 * NUM_FEAT])
 
         # output of convolutional layer
         o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])
@@ -187,77 +189,26 @@ class NeuralNet:
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
 
+    # TODO S: Maybe combine the following two functions? I think this only gets used in guerilla.py but i'm not sure.
+    def evaluate(self, fen):
+        """
+        Evaluates chess board.
+             Input:
+                 fen [String]:
+                     FEN of chess board.
+             Output:
+                 Score between 0 (bad) and 1 (good).
+        """
 
-def train(nn, boards, diagonals, true_values, save_weights=True):
-    """
-        Train neural net.
+        # TODO S: Add board flipping if fen[1]='black' !
+        fen = fen.split()[0]
+        board = dc.fen_to_channels(fen)
+        diagonal = dc.get_diagonals(board)
 
-        Inputs:
-            nn[NeuralNet]:
-                Neural net to train
-            boards[ndarray]:
-                Chess board states to train neural net on. Must in correct input
-                format - See fen_to_channels in main.py
-            diagonals[ndarray]:
-                Diagonals of chess board states to train neural net on. Must in 
-                correct input format - See get_diagonals in main.py
-            true_values[ndarray]:
-                Expected output for each chess board state (between 0 and 1)
-            save_weights[Bool] (optional - default = True):
-                Save weights to file after training
-    """
-
-    # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
-    # Using squared error instead
-    cost = tf.reduce_sum(tf.pow(tf.sub(nn.pred_value, nn.true_value), 2))
-
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
-
-    # TODO S: Batch + epoch training.
-    for i in xrange(np.shape(boards)[0]):
-        nn.sess.run([train_step],
-                    feed_dict={nn.data: boards[i], nn.data_diags: diagonals[i], nn.true_value: true_values[i]})
-
-    if save_weights:
-        nn.save_weight_values()
+        board = np.array([board])
+        diagonal = np.array([diagonal])
+        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session=self.sess)
 
 
-def evaluate(nn, boards, diagonals, true_values):
-    """
-        Evaluate neural net
-
-        Inputs:
-            nn[NeuralNet]:
-                Neural net to evaluate
-            boards[ndarray]:
-                Chess board states to evaluate neural net on. Must in correct 
-                input format - See fen_to_channels in main.py
-            diagonals[ndarray]:
-                Diagonals of chess board states to evaluate neural net on. 
-                Must in correct input format - See get_diagonals in main.py
-            true_values[ndarray]:
-                Expected output for each chess board state (between 0 and 1)
-     """
-
-    total_boards = 0
-    right_boards = 0
-    mean_error = 0
-
-    pred_value = tf.reshape(nn.pred_value, [-1])
-    err = tf.sub(nn.true_value, pred_value)
-    err_sum = tf.reduce_sum(err)
-
-    guess_whos_winning = tf.equal(tf.round(nn.true_value), tf.round(pred_value))
-    num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32))
-
-    for i in xrange(np.shape(boards)[0]):
-        es, nr, gww, pv = nn.sess.run([err_sum, num_right, guess_whos_winning, pred_value],
-                                      feed_dict={nn.data: boards[i], nn.data_diags: diagonals[i],
-                                                 nn.true_value: true_values[i]})
-        total_boards += len(true_values[i])  # TODO: Double check.
-        right_boards += nr
-        mean_error += es
-
-    mean_error = mean_error / total_boards
-    print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (
-        mean_error, right_boards, total_boards)
+    def evaluate_board(self, board):
+        return self.evaluate(board.fen())

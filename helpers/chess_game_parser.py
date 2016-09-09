@@ -33,7 +33,8 @@ def read_pgn(filename):
             game = game.variation(0)
     return fens
 
-
+# TODO S: Fix this (see https://chessprogramming.wikispaces.com/Color+Flipping for a test case)
+# TODO S: Move this. I think data_configuring might be a better spot?
 def flip_board(fen):
     """
     Switch colors of pieces.
@@ -68,8 +69,8 @@ def get_fens(num_games=-1):
             fens:
                 list of fen strings from games
     """
-    # TODO S: fix this shitty file path
-    path = '/home/miguel/Documents/projects/guerilla/helpers/pgn_files/single_game_pgns'
+    # TODO fix this shitty file path
+    path = dir_path + '/pgn_files/single_game_pgns'
     files = [f for f in os.listdir(path)[:num_games] if isfile(join(path, f))]
     fens = []
     for f in files[:num_games]:
@@ -106,9 +107,6 @@ def main():
     pickle_path = dir_path + '/../pickles/fens.p'
     pickle.dump(fens, open(pickle_path, 'wb'))
 
-
-# get path
 dir_path = os.path.dirname(os.path.abspath(__file__))
-
 if __name__ == "__main__":
     main()

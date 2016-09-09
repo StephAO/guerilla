@@ -76,7 +76,6 @@ def load_stockfish_values(filename='sf_scores.p'):
                 pickle file to load values from
     """
     full_path = dir_path + "/../pickles/" + filename
-    print full_path
     stockfish_values = pickle.load(open(full_path, 'rb'))
     return stockfish_values
 

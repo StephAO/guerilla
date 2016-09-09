@@ -29,6 +29,8 @@ def read_pgn(filename):
             game = game.variation(0)
     return fens
 
+# TODO S: Fix this (see https://chessprogramming.wikispaces.com/Color+Flipping for a test case)
+# TODO S: Move this. I think data_configuring might be a better spot?
 def flip_board(fen):
     ''' switch colors of pieces
         input:

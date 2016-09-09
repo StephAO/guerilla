@@ -10,4 +10,5 @@ class Guerilla(player.Player):
         self.search = search.Search(self.nn.evaluate_board)
 
     def get_move(self, board):
+        print "Guerilla is thinking..."
         return self.search.minimax(board)[1]

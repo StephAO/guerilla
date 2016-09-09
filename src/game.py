@@ -107,7 +107,7 @@ def main():
     else:
         print "Under 5 (%d) inputs, using defaults to start game." % (num_inputs)
         p1 = {
-            'type': 'human',#'guerilla',
+            'type': 'guerilla',
             'name': 'Harambe'
         }
         p2 = {
@@ -120,7 +120,7 @@ def main():
         return
 
     # Create classes based on inputs.
-    player1 = Game.player_types[p1['type']](p1['name'])
+    player1 = Game.player_types[p1['type']](p1['name'], 'weight_values.p')
     player2 = Game.player_types[p2['type']](p2['name'])
 
     game = Game(player1, player2)

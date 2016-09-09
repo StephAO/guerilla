@@ -22,7 +22,7 @@ def conv8x1_line(x, W): # includes ranks, files, and diags
 
 class NeuralNet:
 
-    def __init__(self, load_weights=False):
+    def __init__(self, load_weights=False, load_file=None):
         ''' 
             Initialize neural net. Generates session, placeholders, variables, 
             and structure.
@@ -37,7 +37,7 @@ class NeuralNet:
 
         # create variables
         if load_weights:
-            self.load_weight_values()
+            self.load_weight_values(load_file)
         else:
             self.initialize_tf_variables()
 
@@ -156,10 +156,14 @@ class NeuralNet:
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
 
+    # TODO S: Maybe combine the following two functions? I think this only gets used in guerilla.py but i'm not sure.
     def evaluate(self, fen):
         # ensure that only fen is used
         fen = fen.split()[0]
         board = dc.fen_to_channels(fen)
         diagonal = dc.get_diagonals(board)
-        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal, session: self.sess});
+        # TODO: This causes problems because of the tensor shapes. Single fen use VS batch fens used in training. :(
+        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session=self.sess)
 
+    def evaluate_board(self, board):
+        return self.evaluate(board.fen())

@@ -4,10 +4,10 @@ import search
 
 class Guerilla(player.Player):
     
-    def __init__(self, name, colour=None):
+    def __init__(self, name, colour=None, load_file=None):
         super(Guerilla, self).__init__(name, colour)
-        self.nn = neural_net.NeuralNet()
-        self.search = search.Search(self.nn.evaluate)
+        self.nn = neural_net.NeuralNet(load_weights=(load_file!=None), load_file=load_file)
+        self.search = search.Search(self.nn.evaluate_board)
 
     def get_move(self, board):
-        return self.search.minimax(board)
+        return self.search.minimax(board)[0]

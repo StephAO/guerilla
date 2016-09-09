@@ -173,11 +173,12 @@ def main():
             batch_idx = i % BATCH_SIZE
             boards[batch_num][batch_idx] = fen_to_channels(fens[i])
 
-            for i in xrange(BATCH_SIZE):    # TODO S: Is the double use of "i" as an iterator intentional?
+            for i in xrange(BATCH_SIZE):  # TODO S: Is the double use of "i" as an iterator intentional?
                 diagonals[batch_num][batch_idx] = get_diagonals(boards[batch_num][batch_idx])
         nn.train(net, boards, diagonals, true_values)
 
     nn.evaluate(net, boards, diagonals, true_values)
+
 
 if __name__ == "__main__":
     main()

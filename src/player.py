@@ -1,9 +1,10 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+
 class Player:
     __metaclass__ = ABCMeta
-        
-    def __init__(self, name, colour = None):
+
+    def __init__(self, name, colour=None):
         self.name = name
         self._colour = colour
 
@@ -13,9 +14,9 @@ class Player:
 
     @colour.setter
     def colour(self, colour):
-        if colour.lower()  in ['white','w']:
+        if colour.lower() in ['white', 'w']:
             self._colour = 'white'
-        elif colour.lower()  in ['black','b']:
+        elif colour.lower() in ['black', 'b']:
             self._colour = 'black'
         else:
             raise ValueError("Error: Invalid colour! Must be 'white','w','black' or 'b'.")
@@ -23,4 +24,3 @@ class Player:
     @abstractmethod
     def get_move(self, board):
         raise NotImplementedError("You should never see this")
-        return NotImplemented

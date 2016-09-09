@@ -26,7 +26,7 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 class NeuralNet:
     # TODO: Add close session function to release resources.
-    def __init__(self, load_weights=False):
+    def __init__(self, load_weights=False, load_file=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -62,6 +62,7 @@ class NeuralNet:
 
         # initialize variables
         if load_weights:
+            assert load_file is not None, "Could not load weights, file has not been specified."
             self.load_weight_values(load_file)
         else:
             self.initialize_tf_variables()
@@ -208,7 +209,6 @@ class NeuralNet:
         board = np.array([board])
         diagonal = np.array([diagonal])
         return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session=self.sess)
-
 
     def evaluate_board(self, board):
         return self.evaluate(board.fen())

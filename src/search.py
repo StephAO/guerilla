@@ -1,9 +1,11 @@
 import chess
 
+
 class Search:
     """
     Implements game tree search.
     """
+
     def __init__(self, eval_fn, max_depth=3):
         self.eval_function = eval_fn
         self.max_depth = max_depth
@@ -38,7 +40,7 @@ class Search:
                 # print "D%d: %s" % (depth, move)
                 # recursive call
                 board.push(move)
-                score, next_move = self.minimax(board, depth+1, a, B, not max_player)
+                score, next_move = self.minimax(board, depth + 1, a, B, not max_player)
                 board.pop()
                 if max_player:
                     if score > a:
@@ -56,6 +58,7 @@ class Search:
                     break
         # print "D%d: best: %s, %s" % (depth, best_score, best_move)
         return best_score, best_move
+
 
 def search_test_eval(board):
     """
@@ -106,7 +109,7 @@ def search_test():
     # Made up starting positions with white pawns in a2 & b3 and black pawns in a7 & b6 (no kings haha)
     # This allows for only 3 nodes at depth 1, 9 nodes at depth 2, and 21 nodes at depth 3 (max)
 
-    fen_str="8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
 
     board = chess.Board(fen=fen_str)
     shallow = Search(eval_fn=search_test_eval, max_depth=3)  # Can't run deeper due to restricted evaluatoin function.

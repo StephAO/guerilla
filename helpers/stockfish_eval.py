@@ -82,6 +82,6 @@ def main():
     pickle_path = dir_path + '/../pickles/sf_scores.p'
     pickle.dump(sf_scores, open(pickle_path, 'wb'))
 
-dir_path = os.path.dirname(__file__)
+dir_path = os.path.dirname(os.path.abspath(__file__))
 if __name__ == "__main__":
     main()

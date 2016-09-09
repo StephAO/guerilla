@@ -7,8 +7,8 @@ import data_configuring as dc
 
 
 def weight_variable(shape):
-        initial = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
-        return tf.Variable(initial)
+    initial = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
+    return tf.Variable(initial)
 
 def bias_variable(shape):
     initial = tf.constant(0.1, shape=shape, dtype=tf.float32)
@@ -44,9 +44,9 @@ class NeuralNet:
         self.sess.run(tf.initialize_all_variables())
 
         # create placeholders
-        self.data = tf.placeholder(tf.float32, shape=[BATCH_SIZE,8,8,NUM_CHANNELS])
-        self.data_diags = tf.placeholder(tf.float32, shape=[BATCH_SIZE,10,8,NUM_CHANNELS])
-        self.true_value = tf.placeholder(tf.float32, shape=[BATCH_SIZE])
+        self.data = tf.placeholder(tf.float32, shape=[None,8,8,NUM_CHANNELS])
+        self.data_diags = tf.placeholder(tf.float32, shape=[None,10,8,NUM_CHANNELS])
+        self.true_value = tf.placeholder(tf.float32, shape=[None])
 
         # create neural net structure
         self.neural_net()
@@ -134,16 +134,18 @@ class NeuralNet:
             Sets member variable 'pred_value' to the tensor representing the
             output of neural net.
         '''
+        batch_size = tf.shape(self.data)[0]
+
         # outputs to conv layer
         o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
         o_rank = tf.nn.relu(conv8x1_line(self.data, self.W_rank) + self.b_rank)
         o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
         o_diag = tf.nn.relu(conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
 
-        o_grid = tf.reshape(o_grid, [BATCH_SIZE, 64*NUM_FEAT])
-        o_rank = tf.reshape(o_rank, [BATCH_SIZE, 8*NUM_FEAT])
-        o_file = tf.reshape(o_file, [BATCH_SIZE, 8*NUM_FEAT])
-        o_diag = tf.reshape(o_diag, [BATCH_SIZE, 10*NUM_FEAT])
+        o_grid = tf.reshape(o_grid, [batch_size, 64*NUM_FEAT])
+        o_rank = tf.reshape(o_rank, [batch_size, 8*NUM_FEAT])
+        o_file = tf.reshape(o_file, [batch_size, 8*NUM_FEAT])
+        o_diag = tf.reshape(o_diag, [batch_size, 10*NUM_FEAT])
 
         o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])
 
@@ -162,6 +164,9 @@ class NeuralNet:
         fen = fen.split()[0]
         board = dc.fen_to_channels(fen)
         diagonal = dc.get_diagonals(board)
+        
+        board = np.array([board])
+        diagonal = np.array([diagonal])
         # TODO: This causes problems because of the tensor shapes. Single fen use VS batch fens used in training. :(
         return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session=self.sess)
 

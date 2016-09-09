@@ -86,7 +86,7 @@ def main():
     pickle_path = dir_path + '/../pickles/fens.p'
     pickle.dump(fens, open(pickle_path, 'wb'))
 
-dir_path = os.path.dirname(__file__)
+dir_path = os.path.dirname(os.path.abspath(__file__))
 if __name__ == "__main__":
     main()
 

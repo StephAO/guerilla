@@ -58,6 +58,7 @@ class Game:
 
                 # Get move
                 move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
+                print move
                 while move not in self.board.legal_moves:
                     print "Error: Move is not legal"
                     move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
@@ -120,7 +121,7 @@ def main():
         return
 
     # Create classes based on inputs.
-    player1 = Game.player_types[p1['type']](p1['name'], 'weight_values.p')
+    player1 = Game.player_types[p1['type']](p1['name'], 'weights_1000.p')
     player2 = Game.player_types[p2['type']](p2['name'])
 
     game = Game(player1, player2)

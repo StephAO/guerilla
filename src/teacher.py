@@ -1,38 +1,36 @@
 import os
 import random
-import data_configure as dc
+import numpy as np
+import tensorflow as tf
+
+import guerilla
+import data_configuring as dc
+import stockfish_eval as sf
+import chess_game_parser as cgp
+from hyper_parameters import *
 
 class Teacher:
 
-    # dictionary of different training/evaluation methods
-    actions_dict = {
-        'train_bootstrap' : train_bootstrap,
-    }
+    def __init__(self, _guerilla, actions):
 
-    def __init__(self, guerilla, actions):
-        self.guerilla = guerilla
-        self.nn = guerilla.nn
+        # dictionary of different training/evaluation methods
+        self.actions_dict = {
+            'train_bootstrap' : self.train_bootstrap,
+        }
+
+        self.guerilla = _guerilla
+        self.nn = _guerilla.nn
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
         self.actions = actions
 
     def run(self):
-        for action in self.actions():
-            if action in actions_dict:
-                actions_dict[action]()
-            else:
-                print "Error - %s is not a valid command" % (action)
-
-    def train_bootstrap(self, save_weights=True):
-        """
+        """ 
             1. load data from file
             2. configure data
-            3. train neural net
+            3. run actions
         """
-
-        fens_filename = self.dir_path + "/../pickles/fens.p"
-        stockfish_filename = self.dir_path + "/../pickles/stockfish.p"
-
-        train = False
+        fens_filename = "fens.p"
+        stockfish_filename = "sf_scores.p"
 
         fens = cgp.load_fens(fens_filename)
 
@@ -46,24 +44,35 @@ class Teacher:
         boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
         diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
 
+        for action in self.actions:
+            if action in self.actions_dict:
+                self.actions_dict[action](boards, diagonals, true_values, num_batches, fens)
+            else:
+                print "Error - %s is not a valid command" % (action)
+
+    def train_bootstrap(self, boards, diagonals, true_values, num_batches, fens, save_weights=True):
+        """
+            train neural net
+        """
+
         # train should depend on action
-        if train:
-            raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
-            print 'Training data. Will save weights to pickle'
+        raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
+        print 'Training data. Will save weights to pickle'
 
-            for epoch in xrange(NUM_EPOCHS):
-                # Configure data (shuffle fens -> fens to channel -> group batches)
-                game_indices = xrange(num_batches*BATCH_SIZE)
-                random.shuffle(game_indices)
-                for game_idx in game_indices:
-                    batch_num = game_idx/BATCH_SIZE
-                    batch_idx = game_idx % BATCH_SIZE
+        for epoch in xrange(NUM_EPOCHS):
+            # Configure data (shuffle fens -> fens to channel -> group batches)
+            game_indices = range(num_batches*BATCH_SIZE)
+            random.shuffle(game_indices)
+            for game_idx in game_indices:
+                batch_num = game_idx/BATCH_SIZE
+                batch_idx = game_idx % BATCH_SIZE
 
-                    boards[batch_num][batch_idx] = dc.fen_to_channels(fens[game_idx])
-                    for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed
-                        diagonals[batch_num][batch_idx] = dc.get_diagonals(boards[batch_num][batch_idx])
-                # train epoch
-                self.weight_update_bootstrap(boards, diagonals, true_values)
+                boards[batch_num][batch_idx] = dc.fen_to_channels(fens[game_idx])
+                for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed
+                    diagonals[batch_num][batch_idx] = dc.get_diagonals(boards[batch_num][batch_idx])
+            # train epoch
+            self.weight_update_bootstrap(boards, diagonals, true_values)
+
         # evaluate nn
         self.evaluate(boards, diagonals, true_values)
 
@@ -137,3 +146,11 @@ class Teacher:
         mean_error = mean_error/total_boards
         print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (mean_error, right_boards, total_boards)
 
+def main():
+    g = guerilla.Guerilla('Harambe')
+    t = Teacher(g, ['train_bootstrap'])
+    t.run()
+
+
+if __name__ == '__main__':
+    main()

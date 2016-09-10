@@ -4,6 +4,8 @@ import pickle
 import sys
 import os
 from os.path import isfile, join
+sys.path.insert(0, dir_path + '/../src/')
+import data_configuring as dc
 
 def read_pgn(filename):
     ''' given a pgn filename, reads the file and returns a fen for each position in the game
@@ -22,35 +24,12 @@ def read_pgn(filename):
             fen = game.board().fen()
             fen = fen.split(' ')
             if fen[1] == 'w':
-                fen = flip_board(fen[0])
+                fen = dc.flip_board(fen[0])
             else:
                 fen = fen[0]
             fens.append(fen)
             game = game.variation(0)
     return fens
-
-# TODO S: Fix this (see https://chessprogramming.wikispaces.com/Color+Flipping for a test case)
-# TODO S: Move this. I think data_configuring might be a better spot?
-def flip_board(fen):
-    ''' switch colors of pieces
-        input:
-            fen:
-                fen string (only board state)
-        output:
-            new_fen:
-                fen string with colors switched
-    '''
-    new_fen = ''
-    for char in fen:
-        if char.isupper():
-            new_fen += char.lower()
-        elif char.islower():
-            new_fen += char.upper()
-        else:
-            new_fen += char
-    new_fen_list = new_fen.split('/')
-    new_fen = '/'.join(new_fen_list[::-1])
-    return new_fen
 
 def get_fens(num_games=-1):
     ''' Returns a list of fens from games. Will either read from num_games games or all games in folder /pgn_files/single_game_pgns
@@ -61,7 +40,6 @@ def get_fens(num_games=-1):
             fens:
                 list of fen strings from games
     '''
-    # @TODO fix this shitty file path
     path = dir_path + '/pgn_files/single_game_pgns'
     files = [f for f in os.listdir(path)[:num_games] if isfile(join(path, f))]
     fens = []

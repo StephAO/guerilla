@@ -11,6 +11,27 @@ import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
 
+def flip_board(fen):
+    ''' switch colors of pieces
+        input:
+            fen:
+                fen string (only board state)
+        output:
+            new_fen:
+                fen string with colors switched
+    '''
+    new_fen = ''
+    for char in fen:
+        if char.isupper():
+            new_fen += char.lower()
+        elif char.islower():
+            new_fen += char.upper()
+        else:
+            new_fen += char
+    new_fen_list = new_fen.split('/')
+    new_fen = '/'.join(new_fen_list[::-1])
+    return new_fen
+
 def fen_to_channels(fen):
     """
         Converts a fen string to channels for neural net.

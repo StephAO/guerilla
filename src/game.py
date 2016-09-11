@@ -29,9 +29,9 @@ class Game:
         # Initialize board
         self.board = chess.Board()
 
-       # Initialize statistics
+        # Initialize statistics
         self.num_games = num_games
-        self.data = {}
+        self.data = dict()
         self.data['wins'] = [0, 0]
         self.data['draws'] = 0
 
@@ -92,6 +92,7 @@ class Game:
 
         return
 
+
 def main():
     num_inputs = len(sys.argv)
     if num_inputs >= 5:
@@ -106,7 +107,7 @@ def main():
             'name': sys.argv[4]
         }
     else:
-        print "Under 5 (%d) inputs, using defaults to start game." % (num_inputs)
+        print "Under 5 (%d) inputs, using defaults to start game." % num_inputs
         p1 = {
             'type': 'guerilla',
             'name': 'Harambe'

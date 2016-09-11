@@ -1,5 +1,7 @@
 import sys
 import os
+
+#TODO: Remove this and replace with proper access.
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
@@ -57,6 +59,7 @@ def flip_board(fen):
 
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
+# TODO S: Move to chess_game_parser.py
 def fen_to_channels(fen):
     """
         Converts a fen string to channels for neural net.
@@ -83,7 +86,7 @@ def fen_to_channels(fen):
     # castling = fen[2]
     # en_passant = fen[3]
 
-    channels = np.zeros((8,8,NUM_CHANNELS))
+    channels = np.zeros((8, 8, NUM_CHANNELS))
 
     file = 0
     rank = 0
@@ -97,7 +100,8 @@ def fen_to_channels(fen):
             file += int(char)
             continue
         else:
-            my_piece = char.islower() # double check this. Normal fen, black is lower, but stockfish seems use to lower as current move
+            my_piece = char.islower()
+            # TODO: double check this. Normal FEN, black is lower, but stockfish seems use to lower as current move.
             char = char.lower()
             if my_piece:
                 channels[rank, file, piece_indices[char]] = 1
@@ -126,17 +130,17 @@ def get_diagonals(channels):
     for piece_idx in piece_indices.values():
 
         # diagonals with length 6 and 7
-        for length in xrange(6,8):
+        for length in xrange(6, 8):
             for i in xrange(length):
-                offset = 8-length
+                offset = 8 - length
                 diag_offset = 4 if length == 7 else 0
                 for channel in xrange(NUM_CHANNELS):
                     # upwards diagonals
-                    diagonals[0+diag_offset, int(offset/2)+i, channel] = channels[i+offset, i, channel]
-                    diagonals[1+diag_offset, int(offset/2)+i, channel] = channels[i, i+offset, channel]
-                    #downwards diagonals
-                    diagonals[2+diag_offset, int(offset/2)+i, channel] = channels[7-offset-i, i, channel]
-                    diagonals[3+diag_offset, int(offset/2)+i, channel] = channels[7-i, offset-i, channel]
+                    diagonals[0 + diag_offset, int(offset / 2) + i, channel] = channels[i + offset, i, channel]
+                    diagonals[1 + diag_offset, int(offset / 2) + i, channel] = channels[i, i + offset, channel]
+                    # downwards diagonals
+                    diagonals[2 + diag_offset, int(offset / 2) + i, channel] = channels[7 - offset - i, i, channel]
+                    diagonals[3 + diag_offset, int(offset / 2) + i, channel] = channels[7 - i, offset - i, channel]
 
         # diagonals with length 8
         for i in xrange(8):
@@ -144,12 +148,12 @@ def get_diagonals(channels):
                 # upwards
                 diagonals[8, i, channel] = channels[i, i, channel]
                 # downwards
-                diagonals[9, i, channel] = channels[7-i, i, channel]
+                diagonals[9, i, channel] = channels[7 - i, i, channel]
 
     return diagonals
 
 def get_stockfish_values(boards):
-    ''' 
+    """
         Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
         the scores to a winning probability between 0 and 1 (see sigmoid_array for how the sigmoid was chosen)
 
@@ -160,11 +164,10 @@ def get_stockfish_values(boards):
         Outputs:
             values[list of floats]:
                 a list of values for each board ranging between 0 and 1
-    '''        
+    """
     cps = []
-    i = 0
     for b in boards:
-    # cp = centipawns advantage
+        # cp = centipawns advantage
         cp = sf.stockfish_scores(b, seconds=2)
         print cp
         if cp is not None:
@@ -174,8 +177,8 @@ def get_stockfish_values(boards):
     return sigmoid_array(cps)
 
 def sigmoid_array(values):
-    ''' From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
-        1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a few data point
-        and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided on (by me, deal with it)
-        Ideally this fitter function is learned, but this is just for testing so...'''
-    return 1./(1. + np.exp(-0.00547*values))
+    """ From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
+        1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a few
+        data points and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided on
+        (by me, deal with it). Ideally this fitter function is learned, but this is just for testing so..."""
+    return 1. / (1. + np.exp(-0.00547 * values))

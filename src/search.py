@@ -1,5 +1,4 @@
 import chess
-import data_configuring as dc
 
 class Search:
     """
@@ -127,7 +126,7 @@ def search_test1():
     # Made up starting positions with white pawns in a2 & b3 and black pawns in a7 & b6 (no kings haha)
     # This allows for only 3 nodes at depth 1, 9 nodes at depth 2, and 21 nodes at depth 3 (max)
 
-    fen_str="8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
 
     board = chess.Board(fen=fen_str)
     shallow = Search(eval_fn=search_test_eval, max_depth=3)  # Can't run deeper due to restricted evaluatoin function.

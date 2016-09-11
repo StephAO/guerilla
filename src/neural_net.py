@@ -16,30 +16,53 @@ def bias_variable(shape):
     return tf.Variable(initial)
 
 
-def conv5x5_grid(x, W):
-    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')  # Pad or fit? (same is pad, fit is valid)
+def conv5x5_grid(x, w):
+    return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME')  # Pad or fit? (same is pad, fit is valid)
 
 
-def conv8x1_line(x, W):  # includes ranks, files, and diags
-    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='VALID')
+def conv8x1_line(x, w):  # includes ranks, files, and diagonals
+    return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='VALID')
 
 
 class NeuralNet:
+    # TODO: Add close session function to release resources.
     def __init__(self, load_weights=False, load_file=None):
         """
-            Initialize neural net. Generates session, placeholders, variables, 
+            Initializes neural net. Generates session, placeholders, variables,
             and structure.
             Input:
                 load_weights [Bool]:
                     If true, the neural net will load weights saved from a file
                     instead of initializing them from a normal distribution.
         """
-        self.dir_path = os.path.dirname(os.path.abspath(__file__))
+        self.dir_path = os.path.dirname(__file__)
+
+        # declare layer variables
+        self.sess = None
+        self.W_grid = None
+        self.W_rank = None
+        self.W_file = None
+        self.W_diag = None
+        self.b_grid = None
+        self.b_rank = None
+        self.b_file = None
+        self.b_diag = None
+        self.W_fc_1 = None
+        self.b_fc_1 = None
+        self.W_fc_2 = None
+        self.b_fc_2 = None
+        self.W_final = None
+        self.b_final = None
+
+        # declare other variables
+        self.pred_value = None
+
         # create session
         self.set_session()
 
-        # create variables
+        # initialize variables
         if load_weights:
+            assert load_file is not None, "Could not load weights, file has not been specified."
             self.load_weight_values(load_file)
         else:
             self.initialize_tf_variables()
@@ -56,18 +79,20 @@ class NeuralNet:
 
     def set_session(self):
         """ Sets tensorflow session """
+
         self.sess = tf.get_default_session()
         if self.sess is None:
-            self.sess = tf.InteractiveSession()
+            self.sess = tf.InteractiveSession()  # TODO S: Why not just tf.Session()?
 
     def initialize_tf_variables(self):
         """
             Initializes all weight variables to normal distribution, and all
             bias variables to a constant.
         """
+
         self.W_grid = weight_variable([5, 5, NUM_CHANNELS, NUM_FEAT])
-        self.W_rank = weight_variable([8, 1, NUM_CHANNELS, NUM_FEAT])
-        self.W_file = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
+        self.W_rank = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
+        self.W_file = weight_variable([8, 1, NUM_CHANNELS, NUM_FEAT])
         self.W_diag = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
 
         # biases
@@ -84,11 +109,11 @@ class NeuralNet:
         self.W_fc_2 = weight_variable([NUM_HIDDEN, NUM_HIDDEN])
         self.b_fc_2 = bias_variable([NUM_HIDDEN])
 
-        # Ouput layer
+        # Output layer
         self.W_final = weight_variable([NUM_HIDDEN, 1])
         self.b_final = bias_variable([1])
 
-    def load_weight_values(self, filename='weights_1000.p'):
+    def load_weight_values(self, filename='weight_values.p'):
         """
             Sets all variables to values loaded from a file
             Input: 
@@ -115,19 +140,20 @@ class NeuralNet:
         self.b_final = tf.Variable(weight_values['b_final'])
 
     def save_weight_values(self, filename='weight_values.p'):
-        ''' 
+        """
             Saves all variable values a pickle file
             Input: 
                 filename[String]:
                     Name of the file to save weight values to
-        '''
-        weight_values = {}
+        """
+
+        weight_values = dict()
 
         weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], weight_values['W_diag'], \
-        weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
-        weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
-        weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
-            self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final, \
+            weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
+            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
+            weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
+            self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
                            self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final])
 
         pickle_path = self.dir_path + '/../pickles/' + filename
@@ -141,7 +167,7 @@ class NeuralNet:
         """
         batch_size = tf.shape(self.data)[0]
 
-        # outputs to conv layer
+        # outputs to convolutional layer
         o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
         o_rank = tf.nn.relu(conv8x1_line(self.data, self.W_rank) + self.b_rank)
         o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
@@ -152,6 +178,7 @@ class NeuralNet:
         o_file = tf.reshape(o_file, [batch_size, 8 * NUM_FEAT])
         o_diag = tf.reshape(o_diag, [batch_size, 10 * NUM_FEAT])
 
+        # output of convolutional layer
         o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])
 
         # output of fully connected layer 1
@@ -182,7 +209,6 @@ class NeuralNet:
         board = np.array([board])
         diagonal = np.array([diagonal])
         return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session=self.sess)
-
 
     def evaluate_board(self, board):
         return self.evaluate(board.fen())

@@ -4,6 +4,7 @@ import pickle
 import sys
 import os
 from os.path import isfile, join
+dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../src/')
 import data_configuring as dc
 
@@ -24,7 +25,7 @@ def read_pgn(filename):
             fen = game.board().fen()
             fen = fen.split(' ')
             if fen[1] == 'w':
-                fen = dc.flip_board(fen[0])
+                fen = dc.flip_board(fen)[0]
             else:
                 fen = fen[0]
             fens.append(fen)
@@ -66,7 +67,6 @@ def main():
     pickle_path = dir_path + '/../pickles/fens.p'
     pickle.dump(fens, open(pickle_path, 'wb'))
 
-dir_path = os.path.dirname(os.path.abspath(__file__))
 if __name__ == "__main__":
     main()
 

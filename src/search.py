@@ -1,4 +1,5 @@
 import chess
+import data_configuring as dc
 
 class Search:
     """
@@ -8,54 +9,74 @@ class Search:
         self.eval_function = eval_fn
         self.max_depth = max_depth
 
-    def minimax(self, board, depth=0, a=float("-inf"), B=float("inf"), max_player=True):
+    def negamax(self, board, depth=0, a=float("-inf")):
         """ 
-            Recursive function to search for best move using minimax with alpha-beta pruning.
-            Tested.
+            Recursive function to search for best move using negamax with alpha-beta pruning.
+            Assumes that the layer above the leaves are trying to minimize the positive value,
+            which is the same as maximizing the negatives.
             Inputs:
                 board [chess.Board]:
                     current state of board
                 depth [int]:
                     current depth, used for terminating condition
                 a [float]:
-                    max player lower bound. Alpha part of alpha-beta pruning
-                B [float]:
-                    min player upper bound. Beta part of alpha-beta pruning
-                max_player [bool]:
-                    boolean to decided whether to maximize or minimize search value
+                    lower bound of layer above, upper bound of current layer (because of alternating signs)
             Outputs:
                 best_move [chess.Move]:
                     Best move to play
                 best_score [float]:
                     Score achieved by best move
         """
-        best_score = float("-inf") if max_player else float("inf")
+        best_score = float("-inf")
         best_move = None
+
         if depth == self.max_depth:
-            return self.eval_function(board), None
+            fen = board.fen()
+            if fen[1] == 'b':
+                fen = dc.flip_board(fen)
+            return (-1)*self.eval_function(board), None
+            
+        ##### If using search_test2() ######
+        # if type(board) is int:
+        #     return (-1)*board, None
+        ####################################
+        
         else:
             for move in board.legal_moves:
-                # print "D%d: %s" % (depth, move)
-                # recursive call
+                print "D%d: %s" % (depth, move)
+                recursive call
                 board.push(move)
-                score, next_move = self.minimax(board, depth+1, a, B, not max_player)
+                score, next_move = self.negamax(board, depth+1, -best_score)
                 board.pop()
-                if max_player:
-                    if score > a:
-                        a = score
-                    if score > best_score:
-                        best_score = score
-                        best_move = move
-                else:
-                    if score < B:
-                        B = score
-                    if score < best_score:
-                        best_score = score
-                        best_move = move
-                if B <= a:
+
+                if score > best_score:
+                    best_score = score
+                    best_move = move
+
+                # best_score is my current lower bound
+                # a is the upper bound of what's useful to search
+                # if my lower bound breaks the boundaries of what's worth to search
+                # stop searching here
+                if best_score >= a:
                     break
-        # print "D%d: best: %s, %s" % (depth, best_score, best_move)
-        return best_score, best_move
+
+            ##### If using search_test2() ######
+            # end = False
+            # for sub in board:
+            #     if end:
+            #         print "cut out", sub
+            #     else:
+            #         score, next_move = self.negamax(sub, depth+1, best_score)
+            #         if score > best_score:
+            #             best_score = score
+            #             best_move = sub
+            #         if best_score >= (-1)*a:
+            #             print "D%d: %s, %s" % (depth, best_score, best_move)
+            #             end = True
+            ###################################
+            
+        print "D%d: best: %s, %s" % (depth, best_score, best_move)
+        return (-1)*best_score, best_move
 
 def search_test_eval(board):
     """
@@ -100,7 +121,7 @@ def search_test_eval(board):
         raise RuntimeError("This definitely should not happen! Invalid board.")
 
 
-def search_test():
+def search_test1():
     """ Runs a basic minimax test on the search class. """
 
     # Made up starting positions with white pawns in a2 & b3 and black pawns in a7 & b6 (no kings haha)
@@ -117,3 +138,22 @@ def search_test():
     else:
         print "Test failed. Expected [Score, Move]: [6, b3b4] got [%d, %s]" % (score, move)
         return False
+
+def search_test2():
+    """ Runs a basic minimax test on the search class. 
+        You need to toggle the comments in negamax to test it
+        You can generate more tests at http://inst.eecs.berkeley.edu/~cs61b/fa14/ta-materials/apps/ab_tree_practice/
+        Ensure that the layer above the leaves are minimum layers"""
+    test = [[[-15,-15,2],[4,9,4],[-16,3,-15]],[[18,7,-2],[10,-6,15],[-2,-15,-13]],[[12,16,-19],[6,14,-10],[2,-6,-7]]]
+    s = Search(None)
+    result = s.negamax(test)
+    print result
+    if result == (-7, [[12, 16, -19], [6, 14, -10], [2, -6, -7]]):
+        print "Test passed."
+        return True
+    else:
+        print "Test failed. Expected (-7, [[12, 16, -19], [6, 14, -10], [2, -6, -7]]) got %s" % (result)
+
+
+if __name__ == '__main__':
+    search_test2()

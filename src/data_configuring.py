@@ -20,17 +20,42 @@ def flip_board(fen):
             new_fen:
                 fen string with colors switched
     '''
-    new_fen = ''
-    for char in fen:
+    board_fen, turn, castling, en_passant, half_clock, full_clock = fen.split()
+
+    ## board fen ##
+    new_board_fen = ''
+    for char in board_fen:
         if char.isupper():
-            new_fen += char.lower()
+            new_board_fen += char.lower()
         elif char.islower():
-            new_fen += char.upper()
+            new_board_fen += char.upper()
         else:
-            new_fen += char
-    new_fen_list = new_fen.split('/')
-    new_fen = '/'.join(new_fen_list[::-1])
-    return new_fen
+            new_board_fen += char
+    new_fen_list = new_board_fen.split('/')
+    new_board_fen = '/'.join(new_fen_list[::-1])
+    
+    ## turn ##
+    turn = 'w' if turn == 'b' else 'b'
+
+    ## castling ##
+    new_white_castling = ''
+    new_black_castling = ''
+    for char in castling:
+        if char.islower():
+            new_white_castling += char.upper()
+        else:
+            new_black_castling += char.lower()
+    new_castling = new_white_castling + new_black_castling
+
+    ## en_passant ##
+    new_en_passant = ''
+    if en_passant != '-':
+        new_en_passant += en_passant[0]
+        new_en_passant += str(9 - int(en_passant[1]))
+    else:
+        new_en_passant = '-'
+
+    return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
 def fen_to_channels(fen):
     """

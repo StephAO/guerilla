@@ -63,9 +63,10 @@ class Teacher:
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_batches*BATCH_SIZE)
             random.shuffle(game_indices)
+            print game_indices
             for game_idx in game_indices:
                 batch_num = game_idx/BATCH_SIZE
-                batch_idx = game_idx % BATCH_SIZE
+                batch_idx = game_idx%BATCH_SIZE
 
                 boards[batch_num][batch_idx] = dc.fen_to_channels(fens[game_idx])
                 for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed

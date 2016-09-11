@@ -121,7 +121,7 @@ def main():
         return
 
     # Create classes based on inputs.
-    player1 = Game.player_types[p1['type']](p1['name'], 'weights_1000.p')
+    player1 = Game.player_types[p1['type']](p1['name'], 'weights_values.p')
     player2 = Game.player_types[p2['type']](p2['name'])
 
     game = Game(player1, player2)

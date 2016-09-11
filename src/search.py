@@ -43,8 +43,8 @@ class Search:
         
         else:
             for move in board.legal_moves:
-                print "D%d: %s" % (depth, move)
-                recursive call
+                # print "D%d: %s" % (depth, move)
+                # recursive call
                 board.push(move)
                 score, next_move = self.negamax(board, depth+1, -best_score)
                 board.pop()
@@ -75,7 +75,7 @@ class Search:
             #             end = True
             ###################################
             
-        print "D%d: best: %s, %s" % (depth, best_score, best_move)
+        # print "D%d: best: %s, %s" % (depth, best_score, best_move)
         return (-1)*best_score, best_move
 
 def search_test_eval(board):

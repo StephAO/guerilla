@@ -27,10 +27,11 @@ class Human(player.Player):
                 print "Legal Moves: " + ', '.join([str(x) for x in board.legal_moves])
             elif usr_input=='r':
                 move = random.sample(board.legal_moves,1)[0]
-                print move
                 break
-            else:
+            elif usr_input in [str(x) for x in board.legal_moves]:
                 move = chess.Move.from_uci(usr_input)
                 break
+            else:
+                print "Invalid or illegal input, legal moves are: "+ ', '.join([str(x) for x in board.legal_moves])
 
         return move

@@ -23,11 +23,9 @@ def read_pgn(filename):
         game = chess.pgn.read_game(pgn)
         while not game.is_end():
             fen = game.board().fen()
-            fen = fen.split(' ')
             if fen[1] == 'w':
-                fen = dc.flip_board(fen)[0]
-            else:
-                fen = fen[0]
+                fen = dc.flip_board(fen)
+            fen = fen.split(' ')[0]
             fens.append(fen)
             game = game.variation(0)
     return fens

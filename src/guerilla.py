@@ -11,4 +11,4 @@ class Guerilla(player.Player):
 
     def get_move(self, board):
         print "Guerilla is thinking..."
-        return self.search.minimax(board)[1]
+        return self.search.negamax(board)[1]

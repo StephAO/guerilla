@@ -3,6 +3,10 @@ import chess
 import player
 import guerilla
 import human
+import os
+dir_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, dir_path + '/GUI/')
+import ChessGUI_pygame
 
 
 class Game:
@@ -11,7 +15,7 @@ class Game:
         'human': human.Human
     }
 
-    def __init__(self, p1, p2, num_games=1):
+    def __init__(self, p1, p2, num_games=1, use_gui=True):
         """ 
             Note: p1 is white, p2 is black
             Input:
@@ -35,6 +39,14 @@ class Game:
         self.data['wins'] = [0, 0]
         self.data['draws'] = 0
 
+        # Initialize gui
+        if use_gui:
+            self.gui = ChessGUI_pygame.ChessGUI_pygame()
+            if type(p1) is human.Human:
+                self.player1.gui = self.gui
+            if type(p2) is human.Human:
+                self.player2.gui = self.gui
+
     def start(self):
         """ 
             Run n games. For each game players take turns until game is over.
@@ -55,6 +67,8 @@ class Game:
             white = True
             while not self.board.is_game_over(claim_draw=True):
                 Game.pretty_print_board(self.board)
+                self.gui.draw(self.board)
+                print self.board.fen()
 
                 # Get move
                 move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
@@ -91,6 +105,21 @@ class Game:
         print '\n\ta b c d e f g h'
 
         return
+
+    # @staticmethod
+    # def get_gui_board_representation(fen):
+    #     board = [[]]
+    #     for i, char in enumerate(fen.split()[0]):
+    #         if char == '/':
+    #             board.append([])
+    #             i += 1
+    #         elif char.isdigit():
+    #             for j in xrange(int(char)):
+    #                 board[i].append('e')
+    #         else:
+    #             prefix = 'w' if char.isupper() else 'b'
+
+
 
 
 def main():

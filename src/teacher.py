@@ -191,8 +191,6 @@ class Teacher:
                     curr_node = curr_node.parent
 
             # Call TD-Leaf
-            # for i in range(len(fens)):
-            #     print self.nn.evaluate(fens[i]) if i%2==0 else 1 - self.nn.evaluate(dh.flip_board(fens[i]))
             self.td_leaf(fens)
 
     def td_leaf(self, game):
@@ -204,7 +202,6 @@ class Teacher:
                     A game consists of a sequential list of board states. Each board state is a FEN.
         """
         # TODO: Maybe this should check that each game is valid? i.e. assert that only legal moves are played.
-        # TODO: Add LEAF part of TD-Leaf
 
         num_boards = len(game)
         game_info = [{'board': None, 'value': None} for _ in range(num_boards)]  # Indexed the same as num_boards
@@ -236,7 +233,10 @@ class Teacher:
                     w_update[i] += update[i] * td_val
 
         # Update neural net weights.
-        self.nn.update_weights(self.nn.all_weights, [w*TD_LRN_RATE for w in w_update])
+        old_weights = self.nn.get_weights(self.nn.all_weights)
+        new_weights = [old_weights[i] + TD_LRN_RATE*w_update[i] for i in range(len(w_update))]
+        self.nn.update_weights(self.nn.all_weights, new_weights)
+        print "Weights updated."
 
     def calc_value_diff(self, curr_board, next_board):
         """
@@ -304,7 +304,7 @@ class Teacher:
 def main():
     g = guerilla.Guerilla('Harambe', 'w','weight_values.p')
     t = Teacher(g, ['train_td_endgames'])#['train_bootstrap'])
-    t.set_td_params(num_end=1, num_full=1,randomize=False)
+    t.set_td_params(num_end=2, num_full=1,randomize=False)
     t.run()
 
 

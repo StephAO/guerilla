@@ -195,6 +195,18 @@ class NeuralNet:
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
 
+    def get_weights(self, weight_vars):
+        """
+        Get the weight values of the input.
+            Input:
+                weight_vars [List]
+                    List of weights to get.
+            Output:
+                weights [List]
+                    Weights & biases.
+        """
+        return self.sess.run(weight_vars)
+
     def update_weights(self, weight_vars, weight_vals):
         """
         Updates the neural net weights based on the input.

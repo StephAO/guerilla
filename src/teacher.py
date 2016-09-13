@@ -183,7 +183,7 @@ class Teacher:
                 # Only get endgame fens
                 curr_node = game.end()
                 for i in range(self.td_depth):
-                    fens.append(curr_node.board().fen())
+                    fens.insert(0, curr_node.board().fen())
 
                     # Check if start of game is reached
                     if curr_node == game.root():
@@ -191,7 +191,8 @@ class Teacher:
                     curr_node = curr_node.parent
 
             # Call TD-Leaf
-            print fens
+            for i in range(len(fens)):
+                print self.nn.evaluate(fens[i]) if i%2==0 else 1 - self.nn.evaluate(dc.flip_board(fens[i]))
             self.td_leaf(fens)
 
     def td_leaf(self, game):
@@ -204,7 +205,6 @@ class Teacher:
         """
         # TODO: Maybe this should check that each game is valid? i.e. assert that only legal moves are played.
         # TODO: Add LEAF part of TD-Leaf
-        # TODO: Test
 
         num_boards = len(game)
         w_update = None
@@ -217,7 +217,6 @@ class Teacher:
                 td_val += math.pow(TD_DISCOUNT, j - t)*dt
 
             # Get gradient and update sum
-            print "adding gradient"
             update = self.nn.get_gradient(game[t], self.nn.all_weights)
             if not w_update:
                 w_update = [w*td_val for w in update]

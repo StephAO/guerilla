@@ -29,14 +29,14 @@ class ChessGUI_pygame:
         pygame.display.set_caption('Python Chess')
 
         self.textBox = ScrollingTextBox(self.screen,525,825,50,450)
-        self.LoadImages(graphicStyle)
+        self.load_images(graphicStyle)
         #pygame.font.init() - should be already called by pygame.init()
         self.fontDefault = pygame.font.Font( None, 20 )
 
         self.ranks = ['8','7','6','5','4','3','2','1']
         self.files = ['a','b','c','d','e','f','g','h']
 
-    def LoadImages(self,graphicStyle):
+    def load_images(self,graphicStyle):
         dir_path = os.path.dirname(os.path.abspath(__file__))
         if graphicStyle == 0:
             self.square_size = 50 #all images must be images 50 x 50 pixels
@@ -226,7 +226,7 @@ class ChessGUI_pygame:
                 sys.exit(0)
                     
             if from_tile is None and to_tile is None:
-                self.Draw(board)
+                self.draw(board)
                 if tile is not None:
                     if tile in [str(x)[:2] for x in board.legal_moves]:
                         from_tile = tile
@@ -237,7 +237,7 @@ class ChessGUI_pygame:
                              
             elif from_tile is not None and to_tile is None:
                 possible_to_tiles = [str(x)[2:] for x in board.legal_moves if from_tile == str(x)[:2]]
-                self.Draw(board, possible_to_tiles)
+                self.draw(board, possible_to_tiles)
                 if tile is not None:
                     if tile in possible_to_tiles:
                         to_tile = tile

@@ -10,7 +10,7 @@ import os
 from os.path import isfile, join
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../src/')
-import data_configuring as dc
+import data_handler as dh
 
 def read_pgn(filename):
     """
@@ -28,7 +28,7 @@ def read_pgn(filename):
         while not game.is_end():
             fen = game.board().fen()
             if fen[1] == 'w':
-                fen = dc.flip_board(fen)
+                fen = dh.flip_board(fen)
             fen = fen.split(' ')[0]
             fens.append(fen)
             game = game.variation(0)

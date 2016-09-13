@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 import os
 from hyper_parameters import *
-import data_configuring as dc
+import data_handler as dh
 
 
 def weight_variable(shape):
@@ -249,8 +249,8 @@ class NeuralNet:
         """
 
         fen = fen.split()[0]
-        board = dc.fen_to_channels(fen)
-        diagonal = dc.get_diagonals(board)
+        board = dh.fen_to_channels(fen)
+        diagonal = dh.get_diagonals(board)
 
         board = np.array([board])
         diagonal = np.array([diagonal])
@@ -268,7 +268,7 @@ class NeuralNet:
                  Score between 0 (bad) and 1 (good). Represents probability of White (current player) winning.
         """
 
-        if fen.split()[1] == 'b': raise ValueError("Error: Invalid evaluate input, white must be next to play.")
+        if dh.fen_is_black(fen): raise ValueError("Invalid evaluate input, white must be next to play.")
 
         return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
 

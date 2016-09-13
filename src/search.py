@@ -1,12 +1,39 @@
 import chess
+import data_handler as dh
 
 class Search:
     """
     Implements game tree search.
     """
-    def __init__(self, eval_fn, max_depth=3):
+
+    def __init__(self, eval_fn, max_depth=3, search_mode = "negamax"):
+        # Search options
+        self.search_opts = {"negamax": self.negamax}
+
+        if search_mode not in self.search_opts:
+            raise NotImplementedError, "Invalid Search option!"
+        self.search_mode = search_mode
+
         self.eval_function = eval_fn
         self.max_depth = max_depth
+
+    def run(self, board):
+        """
+        Runs search based on parameter.
+        Inputs:
+                board [chess.Board]:
+                    current state of board
+            Outputs:
+                best_move [chess.Move]:
+                    Best move to play
+                best_score [float]:
+                    Score achieved by best move
+                best_leaf [String]
+                    FEN of the board of the leaf node which yielded the highest value.
+        """
+
+        return self.search_opts[self.search_mode](board)
+
 
     def negamax(self, board, depth=0, a=float("-inf")):
         """ 
@@ -21,19 +48,26 @@ class Search:
                 a [float]:
                     lower bound of layer above, upper bound of current layer (because of alternating signs)
             Outputs:
-                best_move [chess.Move]:
-                    Best move to play
                 best_score [float]:
                     Score achieved by best move
+                best_move [chess.Move]:
+                    Best move to play
+                best_leaf [String]
+                    FEN of the board of the leaf node which yielded the highest value.
         """
+        # TODO: Make sure switch from (-1) to (1-n) doesnt' affect logic
+        # TODO: Re-test
+        # TODO: Test that pruning works
+
         best_score = float("-inf")
         best_move = None
+        best_leaf = None
 
         if depth == self.max_depth:
-            fen = board.fen()
-            if fen[1] == 'b':
-                fen = dc.flip_board(fen)
-            return (-1)*self.eval_function(board), None
+            fen = leaf_board = board.fen()
+            if dh.fen_is_black(fen):
+                fen = dh.flip_board(fen)
+            return 1 - self.eval_function(fen), None, leaf_board
             
         ##### If using search_test2() ######
         # if type(board) is int:
@@ -45,12 +79,13 @@ class Search:
                 # print "D%d: %s" % (depth, move)
                 # recursive call
                 board.push(move)
-                score, next_move = self.negamax(board, depth+1, -best_score)
+                score, next_move, leaf_board = self.negamax(board, depth + 1, -best_score)
                 board.pop()
 
                 if score > best_score:
                     best_score = score
                     best_move = move
+                    best_leaf = leaf_board
 
                 # best_score is my current lower bound
                 # a is the upper bound of what's useful to search
@@ -75,7 +110,7 @@ class Search:
             ###################################
             
         # print "D%d: best: %s, %s" % (depth, best_score, best_move)
-        return (-1)*best_score, best_move
+        return 1 - best_score, best_move, best_leaf
 
 def search_test_eval(board):
     """
@@ -130,7 +165,7 @@ def search_test1():
 
     board = chess.Board(fen=fen_str)
     shallow = Search(eval_fn=search_test_eval, max_depth=3)  # Can't run deeper due to restricted evaluatoin function.
-    score, move = shallow.minimax(board)
+    score, move, _ = shallow.minimax(board)
     if (score == 6) and (str(move) == "b3b4"):
         print "Test passed."
         return True

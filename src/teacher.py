@@ -7,7 +7,7 @@ import chess.pgn
 import chess
 
 import guerilla
-import data_configuring as dc
+import data_handler as dh
 import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
@@ -69,7 +69,7 @@ class Teacher:
                 self.train_td_endgames()
 
             else:
-                print "Error: %s is not a valid action." % (action)
+                raise NotImplementedError, "Error: %s is not a valid action." % (action)
 
     def train_bootstrap(self, boards, diagonals, true_values, num_batches, fens, save_weights=True):
         """
@@ -90,9 +90,9 @@ class Teacher:
                 batch_num = i / BATCH_SIZE
                 batch_idx = i % BATCH_SIZE
 
-                boards[batch_num][batch_idx] = dc.fen_to_channels(fens[game_indices[i]])
+                boards[batch_num][batch_idx] = dh.fen_to_channels(fens[game_indices[i]])
                 for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed
-                    diagonals[batch_num][batch_idx] = dc.get_diagonals(boards[batch_num][batch_idx])
+                    diagonals[batch_num][batch_idx] = dh.get_diagonals(boards[batch_num][batch_idx])
             # train epoch
             self.weight_update_bootstrap(boards, diagonals, true_values)
 
@@ -191,8 +191,8 @@ class Teacher:
                     curr_node = curr_node.parent
 
             # Call TD-Leaf
-            for i in range(len(fens)):
-                print self.nn.evaluate(fens[i]) if i%2==0 else 1 - self.nn.evaluate(dc.flip_board(fens[i]))
+            # for i in range(len(fens)):
+            #     print self.nn.evaluate(fens[i]) if i%2==0 else 1 - self.nn.evaluate(dh.flip_board(fens[i]))
             self.td_leaf(fens)
 
     def td_leaf(self, game):
@@ -207,17 +207,27 @@ class Teacher:
         # TODO: Add LEAF part of TD-Leaf
 
         num_boards = len(game)
+        game_info = [{'board': None, 'value': None} for _ in range(num_boards)]  # Indexed the same as num_boards
         w_update = None
+
+        # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
+        # Get new board state from leaf
+        # Note: Does not modify score of black boards.
+        for i, board in enumerate(game):
+            game_info[i]['value'], _, game_info[i]['board'] = self.guerilla.search.run(chess.Board(board))
+
+        print "TD-Leaf values calculated!"
+
         for t in range(num_boards):
             td_val = 0
             for j in range(t, num_boards - 1):
                 # Calculate temporal difference
-                dt = self.calc_score_diff(game[j], game[j + 1])
+                dt = self.calc_value_diff(game_info[j], game_info[j + 1])
                 # Add to sum
                 td_val += math.pow(TD_DISCOUNT, j - t)*dt
 
             # Get gradient and update sum
-            update = self.nn.get_gradient(game[t], self.nn.all_weights)
+            update = self.nn.get_gradient(game_info[j]['board'], self.nn.all_weights)
             if not w_update:
                 w_update = [w*td_val for w in update]
             else:
@@ -228,25 +238,25 @@ class Teacher:
         # Update neural net weights.
         self.nn.update_weights(self.nn.all_weights, [w*TD_LRN_RATE for w in w_update])
 
-    def calc_score_diff(self, curr_board, next_board):
+    def calc_value_diff(self, curr_board, next_board):
         """
         Calculates the score difference between two board states.
             Inputs:
-                curr_board [String]
-                    FEN of current board state.
-                next_board [String]
-                    FEN of next board state.
+                curr_board [Dict]
+                    {'board': FEN of current board state, 'value': value of current board state}
+                next_board [Dict]
+                    {'board': FEN of next board state, 'value': value of next board state}
             Output:
                 score_diff [Float]
-                    Score difference.
+                    Value difference.
         """
-        assert ((curr_board.split()[1] == 'w' and next_board.split()[1] == 'b') or
-                (curr_board.split()[1] == 'b' and next_board.split()[1] == 'w'))
+        assert ((dh.fen_is_white(curr_board['board']) and dh.fen_is_black(next_board['board'])) or
+                (dh.fen_is_black(curr_board['board']) and dh.fen_is_white(next_board['board'])))
 
-        if curr_board.split()[1] == 'b':
-            score_diff = (self.nn.evaluate(next_board)) - (1 - self.nn.evaluate(dc.flip_board(curr_board)))
+        if dh.fen_is_black(curr_board['board']):
+            score_diff = (next_board['value']) - (1 - curr_board['value'])
         else:
-            score_diff = (1 - self.nn.evaluate(dc.flip_board(next_board))) - (self.nn.evaluate(curr_board))
+            score_diff = (1 - next_board['value']) - (curr_board['value'])
 
         return score_diff
 

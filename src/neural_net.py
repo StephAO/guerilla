@@ -69,6 +69,10 @@ class NeuralNet:
 
         self.sess.run(tf.initialize_all_variables())
 
+        # all weights + biases
+        self.all_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
+                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final]
+
         # create placeholders
         self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, NUM_CHANNELS])
         self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, NUM_CHANNELS])
@@ -120,6 +124,7 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to load weight values from
         """
+        print "Loading weight values..."
         pickle_path = self.dir_path + '/../pickles/' + filename
         weight_values = pickle.load(open(pickle_path, 'rb'))
 
@@ -154,7 +159,7 @@ class NeuralNet:
             weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
             weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
             self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
-                           self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final])
+                           self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final])
 
         pickle_path = self.dir_path + '/../pickles/' + filename
         pickle.dump(weight_values, open(pickle_path, 'wb'))
@@ -190,6 +195,68 @@ class NeuralNet:
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
 
+    def update_weights(self, weight_vars, weight_vals):
+        """
+        Updates the neural net weights based on the input.
+            Input:
+                weight_vars [List]
+                    List of weights to be updated
+                weight_vals [List]
+                    List of values with which to update weights. Must be in same order!
+        """
+        assert len(weight_vars) == len(weight_vals)
+
+        # Create assignment for each weight
+        num_weights = len(weight_vals)
+        assignments = [None] * num_weights
+        for i in range(num_weights):
+            assignments[i] = weight_vars[i].assign(weight_vals[i])
+
+        # Run assignment/update
+        print ([str(x.eval()) for x in weight_vars])
+        self.sess.run(assignments)
+        print ([str(x.eval()) for x in weight_vars])
+
+
+    def get_gradient(self, fen, weights):
+        """
+        Returns the gradient of the neural net at the output node, with respect to the specified weights.
+        board.
+            Input:
+                fen [String]
+                    FEN of board where gradient is to be taken.
+                weights [List]
+                    List of weight variables.
+            Output:
+                Gradient [List of floats].
+        """
+
+        #  declare gradient of predicted (output) value w.r.t. weights + biases
+        grad = tf.gradients(self.pred_value, weights)
+
+        # calculate gradient
+        return self.sess.run(grad, feed_dict=self.board_to_feed(fen))
+
+    def board_to_feed(self, fen):
+        """
+        Converts the FEN of a SINGLE board to the required feed input for the neural net.
+            Input:
+                board [String]
+                    FEN of board.
+            Output:
+                feed_dict [Dictionary]
+                    Formatted input for neural net.
+        """
+
+        fen = fen.split()[0]
+        board = dc.fen_to_channels(fen)
+        diagonal = dc.get_diagonals(board)
+
+        board = np.array([board])
+        diagonal = np.array([diagonal])
+
+        return {self.data: board, self. data_diags: diagonal}
+
     # TODO S: Maybe combine the following two functions? I think this only gets used in guerilla.py but i'm not sure.
     def evaluate(self, fen):
         """
@@ -198,17 +265,12 @@ class NeuralNet:
                  fen [String]:
                      FEN of chess board.
              Output:
-                 Score between 0 (bad) and 1 (good).
+                 Score between 0 (bad) and 1 (good). Represents probability of White (current player) winning.
         """
 
-        # TODO S: Add board flipping if fen[1]='black' !
-        fen = fen.split()[0]
-        board = dc.fen_to_channels(fen)
-        diagonal = dc.get_diagonals(board)
+        if fen.split()[1] == 'b': raise ValueError("Error: Invalid evaluate input, white must be next to play.")
 
-        board = np.array([board])
-        diagonal = np.array([diagonal])
-        return self.pred_value.eval(feed_dict={self.data: board, self.data_diags: diagonal}, session=self.sess)
+        return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
 
     def evaluate_board(self, board):
         return self.evaluate(board.fen())

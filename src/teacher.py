@@ -2,6 +2,9 @@ import os
 import random
 import numpy as np
 import tensorflow as tf
+import math
+import chess.pgn
+import chess
 
 import guerilla
 import data_configuring as dc
@@ -15,6 +18,7 @@ class Teacher:
         # dictionary of different training/evaluation methods
         self.actions_dict = {
             'train_bootstrap' : self.train_bootstrap,
+            'train_td_endgames' : self.train_td_endgames,
         }
 
         self.guerilla = _guerilla
@@ -22,32 +26,50 @@ class Teacher:
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
         self.actions = actions
 
+        # Bootstrap parameters
+        self.fens_filename = "fens.p"
+        self.stockfish_filename = "sf_scores.p"
+
+        # TD-Leaf parameters
+        self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
+        self.td_rand_file = False  # If true then TD-Leaf randomizes across the files in the folder.
+        self.td_num_endgame = -1  # The number of endgames to train on using TD-Leaf (-1 = All)
+        self.td_num_full = -1  # The number of full games to train on using TD-Leaf
+        self.td_depth = 12  # How many moves are included in each TD training
+
     def run(self):
         """ 
             1. load data from file
             2. configure data
             3. run actions
         """
-        fens_filename = "fens.p"
-        stockfish_filename = "sf_scores.p"
-
-        fens = cgp.load_fens(fens_filename)
-
-        num_batches = len(fens) / BATCH_SIZE
-
-        true_values = sf.load_stockfish_values(stockfish_filename)
-        true_values = np.reshape(true_values[:num_batches * BATCH_SIZE], (num_batches, BATCH_SIZE))
-
-        print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
-
-        boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
-        diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
 
         for action in self.actions:
-            if action in self.actions_dict:
-                self.actions_dict[action](boards, diagonals, true_values, num_batches, fens)
+            if action == 'train_bootstrap':
+                print "Performing Bootstrap training!"
+                print "Fetching stockfish values..."
+
+                # Fetch stockfish values
+                fens = cgp.load_fens(self.fens_filename)
+
+                num_batches = len(fens) / BATCH_SIZE
+
+                true_values = sf.load_stockfish_values(self.stockfish_filename)
+                true_values = np.reshape(true_values[:num_batches * BATCH_SIZE], (num_batches, BATCH_SIZE))
+
+                print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
+
+                boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
+                diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
+
+                self.train_bootstrap(boards, diagonals, true_values, num_batches, fens)
+
+            elif action == 'train_td_endgames':
+                print "Performing endgame TD-Leaf training!"
+                self.train_td_endgames()
+
             else:
-                print "Error: %s is not a valid command" % (action)
+                print "Error: %s is not a valid action." % (action)
 
     def train_bootstrap(self, boards, diagonals, true_values, num_batches, fens, save_weights=True):
         """
@@ -58,15 +80,17 @@ class Teacher:
         raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
         print 'Training data. Will save weights to pickle'
 
+        num_boards = num_batches * BATCH_SIZE
+
         for epoch in xrange(NUM_EPOCHS):
             # Configure data (shuffle fens -> fens to channel -> group batches)
-            game_indices = range(num_batches * BATCH_SIZE)
+            game_indices = range(num_boards)
             random.shuffle(game_indices)
-            for game_idx in game_indices:
-                batch_num = game_idx / BATCH_SIZE
-                batch_idx = game_idx % BATCH_SIZE
+            for i in range(num_boards):
+                batch_num = i / BATCH_SIZE
+                batch_idx = i % BATCH_SIZE
 
-                boards[batch_num][batch_idx] = dc.fen_to_channels(fens[game_idx])
+                boards[batch_num][batch_idx] = dc.fen_to_channels(fens[game_indices[i]])
                 for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed
                     diagonals[batch_num][batch_idx] = dc.get_diagonals(boards[batch_num][batch_idx])
             # train epoch
@@ -107,6 +131,125 @@ class Teacher:
 
         if save_weights:
             self.nn.save_weight_values()
+
+
+    def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None, depth = None):
+        """
+        Set the parameters for TD-Leaf.
+            Inputs:
+                num_end [Int]
+                    Number of endgames to train on using TD-Leaf.
+                num_full [Int]
+                    Number of full games to train on using TD-Leaf.
+                randomize [Boolean]
+                    Whether or not to randomize across the pgn files.
+                pgn_folder [String]
+                    Folder containing chess games in PGN format.
+        """
+
+        if num_end:
+            self.td_num_endgame = num_end
+        if num_full:
+            self.td_num_full = num_full
+        if randomize:
+            self.td_rand_file = randomize
+        if pgn_folder:
+            self.td_pgn_folder = pgn_folder
+        if depth:
+            self.td_depth = depth
+
+    def train_td_endgames(self):
+        """
+        Trains the neural net using TD-Leaf on endgames.
+        """
+
+        game_indices = range(self.td_num_endgame)
+
+        if self.td_rand_file:
+            random.shuffle(game_indices)
+            pgn_files = [f for f in os.listdir(self.td_pgn_folder) if os.path.isfile(os.path.join(self.td_pgn_folder, f))]
+        else:
+            pgn_files = [f for f in os.listdir(self.td_pgn_folder)[:self.td_num_endgame] if
+                         os.path.isfile(os.path.join(self.td_pgn_folder, f))]
+
+        for i, game_idx in enumerate(game_indices):
+            print "Training on game %d of %d..." % (i + 1, self.td_num_endgame)
+            fens = []
+
+            # Open and use pgn file sequentially or at random
+            with open(os.path.join(self.td_pgn_folder, pgn_files[game_idx])) as pgn:
+                game = chess.pgn.read_game(pgn)
+
+                # Only get endgame fens
+                curr_node = game.end()
+                for i in range(self.td_depth):
+                    fens.append(curr_node.board().fen())
+
+                    # Check if start of game is reached
+                    if curr_node == game.root():
+                        break
+                    curr_node = curr_node.parent
+
+            # Call TD-Leaf
+            print fens
+            self.td_leaf(fens)
+
+    def td_leaf(self, game):
+        """
+        Trains neural net using TD-Leaf algorithm.
+
+            Inputs:
+                Game [List]
+                    A game consists of a sequential list of board states. Each board state is a FEN.
+        """
+        # TODO: Maybe this should check that each game is valid? i.e. assert that only legal moves are played.
+        # TODO: Add LEAF part of TD-Leaf
+        # TODO: Test
+
+        num_boards = len(game)
+        w_update = None
+        for t in range(num_boards):
+            td_val = 0
+            for j in range(t, num_boards - 1):
+                # Calculate temporal difference
+                dt = self.calc_score_diff(game[j], game[j + 1])
+                # Add to sum
+                td_val += math.pow(TD_DISCOUNT, j - t)*dt
+
+            # Get gradient and update sum
+            print "adding gradient"
+            update = self.nn.get_gradient(game[t], self.nn.all_weights)
+            if not w_update:
+                w_update = [w*td_val for w in update]
+            else:
+                # update each set of weights
+                for i in range(len(update)):
+                    w_update[i] += update[i] * td_val
+
+        # Update neural net weights.
+        self.nn.update_weights(self.nn.all_weights, [w*TD_LRN_RATE for w in w_update])
+
+    def calc_score_diff(self, curr_board, next_board):
+        """
+        Calculates the score difference between two board states.
+            Inputs:
+                curr_board [String]
+                    FEN of current board state.
+                next_board [String]
+                    FEN of next board state.
+            Output:
+                score_diff [Float]
+                    Score difference.
+        """
+        assert ((curr_board.split()[1] == 'w' and next_board.split()[1] == 'b') or
+                (curr_board.split()[1] == 'b' and next_board.split()[1] == 'w'))
+
+        if curr_board.split()[1] == 'b':
+            score_diff = (self.nn.evaluate(next_board)) - (1 - self.nn.evaluate(dc.flip_board(curr_board)))
+        else:
+            score_diff = (1 - self.nn.evaluate(dc.flip_board(next_board))) - (self.nn.evaluate(curr_board))
+
+        return score_diff
 
     def evaluate(self, boards, diagonals, true_values):
         """
@@ -150,8 +293,9 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe')
-    t = Teacher(g, ['train_bootstrap'])
+    g = guerilla.Guerilla('Harambe', 'w','weight_values.p')
+    t = Teacher(g, ['train_td_endgames'])#['train_bootstrap'])
+    t.set_td_params(num_end=1, num_full=1,randomize=False)
     t.run()
 
 

@@ -12,6 +12,10 @@ LEARNING_RATE = 0.001
 
 NUM_CHANNELS = 6 * 2
 
+# Hyper parameters for TD-Leaf Training Algorithm
+TD_LRN_RATE = 0.5  # Learning rate
+TD_DISCOUNT = 0.7  # Discount rate
+
 # TODO: I don't think this should be here.
 piece_indices = {
     'p': 0,

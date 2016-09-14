@@ -155,9 +155,9 @@ class NeuralNet:
         weight_values = dict()
 
         weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], weight_values['W_diag'], \
-            weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
-            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
-            weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
+        weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
+        weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
+        weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
             self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final])
 
@@ -225,10 +225,8 @@ class NeuralNet:
             assignments[i] = weight_vars[i].assign(weight_vals[i])
 
         # Run assignment/update
-        print ([str(x.eval()) for x in weight_vars])
         self.sess.run(assignments)
-        print ([str(x.eval()) for x in weight_vars])
-
+        # print ([str(x.eval()) for x in weight_vars])
 
     def get_gradient(self, fen, weights):
         """
@@ -267,7 +265,7 @@ class NeuralNet:
         board = np.array([board])
         diagonal = np.array([diagonal])
 
-        return {self.data: board, self. data_diags: diagonal}
+        return {self.data: board, self.data_diags: diagonal}
 
     # TODO S: Maybe combine the following two functions? I think this only gets used in guerilla.py but i'm not sure.
     def evaluate(self, fen):
@@ -280,7 +278,8 @@ class NeuralNet:
                  Score between 0 (bad) and 1 (good). Represents probability of White (current player) winning.
         """
 
-        if dh.fen_is_black(fen): raise ValueError("Invalid evaluate input, white must be next to play.")
+        if dh.fen_is_black(fen):
+            raise ValueError("Invalid evaluate input, white must be next to play.")
 
         return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
 

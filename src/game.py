@@ -4,6 +4,7 @@ import player
 import guerilla
 import human
 import os
+
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/GUI/')
 import ChessGUI_pygame
@@ -106,20 +107,18 @@ class Game:
 
         return
 
-    # @staticmethod
-    # def get_gui_board_representation(fen):
-    #     board = [[]]
-    #     for i, char in enumerate(fen.split()[0]):
-    #         if char == '/':
-    #             board.append([])
-    #             i += 1
-    #         elif char.isdigit():
-    #             for j in xrange(int(char)):
-    #                 board[i].append('e')
-    #         else:
-    #             prefix = 'w' if char.isupper() else 'b'
-
-
+        # @staticmethod
+        # def get_gui_board_representation(fen):
+        #     board = [[]]
+        #     for i, char in enumerate(fen.split()[0]):
+        #         if char == '/':
+        #             board.append([])
+        #             i += 1
+        #         elif char.isdigit():
+        #             for j in xrange(int(char)):
+        #                 board[i].append('e')
+        #         else:
+        #             prefix = 'w' if char.isupper() else 'b'
 
 
 def main():

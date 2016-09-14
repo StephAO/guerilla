@@ -12,13 +12,15 @@ import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
 
+
 class Teacher:
     def __init__(self, _guerilla, actions):
 
         # dictionary of different training/evaluation methods
         self.actions_dict = {
-            'train_bootstrap' : self.train_bootstrap,
-            'train_td_endgames' : self.train_td_endgames,
+            'train_bootstrap': self.train_bootstrap,
+            'train_td_endgames': self.train_td,
+            'train_td_full': self.train_td
         }
 
         self.guerilla = _guerilla
@@ -66,10 +68,12 @@ class Teacher:
 
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
-                self.train_td_endgames()
-
+                self.train_td(endgame=True)
+            elif action == 'train_td_full':
+                print "Performing full-game TD-Leaf training!"
+                self.train_td(endgame=False)
             else:
-                raise NotImplementedError, "Error: %s is not a valid action." % (action)
+                raise NotImplementedError("Error: %s is not a valid action." % action)
 
     def train_bootstrap(self, boards, diagonals, true_values, num_batches, fens, save_weights=True):
         """
@@ -94,13 +98,13 @@ class Teacher:
                 for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed
                     diagonals[batch_num][batch_idx] = dh.get_diagonals(boards[batch_num][batch_idx])
             # train epoch
-            self.weight_update_bootstrap(boards, diagonals, true_values)
+            self.weight_update_bootstrap(boards, diagonals, true_values, save_weights)
 
         # evaluate nn
         self.evaluate(boards, diagonals, true_values)
 
     # move save_weights to come from action
-    def weight_update_bootstrap(self, boards, diagonals, true_values, save_weights=True):
+    def weight_update_bootstrap(self, boards, diagonals, true_values, save_weights):
         """
             Train neural net
 
@@ -125,15 +129,14 @@ class Teacher:
 
         train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
 
-        for i in xrange(np.shape(boards)[0]):
+        for i in xrange(boards.shape[0]):
             self.nn.sess.run([train_step], feed_dict={self.nn.data: boards[i], self.nn.data_diags: diagonals[i],
                                                       self.nn.true_value: true_values[i]})
 
         if save_weights:
             self.nn.save_weight_values()
 
-
-    def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None, depth = None):
+    def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None, depth=None):
         """
         Set the parameters for TD-Leaf.
             Inputs:
@@ -158,37 +161,70 @@ class Teacher:
         if depth:
             self.td_depth = depth
 
-    def train_td_endgames(self):
+    def train_td(self, endgame):
         """
-        Trains the neural net using TD-Leaf on endgames.
+        Trains the neural net using TD-Leaf.
+            Inputs:
+                endgame [Boolean]
+                    If True then only trains on endgames. Otherwise trains on a random subset of full games.
         """
 
-        game_indices = range(self.td_num_endgame)
+        num_games = self.td_num_endgame if endgame else self.td_num_full
 
+        # Only load some files if not random
         if self.td_rand_file:
-            random.shuffle(game_indices)
-            pgn_files = [f for f in os.listdir(self.td_pgn_folder) if os.path.isfile(os.path.join(self.td_pgn_folder, f))]
+            pgn_files = [f for f in os.listdir(self.td_pgn_folder) if
+                         os.path.isfile(os.path.join(self.td_pgn_folder, f))]
         else:
-            pgn_files = [f for f in os.listdir(self.td_pgn_folder)[:self.td_num_endgame] if
+            pgn_files = [f for f in os.listdir(self.td_pgn_folder)[:num_games] if
                          os.path.isfile(os.path.join(self.td_pgn_folder, f))]
 
+        game_indices = range(num_games if num_games >= 0 else len(pgn_files))
+
+        # Shuffle if necessary
+        if self.td_rand_file:
+            random.shuffle(game_indices)
+
         for i, game_idx in enumerate(game_indices):
-            print "Training on game %d of %d..." % (i + 1, self.td_num_endgame)
+            print "Training on game %d of %d..." % (i + 1, num_games)
             fens = []
 
             # Open and use pgn file sequentially or at random
             with open(os.path.join(self.td_pgn_folder, pgn_files[game_idx])) as pgn:
                 game = chess.pgn.read_game(pgn)
 
-                # Only get endgame fens
-                curr_node = game.end()
-                for i in range(self.td_depth):
-                    fens.insert(0, curr_node.board().fen())
+                if endgame:
+                    # Only get endgame fens
+                    curr_node = game.end()
+                    for _ in range(self.td_depth):
+                        fens.insert(0, curr_node.board().fen())
 
-                    # Check if start of game is reached
-                    if curr_node == game.root():
-                        break
-                    curr_node = curr_node.parent
+                        # Check if start of game is reached
+                        if curr_node == game.root():
+                            break
+                        curr_node = curr_node.parent
+                else:
+                    # Get all fens
+                    curr_node = game.root()
+                    while True:
+                        fens.append(curr_node.board().fen())
+
+                        # Check if end has been reached
+                        if curr_node.is_end():
+                            break
+
+                        curr_node = curr_node.variations[0]
+
+                    # Get random subset
+                    game_length = len(fens)
+                    sub_start = random.randint(0, max(0, game_length - self.td_depth))
+                    sub_end = min(game_length, sub_start + self.td_depth)
+                    fens = fens[sub_start:sub_end]
+
+                    # TODO: Remove this checklater.
+                    if (len(fens) != self.td_depth and game_length >= self.td_depth) or \
+                            (len(fens) != game_length and game_length < self.td_depth):
+                        print "Warning: This shouldn't happen!"
 
             # Call TD-Leaf
             self.td_leaf(fens)
@@ -221,12 +257,12 @@ class Teacher:
                 # Calculate temporal difference
                 dt = self.calc_value_diff(game_info[j], game_info[j + 1])
                 # Add to sum
-                td_val += math.pow(TD_DISCOUNT, j - t)*dt
+                td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
             # Get gradient and update sum
-            update = self.nn.get_gradient(game_info[j]['board'], self.nn.all_weights)
+            update = self.nn.get_gradient(game_info[t]['board'], self.nn.all_weights)
             if not w_update:
-                w_update = [w*td_val for w in update]
+                w_update = [w * td_val for w in update]
             else:
                 # update each set of weights
                 for i in range(len(update)):
@@ -234,7 +270,7 @@ class Teacher:
 
         # Update neural net weights.
         old_weights = self.nn.get_weights(self.nn.all_weights)
-        new_weights = [old_weights[i] + TD_LRN_RATE*w_update[i] for i in range(len(w_update))]
+        new_weights = [old_weights[i] + TD_LRN_RATE * w_update[i] for i in range(len(w_update))]
         self.nn.update_weights(self.nn.all_weights, new_weights)
         print "Weights updated."
 
@@ -288,7 +324,7 @@ class Teacher:
         guess_whos_winning = tf.equal(tf.round(self.nn.true_value), tf.round(pred_value))
         num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32))
 
-        for i in xrange(np.shape(boards)[0]):
+        for i in xrange(boards.shape[0]):
             es, nr, gww, pv = self.nn.sess.run([err_sum, num_right, guess_whos_winning, pred_value],
                                                feed_dict={self.nn.data: boards[i], self.nn.data_diags: diagonals[i],
                                                           self.nn.true_value: true_values[i]})
@@ -302,9 +338,9 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w','weight_values.p')
-    t = Teacher(g, ['train_td_endgames'])#['train_bootstrap'])
-    t.set_td_params(num_end=2, num_full=1,randomize=False)
+    g = guerilla.Guerilla('Harambe', 'w', 'weight_values.p')
+    t = Teacher(g, ['train_bootstrap', 'train_td_endgames', 'train_td_full'])
+    t.set_td_params(num_end=2, num_full=1, randomize=False)
     t.run()
 
 

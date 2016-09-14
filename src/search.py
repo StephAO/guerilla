@@ -1,12 +1,13 @@
 import chess
 import data_handler as dh
 
+
 class Search:
     """
     Implements game tree search.
     """
 
-    def __init__(self, eval_fn, max_depth=3, search_mode = "negamax"):
+    def __init__(self, eval_fn, max_depth=3, search_mode="negamax"):
         # Search options
         self.search_opts = {"negamax": self.negamax}
 
@@ -33,7 +34,6 @@ class Search:
         """
 
         return self.search_opts[self.search_mode](board)
-
 
     def negamax(self, board, depth=0, a=float("-inf")):
         """ 
@@ -68,12 +68,12 @@ class Search:
             if dh.fen_is_black(fen):
                 fen = dh.flip_board(fen)
             return 1 - self.eval_function(fen), None, leaf_board
-            
+
         ##### If using search_test2() ######
         # if type(board) is int:
         #     return (-1)*board, None
         ####################################
-        
+
         else:
             for move in board.legal_moves:
                 # print "D%d: %s" % (depth, move)
@@ -94,23 +94,24 @@ class Search:
                 if best_score >= a:
                     break
 
-            ##### If using search_test2() ######
-            # end = False
-            # for sub in board:
-            #     if end:
-            #         print "cut out", sub
-            #     else:
-            #         score, next_move = self.negamax(sub, depth+1, best_score)
-            #         if score > best_score:
-            #             best_score = score
-            #             best_move = sub
-            #         if best_score >= (-1)*a:
-            #             print "D%d: %s, %s" % (depth, best_score, best_move)
-            #             end = True
-            ###################################
-            
+                    ##### If using search_test2() ######
+                    # end = False
+                    # for sub in board:
+                    #     if end:
+                    #         print "cut out", sub
+                    #     else:
+                    #         score, next_move = self.negamax(sub, depth+1, best_score)
+                    #         if score > best_score:
+                    #             best_score = score
+                    #             best_move = sub
+                    #         if best_score >= (-1)*a:
+                    #             print "D%d: %s, %s" % (depth, best_score, best_move)
+                    #             end = True
+                    ###################################
+
         # print "D%d: best: %s, %s" % (depth, best_score, best_move)
         return 1 - best_score, best_move, best_leaf
+
 
 def search_test_eval(board):
     """
@@ -173,12 +174,14 @@ def search_test1():
         print "Test failed. Expected [Score, Move]: [6, b3b4] got [%d, %s]" % (score, move)
         return False
 
+
 def search_test2():
     """ Runs a basic minimax test on the search class. 
         You need to toggle the comments in negamax to test it
         You can generate more tests at http://inst.eecs.berkeley.edu/~cs61b/fa14/ta-materials/apps/ab_tree_practice/
         Ensure that the layer above the leaves are minimum layers"""
-    test = [[[-15,-15,2],[4,9,4],[-16,3,-15]],[[18,7,-2],[10,-6,15],[-2,-15,-13]],[[12,16,-19],[6,14,-10],[2,-6,-7]]]
+    test = [[[-15, -15, 2], [4, 9, 4], [-16, 3, -15]], [[18, 7, -2], [10, -6, 15], [-2, -15, -13]],
+            [[12, 16, -19], [6, 14, -10], [2, -6, -7]]]
     s = Search(None)
     result = s.negamax(test)
     print result
@@ -186,7 +189,7 @@ def search_test2():
         print "Test passed."
         return True
     else:
-        print "Test failed. Expected (-7, [[12, 16, -19], [6, 14, -10], [2, -6, -7]]) got %s" % (result)
+        print "Test failed. Expected (-7, [[12, 16, -19], [6, 14, -10], [2, -6, -7]]) got %s" % result
 
 
 if __name__ == '__main__':

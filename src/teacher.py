@@ -14,6 +14,7 @@ from hyper_parameters import *
 
 
 class Teacher:
+
     def __init__(self, _guerilla, actions):
 
         # dictionary of different training/evaluation methods
@@ -32,7 +33,7 @@ class Teacher:
         self.training_time = None
         self.files = None
 
-	# TD-Leaf parameters
+        # TD-Leaf parameters
         self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
         self.td_rand_file = False  # If true then TD-Leaf randomizes across the files in the folder.
         self.td_num_endgame = -1  # The number of endgames to train on using TD-Leaf (-1 = All)
@@ -45,24 +46,23 @@ class Teacher:
             2. configure data
             3. run actions
         """
-	self.files = [fens_filename, stockfish_filename]
-	self.start_time = time.time()
+        self.files = [fens_filename, stockfish_filename]
+        self.start_time = time.time()
         self.training_time = training_time
-       
-	for action in self.actions:
+           
+        for action in self.actions:
             if action == 'train_bootstrap':
-		print "Performing Bootstrap training!"
+                print "Performing Bootstrap training!"
                 print "Fetching stockfish values..."
 
-		fens = cgp.load_fens(fens_filename)
-		fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
-		true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
-		
-		self.train_bootstrap(fens, true_values)
-        	
-        for action in self.actions:
+                fens = cgp.load_fens(fens_filename)
+                fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
+                true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
+                
+                self.train_bootstrap(fens, true_values)
+                
             if action in self.actions_dict:
-                self.actions_dict[action](boards, diagonals, true_values, num_batches, fens)
+                self.train_bootstrap(boards, diagonals, true_values, num_batches, fens)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
                 self.train_td(endgame=True)
@@ -72,7 +72,7 @@ class Teacher:
             else:
                 raise NotImplementedError("Error: %s is not a valid action." % action)
 
-def save_state(self, state, filename = "state.p"):
+    def save_state(self, state, filename = "state.p"):
         """
             Save current state so that training can resume at another time
             Note: Can only save state at whole batch intervals (but mid-epoch is fine)
@@ -148,6 +148,33 @@ def save_state(self, state, filename = "state.p"):
 
             # continue with rests of epochs
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], error=state['error'])
+
+    def basic_board_eval(self, fen):
+        """ 
+            Assumes input fen is white's turn
+            Inputs:
+                fen[string]:
+                    The fen representing the board state
+            Outputs:
+                value[int]
+                    sum value white pieces - sum value black pieces
+        """
+        piece_value = {
+            'p': 1,
+            'r': 5,
+            'n': 3,
+            'b': 3,
+            'q': 9,
+            'k': 1000,
+        }
+        value = 0
+        for char in fen:
+            if char == ' ':
+                break
+            if char.lower() in piece_value:
+                sign = 1 if char.isupper() else -1
+                value += sign * piece_value[char.lower()]
+        return value
 
     def train_bootstrap(self, fens, true_values, start_epoch = 0, error = []):
         """
@@ -241,9 +268,10 @@ def save_state(self, state, filename = "state.p"):
 
             # set up batch
             for j in xrange(BATCH_SIZE):
+
                 boards[j] = dc.fen_to_channels(fens[game_indices[board_num]])
                 diagonals[j] = dc.get_diagonals(boards[j])
-                true_values[j] = true_values_[game_indices[board_num]]
+                true_values[j] = self.basic_board_eval(fens[game_indices[board_num]])#true_values_[game_indices[board_num]]
                 board_num += 1
 
             # train batch
@@ -353,6 +381,7 @@ def save_state(self, state, filename = "state.p"):
                         fens.insert(0, curr_node.board().fen())
 
                         # Check if start of game is reached
+                        # S: I think the check should be above the insert
                         if curr_node == game.root():
                             break
                         curr_node = curr_node.parent
@@ -413,6 +442,7 @@ def save_state(self, state, filename = "state.p"):
                 td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
             # Get gradient and update sum
+            # S: why are you sending weight into the nn, the nn has all the weights as a member variable
             update = self.nn.get_gradient(game_info[t]['board'], self.nn.all_weights)
             if not w_update:
                 w_update = [w * td_val for w in update]
@@ -450,11 +480,10 @@ def save_state(self, state, filename = "state.p"):
         return score_diff
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', 'weight_values.p')
-    t = Teacher(g, ['train_bootstrap', 'train_td_endgames', 'train_td_full'])
-    t.set_td_params(num_end=2, num_full=1, randomize=False)
-    # t.run(training_time = 3600, fens_filename = "fens_1000.p", stockfish_filename = "true_values_1000.p")
-
+    g = guerilla.Guerilla('Harambe', 'w')
+    t = Teacher(g, ['train_bootstrap'])#, 'train_td_endgames', 'train_td_full'])
+    # t.set_td_params(num_end=2, num_full=1, randomize=False)
+    t.run(training_time = None, fens_filename = "fens_1000.p", stockfish_filename = "true_values_1000.p")
 
 if __name__ == '__main__':
     main()

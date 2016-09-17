@@ -217,10 +217,12 @@ class NeuralNet:
                 weight_vals [List]
                     List of values with which to update weights. Must be in same order!
         """
-        assert len(weight_vars) == len(weight_vals)
+        if len(weight_vars) == len(weight_vals):
+            raise Exception("Number of values is not the same as the number of variables")
 
         # Create assignment for each weight
         num_weights = len(weight_vals)
+        # S: can you not make this using list comprehesion?
         assignments = [None] * num_weights
         for i in range(num_weights):
             assignments[i] = weight_vars[i].assign(weight_vals[i])
@@ -243,6 +245,7 @@ class NeuralNet:
         """
 
         #  declare gradient of predicted (output) value w.r.t. weights + biases
+        #  S: use self.all_weights. Set grad as a member variable since you're accessing it so much
         grad = tf.gradients(self.pred_value, weights)
 
         # calculate gradient

@@ -2,6 +2,7 @@ import player
 import chess
 import random
 
+
 class Human(player.Player):
     def __init__(self, name, colour=None):
         super(Human, self).__init__(name, colour)
@@ -34,7 +35,7 @@ class Human(player.Player):
                 move = chess.Move.from_uci(usr_input)
                 break
             else:
-                print "Invalid or illegal input, legal moves are: "+ ', '.join([str(x) for x in board.legal_moves])
+                print "Invalid or illegal input, legal moves are: " + ', '.join([str(x) for x in board.legal_moves])
 
         return move
 
@@ -49,4 +50,3 @@ class Human(player.Player):
             return self.get_move_from_gui(board)
         else:
             return self.get_move_from_tml(board)
-        

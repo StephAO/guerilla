@@ -1,7 +1,6 @@
 import sys
 import os
 
-#TODO: Remove this and replace with proper access.
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
@@ -14,17 +13,17 @@ import chess_game_parser as cgp
 from hyper_parameters import *
 
 def flip_board(fen):
-    ''' switch colors of pieces
+    """ switch colors of pieces
         input:
             fen:
                 fen string (only board state)
         output:
             new_fen:
                 fen string with colors switched
-    '''
+    """
     board_fen, turn, castling, en_passant, half_clock, full_clock = fen.split()
 
-    ## board fen ##
+    # board fen
     new_board_fen = ''
     for char in board_fen:
         if char.isupper():
@@ -35,11 +34,11 @@ def flip_board(fen):
             new_board_fen += char
     new_fen_list = new_board_fen.split('/')
     new_board_fen = '/'.join(new_fen_list[::-1])
-    
-    ## turn ##
+
+    # turn
     turn = 'w' if turn == 'b' else 'b'
 
-    ## castling ##
+    # castling
     new_white_castling = ''
     new_black_castling = ''
     for char in castling:
@@ -49,7 +48,7 @@ def flip_board(fen):
             new_black_castling += char.lower()
     new_castling = new_white_castling + new_black_castling
 
-    ## en_passant ##
+    # en_passant
     new_en_passant = ''
     if en_passant != '-':
         new_en_passant += en_passant[0]
@@ -59,7 +58,7 @@ def flip_board(fen):
 
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
-# TODO S: Move to chess_game_parser.py
+# TODO: Maybe move
 def fen_to_channels(fen):
     """
         Converts a fen string to channels for neural net.
@@ -88,29 +87,28 @@ def fen_to_channels(fen):
 
     channels = np.zeros((8, 8, NUM_CHANNELS))
 
-    file = 0
-    rank = 0
-    empty_char = False
+    c_file = 0
+    c_rank = 0
     for char in fen:
         if char == '/':
-            file = 0
-            rank += 1
+            c_file = 0
+            c_rank += 1
             continue
         elif char.isdigit():
-            file += int(char)
+            c_file += int(char)
             continue
         else:
             my_piece = char.islower()
             # TODO: double check this. Normal FEN, black is lower, but stockfish seems use to lower as current move.
             char = char.lower()
             if my_piece:
-                channels[rank, file, piece_indices[char]] = 1
+                channels[c_rank, c_file, piece_indices[char]] = 1
             else:
-                channels[rank, file, piece_indices[char] + 6] = 1
+                channels[c_rank, c_file, piece_indices[char] + 6] = 1
 
-            # channels[rank, file, piece_indices[char] + 12] = 1 if my_piece else -1
-        file += 1
-        if rank == 7 and file == 8:
+                # channels[rank, file, piece_indices[char] + 12] = 1 if my_piece else -1
+        c_file += 1
+        if c_rank == 7 and c_file == 8:
             break
     return channels
 
@@ -127,8 +125,7 @@ def get_diagonals(channels):
                 (shorter diagonasl are 0 padded)
     """
     diagonals = np.zeros((10, 8, NUM_CHANNELS))
-    for piece_idx in piece_indices.values():
-
+    for _ in piece_indices.values():
         # diagonals with length 6 and 7
         for length in xrange(6, 8):
             for i in xrange(length):
@@ -182,3 +179,29 @@ def sigmoid_array(values):
         data points and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided on
         (by me, deal with it). Ideally this fitter function is learned, but this is just for testing so..."""
     return 1. / (1. + np.exp(-0.00547 * values))
+
+def fen_is_white(fen):
+    """
+    Returns true if fen is for white playing next.
+    Inputs:
+        fen [String]
+            Chess board FEN.
+    Output:
+        [Boolean]
+            True if fen is for white playing next.
+    """
+    if fen.split(' ')[1] == 'w':
+        return True
+    return False
+
+def fen_is_black(fen):
+    """
+    Returns true if fen is for black playing next.
+    Inputs:
+        fen [String]
+            Chess board FEN.
+    Output:
+        [Boolean]
+            True if fen is for black playing next.
+    """
+    return not fen_is_white(fen)

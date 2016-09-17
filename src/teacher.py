@@ -5,6 +5,7 @@ import tensorflow as tf
 import math
 import chess.pgn
 import chess
+import time
 
 import guerilla
 import data_handler as dh
@@ -269,8 +270,8 @@ class Teacher:
             # set up batch
             for j in xrange(BATCH_SIZE):
 
-                boards[j] = dc.fen_to_channels(fens[game_indices[board_num]])
-                diagonals[j] = dc.get_diagonals(boards[j])
+                boards[j] = dh.fen_to_channels(fens[game_indices[board_num]])
+                diagonals[j] = dh.get_diagonals(boards[j])
                 true_values[j] = self.basic_board_eval(fens[game_indices[board_num]])#true_values_[game_indices[board_num]]
                 board_num += 1
 
@@ -305,8 +306,8 @@ class Teacher:
         boards = np.zeros((CONV_CHECK_SIZE, 8, 8, NUM_CHANNELS))
         diagonals = np.zeros((CONV_CHECK_SIZE, 10, 8, NUM_CHANNELS))
         for i in xrange(CONV_CHECK_SIZE):
-            boards[i] = dc.fen_to_channels(fens[i])
-            diagonals[i] = dc.get_diagonals(boards[i])
+            boards[i] = dh.fen_to_channels(fens[i])
+            diagonals[i] = dh.get_diagonals(boards[i])
 
         # Get loss
         error = self.nn.sess.run([err_sum], feed_dict = { 

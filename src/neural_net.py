@@ -62,12 +62,11 @@ class NeuralNet:
 
         # initialize variables
         if load_weights:
-            assert load_file is not None, "Could not load weights, file has not been specified."
+            if load_file is None:
+                raise Exception("Could not load weights, file has not been specified.")
             self.load_weight_values(load_file)
         else:
             self.initialize_tf_variables()
-
-        self.sess.run(tf.initialize_all_variables())
 
         # create placeholders
         self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, NUM_CHANNELS])
@@ -112,6 +111,7 @@ class NeuralNet:
         # Output layer
         self.W_final = weight_variable([NUM_HIDDEN, 1])
         self.b_final = bias_variable([1])
+        self.sess.run(tf.initialize_all_variables())
 
     def load_weight_values(self, filename='weight_values.p'):
         """
@@ -121,6 +121,7 @@ class NeuralNet:
                     Name of the file to load weight values from
         """
         pickle_path = self.dir_path + '/../pickles/' + filename
+        print "loading", pickle_path
         weight_values = pickle.load(open(pickle_path, 'rb'))
 
         self.W_grid = tf.Variable(weight_values['W_grid'])
@@ -138,6 +139,7 @@ class NeuralNet:
         self.b_fc_1 = tf.Variable(weight_values['b_fc_1'])
         self.b_fc_2 = tf.Variable(weight_values['b_fc_2'])
         self.b_final = tf.Variable(weight_values['b_final'])
+        self.sess.run(tf.initialize_all_variables())
 
     def save_weight_values(self, filename='weight_values.p'):
         """
@@ -157,6 +159,7 @@ class NeuralNet:
                            self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final])
 
         pickle_path = self.dir_path + '/../pickles/' + filename
+        print "saving", pickle_path
         pickle.dump(weight_values, open(pickle_path, 'wb'))
 
     def neural_net(self):

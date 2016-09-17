@@ -1,8 +1,10 @@
 import os
 import random
 import time
+import pickle
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 import guerilla
 import data_configuring as dc
@@ -36,13 +38,14 @@ class Teacher:
         self.files = [fens_filename, stockfish_filename]
 
         fens = cgp.load_fens(fens_filename)
+        fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
         true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
 
         self.start_time = time.time()
         self.training_time = training_time
         for action in self.actions:
             if action in self.actions_dict:
-                    self.actions_dict[action](boards, diagonals, true_values, fens)
+                    self.actions_dict[action](fens, true_values)
             else:
                 print "Error: %s is not a valid command" % (action)
 
@@ -61,8 +64,8 @@ class Teacher:
         """
         state['files'] = self.files
         pickle_path = self.dir_path + '/../pickles/' + filename
-        pickle.dump(weight_values, open(pickle_path, 'wb'))
         self.nn.save_weight_values(filename = 'in_training_weight_values.p')
+        pickle.dump(state, open(pickle_path, 'wb'))
 
     def load_state(self, filename = 'state.p'):
         """ 
@@ -88,73 +91,112 @@ class Teacher:
         """
             Resumes training from a previously paused training session
         """
+        print "Resuming training"
         state = self.load_state()
         fens = cgp.load_fens(self.files[0])
 
         num_batches = len(fens) / BATCH_SIZE
 
-        true_values = sf.load_stockfish_values(self.files[0])[:len(fens)]
+        true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
 
         self.start_time = time.time()
         self.training_time = training_time;
 
-        if state['action'] == 'boostrap':
+        if state['action'] == 'train_bootstrap':
             # finish epoch
+            train_fens = fens[:(-1) * CONV_CHECK_SIZE] # fens to train on
+            convg_fens = fens[(-1) * CONV_CHECK_SIZE:] # fens to check convergence on
+
+            train_values = true_values[:(-1) * CONV_CHECK_SIZE]
+            convg_values = true_values[(-1) * CONV_CHECK_SIZE:]
             cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
             train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
-            self.weight_update_bootstrap(fens, true_values, state['remaining_boards'], cost, train_step)
-            # continue with rests of epochs
-            self.train_bootstrap(boards, diagonals, true_values, fens, start_epoch=state['epoch_num'])
+            self.weight_update_bootstrap(train_fens, train_values, state['remaining_boards'], cost, train_step)
 
-    def train_bootstrap(self, boards, diagonals, true_values, fens, start_epoch = 0):
+            # evaluate nn for convergence
+            state['error'].append(self.evaluate_bootstrap(convg_fens, convg_values))
+            base_loss = state['error'][0] - state['error'][1]
+            curr_loss = state['error'][-2] - state['error'][-1]
+            if (abs(curr_loss / base_loss) < CONV_THRESHOLD):
+                self.nn.save_weight_values()
+                plt.plot(range(state['epoch_num']), state['error'])
+                plt.show()
+                return
+
+            # continue with rests of epochs
+            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], error=state['error'])
+
+    def train_bootstrap(self, fens, true_values, start_epoch = 0, error = []):
         """
             Train neural net
 
             Inputs:
-                nn[NeuralNet]:
-                    Neural net to train
-                boards[ndarray]:
-                    Chess board states to train neural net on. Must in correct input
-                    format - See fen_to_channels in main.py
-                diagonals[ndarray]:
-                    Diagonals of chess board states to train neural net on. Must in 
-                    correct input format - See get_diagonals in main.py
+                fens[list of strings]:
+                    The fens representing the board states
                 true_values[ndarray]:
                     Expected output for each chess board state (between 0 and 1)
                 num_batches[int]:
                     number of batches
-                fens[list of strings]:
-                    the fens
         """
-        raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
-        print 'Training data. Will save weights to pickle'
 
-        num_boards = len(fens)
+        train_fens = fens[:(-1) * CONV_CHECK_SIZE] # fens to train on
+        convg_fens = fens[(-1) * CONV_CHECK_SIZE:] # fens to check convergence on
+
+        train_values = true_values[:(-1) * CONV_CHECK_SIZE]
+        convg_values = true_values[(-1) * CONV_CHECK_SIZE:]
+
+        num_boards = len(train_fens)
+
+        usr_in = raw_input("This will overwrite your old weights\' pickle, do you still want to proceed (y/n)?: ")
+        if usr_in.lower() == 'n':
+            return
+        print "Training data on %d positions. Will save weights to pickle" % (num_boards)
 
         # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
         # Using squared error instead
         cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
         train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
-
+        epoch = start_epoch-1
         for epoch in xrange(start_epoch, NUM_EPOCHS):
+            print epoch
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
 
-            save = self.weight_update_bootstrap(fens, true_values, game_indices, cost, train_step)
+            # update weights
+            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, cost, train_step)
 
+            # save state if timeout
             if save[0]:
                 save[1]['epoch_num'] = epoch + 1
-                save_state(save[1])
+                save[1]['error'] = error
+                self.save_state(save[1])
+                return
 
-        # evaluate nn
-        self.evaluate(boards, diagonals, true_values)
+            # evaluate nn for convergence
+            error.append(self.evaluate_bootstrap(convg_fens, convg_values))
+            print error[-1]
+            if (len(error) > 2):
+                base_loss = error[0] - error[1]
+                curr_loss = error[-2] - error[-1]
+                if (abs(curr_loss / base_loss) < CONV_THRESHOLD):
+                    print "Training complete: Reached convergence threshold"
+                    break
+
+        else:
+            print "Training complete: Reached max epoch, no convergence yet"
+
+        self.nn.save_weight_values()
+
+        plt.plot(range(epoch+1), error)
+        plt.show()
+        return
 
     def weight_update_bootstrap(self, fens, true_values_, game_indices, cost, train_step):
         """ Weight update for a single batch """        
 
         if len(game_indices) % BATCH_SIZE != 0:
-            raise Exception("Error: number of actual fens and expected fens do not match up")
+            raise Exception("Error: number of fens provided (%d) is not a multiple of batch_size (%d)" % (len(game_indices), BATCH_SIZE))
 
         num_batches = int(len(game_indices) / BATCH_SIZE)
 
@@ -165,12 +207,13 @@ class Teacher:
 
         for i in xrange(num_batches):
             # if training time is up, save state
-            if self.training_time is not None 
+            if self.training_time is not None \
                 and time.time() - self.start_time >= self.training_time:
+                print "Timeout: Saving state and quitting"
                 return (True, 
                         {   
-                            'remaining_boards'   : game_indices[i*BATCH_SIZE+1:]
-                            'action'            : 'train_bootstrap'
+                            'remaining_boards'   : game_indices[(i * BATCH_SIZE):],
+                            'action'             : 'train_bootstrap'
                         })
 
             # set up batch
@@ -187,19 +230,13 @@ class Teacher:
         return (False, {})
 
 
-    def evaluate(self, boards, diagonals, true_values):
+    def evaluate_bootstrap(self, fens, true_values):
         """
             Evaluate neural net
 
             Inputs:
-                nn[NeuralNet]:
-                    Neural net to evaluate
-                boards[ndarray]:
-                    Chess board states to evaluate neural net on. Must in correct 
-                    input format - See fen_to_channels in main.py
-                diagonals[ndarray]:
-                    Diagonals of chess board states to evaluate neural net on. 
-                    Must in correct input format - See get_diagonals in main.py
+                fens[list of strings]:
+                    The fens representing the board states
                 true_values[ndarray]:
                     Expected output for each chess board state (between 0 and 1)
         """
@@ -208,31 +245,32 @@ class Teacher:
         right_boards = 0
         mean_error = 0
 
+        # Create tensors
         pred_value = tf.reshape(self.nn.pred_value, [-1])
         err = tf.sub(self.nn.true_value, pred_value)
         err_sum = tf.reduce_sum(err)
 
-        guess_whos_winning = tf.equal(tf.round(self.nn.true_value), tf.round(pred_value))
-        num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32))
+        # Configure data
+        boards = np.zeros((CONV_CHECK_SIZE, 8, 8, NUM_CHANNELS))
+        diagonals = np.zeros((CONV_CHECK_SIZE, 10, 8, NUM_CHANNELS))
+        for i in xrange(CONV_CHECK_SIZE):
+            boards[i] = dc.fen_to_channels(fens[i])
+            diagonals[i] = dc.get_diagonals(boards[i])
 
-        for i in xrange(np.shape(boards)[0]):
-            es, nr, gww, pv = self.nn.sess.run([err_sum, num_right, guess_whos_winning, pred_value],
-                                               feed_dict={self.nn.data: boards[i], self.nn.data_diags: diagonals[i],
-                                                          self.nn.true_value: true_values[i]})
-            total_boards += len(true_values[i])
-            right_boards += nr
-            mean_error += es
+        # Get loss
+        error = self.nn.sess.run([err_sum], feed_dict = { 
+                self.nn.data: boards, 
+                self.nn.data_diags: diagonals,
+                self.nn.true_value: true_values 
+        })
 
-        mean_error = mean_error / total_boards
-        print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (
-            mean_error, right_boards, total_boards)
-
+        return abs(error[0])
 
 def main():
     g = guerilla.Guerilla('Harambe')
     t = Teacher(g, ['train_bootstrap'])
-    t.run()
-
+    # t.run(training_time = 3600, fens_filename = "fens_1000.p", stockfish_filename = "true_values_1000.p")
+    t.resume()
 
 if __name__ == '__main__':
     main()

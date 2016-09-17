@@ -286,10 +286,10 @@ class Teacher:
                 score_diff [Float]
                     Value difference.
         """
-        assert ((dh.fen_is_white(curr_board['board']) and dh.fen_is_black(next_board['board'])) or
-                (dh.fen_is_black(curr_board['board']) and dh.fen_is_white(next_board['board'])))
+        assert ((dh.white_is_next(curr_board['board']) and dh.black_is_next(next_board['board'])) or
+                (dh.black_is_next(curr_board['board']) and dh.white_is_next(next_board['board'])))
 
-        if dh.fen_is_black(curr_board['board']):
+        if dh.black_is_next(curr_board['board']):
             score_diff = (next_board['value']) - (1 - curr_board['value'])
         else:
             score_diff = (1 - next_board['value']) - (curr_board['value'])

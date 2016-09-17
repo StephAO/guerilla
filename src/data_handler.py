@@ -185,7 +185,7 @@ def sigmoid_array(values):
     return 1. / (1. + np.exp(-0.00547 * values))
 
 
-def fen_is_white(fen):
+def white_is_next(fen):
     """
     Returns true if fen is for white playing next.
     Inputs:
@@ -200,7 +200,7 @@ def fen_is_white(fen):
     return False
 
 
-def fen_is_black(fen):
+def black_is_next(fen):
     """
     Returns true if fen is for black playing next.
     Inputs:
@@ -210,4 +210,4 @@ def fen_is_black(fen):
         [Boolean]
             True if fen is for black playing next.
     """
-    return not fen_is_white(fen)
+    return not white_is_next(fen)

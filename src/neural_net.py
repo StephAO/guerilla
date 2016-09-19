@@ -217,8 +217,8 @@ class NeuralNet:
                 weight_vals [List]
                     List of values with which to update weights. Must be in same order!
         """
-        if len(weight_vars) == len(weight_vals):
-            raise Exception("Number of values is not the same as the number of variables")
+        if len(weight_vars) != len(weight_vals):
+            raise Exception("Number of values (%d) is not the same as the number of variables (%d)" % (len(weight_vals), len(weight_vars)))
 
         # Create assignment for each weight
         num_weights = len(weight_vals)

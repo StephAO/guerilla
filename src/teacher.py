@@ -6,6 +6,7 @@ import math
 import chess.pgn
 import chess
 import time
+import matplotlib.pyplot as plt
 
 import guerilla
 import data_handler as dh
@@ -23,7 +24,7 @@ class Teacher:
             'train_bootstrap': self.train_bootstrap,
             'train_td_endgames': self.train_td,
             'train_td_full': self.train_td,
-            'load_and_resume' : self.resume
+            'load_and_resume' : self.resume,
             'train_selfplay': self.train_selfplay
         }
 
@@ -68,9 +69,6 @@ class Teacher:
                 true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
 
                 self.train_bootstrap(fens, true_values)
-
-            if action in self.actions_dict:
-                self.train_bootstrap(boards, diagonals, true_values, num_batches, fens)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
                 self.train_td(endgame=True)
@@ -243,17 +241,46 @@ class Teacher:
                 if (abs(curr_loss / base_loss) < LOSS_THRESHOLD):
                     print "Training complete: Reached convergence threshold"
                     break
-
         else:
             print "Training complete: Reached max epoch, no convergence yet"
 
         self.nn.save_weight_values()
 
-    def set_td_params(self, num_end=None, num_full=None, randomize=None,
-                      pgn_folder=None, end_length=None, full_length=None):
-        plt.plot(range(epoch+1), error)
+        plt.plot(range(epoch + 1), error)
         plt.show()
         return
+
+    def set_td_params(self, num_end=None, num_full=None, randomize=None,
+                      pgn_folder=None, end_length=None, full_length=None):
+        """
+        Set the parameters for TD-Leaf.
+            Inputs:
+                num_end [Int]
+                    Number of endgames to train on using TD-Leaf.
+                num_full [Int]
+                    Number of full games to train on using TD-Leaf.
+                randomize [Boolean]
+                    Whether or not to randomize across the pgn files.
+                pgn_folder [String]
+                    Folder containing chess games in PGN format.
+                end_depth [Int]
+                    Length of endgames.
+                full_depth [Int]
+                    Maximum length of full games. (-1 for no max)
+        """
+
+        if num_end:
+            self.td_num_endgame = num_end
+        if num_full:
+            self.td_num_full = num_full
+        if randomize:
+            self.td_rand_file = randomize
+        if pgn_folder:
+            self.td_pgn_folder = pgn_folder
+        if end_length:
+            self.td_end_length = end_length
+        if full_length:
+            self.td_full_length = full_length
 
     def weight_update_bootstrap(self, fens, true_values_, game_indices, cost, train_step):
         """ Weight update for a single batch """
@@ -330,37 +357,6 @@ class Teacher:
 
         return abs(error[0])
 
-    def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None, depth=None):
-        """
-        Set the parameters for TD-Leaf.
-            Inputs:
-                num_end [Int]
-                    Number of endgames to train on using TD-Leaf.
-                num_full [Int]
-                    Number of full games to train on using TD-Leaf.
-                randomize [Boolean]
-                    Whether or not to randomize across the pgn files.
-                pgn_folder [String]
-                    Folder containing chess games in PGN format.
-                end_depth [Int]
-                    Length of endgames.
-                full_depth [Int]
-                    Maximum length of full games. (-1 for no max)
-        """
-
-        if num_end:
-            self.td_num_endgame = num_end
-        if num_full:
-            self.td_num_full = num_full
-        if randomize:
-            self.td_rand_file = randomize
-        if pgn_folder:
-            self.td_pgn_folder = pgn_folder
-        if end_length:
-            self.td_end_length = end_length
-        if full_length:
-            self.td_full_length = full_length
-
     def train_td(self, endgame):
         """
         Trains the neural net using TD-Leaf.
@@ -434,7 +430,6 @@ class Teacher:
     def td_leaf(self, game):
         """
         Trains neural net using TD-Leaf algorithm.
-
             Inputs:
                 Game [List]
                     A game consists of a sequential list of board states. Each board state is a FEN.
@@ -452,7 +447,7 @@ class Teacher:
         for i, board in enumerate(game):
             print str(i) + "... ",
             game_info[i]['value'], _, game_info[i]['board'] = self.guerilla.search.run(chess.Board(board))
-            #print game_info[i]
+            print game_info[i]
 
         print "\nTD-Leaf values calculated!"
 
@@ -522,7 +517,7 @@ class Teacher:
         Self-play is performed from a random board position. The random board position is found by loading from the fens
         file and then applying a random legal move to the board.
         """
-        fens = cgp.load_fens(self.fens_filename)
+        fens = cgp.load_fens(self.files[0])
         rand_idx = np.random.choice(len(fens), self.sp_num)
         max_len = float("inf") if self.sp_length == -1 else self.sp_length
 
@@ -593,8 +588,8 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', 'weight_values.p')
-    g.search.max_depth = 2
+    g = guerilla.Guerilla('Harambe', 'w', load_file='weight_values.p')
+    g.search.max_depth = 1
     t = Teacher(g, ['train_bootstrap','train_td_endgames', 'train_td_full','train_selfplay'])
     t.set_td_params(num_end=2, num_full=1, randomize=False, end_length = 5, full_length = 5)
     t.set_sp_params(num_selfplay=1, max_length=5)

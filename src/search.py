@@ -82,7 +82,7 @@ class Search:
                 score = 1 - score
                 board.pop()
                 # print "D: %d M: %s S: %.1f" % (depth, move, score)
-                if score > best_score:
+                if score >= best_score:
                     best_score = score
                     best_move = move
                     best_leaf = leaf_board

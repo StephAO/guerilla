@@ -282,7 +282,7 @@ class NeuralNet:
                  Score between 0 and 1. Represents probability of White (current player) winning.
         """
 
-        if dh.fen_is_black(fen):
+        if dh.black_is_next(fen):
             raise ValueError("Invalid evaluate input, white must be next to play.")
 
         return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]

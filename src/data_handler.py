@@ -1,6 +1,7 @@
 import sys
 import os
 
+# TODO: Remove this and replace with proper access.
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
@@ -180,7 +181,8 @@ def sigmoid_array(values):
         (by me, deal with it). Ideally this fitter function is learned, but this is just for testing so..."""
     return 1. / (1. + np.exp(-0.00547 * values))
 
-def fen_is_white(fen):
+
+def white_is_next(fen):
     """
     Returns true if fen is for white playing next.
     Inputs:
@@ -194,7 +196,8 @@ def fen_is_white(fen):
         return True
     return False
 
-def fen_is_black(fen):
+
+def black_is_next(fen):
     """
     Returns true if fen is for black playing next.
     Inputs:
@@ -204,4 +207,4 @@ def fen_is_black(fen):
         [Boolean]
             True if fen is for black playing next.
     """
-    return not fen_is_white(fen)
+    return not white_is_next(fen)

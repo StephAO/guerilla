@@ -57,7 +57,8 @@ class Teacher:
                 print "Fetching stockfish values..."
 
                 fens = cgp.load_fens(fens_filename)
-                fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
+                if (len(fens)%BATCH_SIZE)!=0:
+                    fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
                 true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
                 
                 self.train_bootstrap(fens, true_values)
@@ -124,24 +125,24 @@ class Teacher:
         true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
 
         self.start_time = time.time()
-        self.training_time = training_time;
+        self.training_time = training_time
 
         if state['action'] == 'train_bootstrap':
             # finish epoch
-            train_fens = fens[:(-1) * CONV_CHECK_SIZE] # fens to train on
-            convg_fens = fens[(-1) * CONV_CHECK_SIZE:] # fens to check convergence on
+            train_fens = fens[:(-1) * VALIDATION_SIZE] # fens to train on
+            valid_fens = fens[(-1) * VALIDATION_SIZE:] # fens to check convergence on
 
-            train_values = true_values[:(-1) * CONV_CHECK_SIZE]
-            convg_values = true_values[(-1) * CONV_CHECK_SIZE:]
+            train_values = true_values[:(-1) * VALIDATION_SIZE]
+            valid_values = true_values[(-1) * VALIDATION_SIZE:]
             cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
             train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
             self.weight_update_bootstrap(train_fens, train_values, state['remaining_boards'], cost, train_step)
 
             # evaluate nn for convergence
-            state['error'].append(self.evaluate_bootstrap(convg_fens, convg_values))
+            state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
             base_loss = state['error'][0] - state['error'][1]
             curr_loss = state['error'][-2] - state['error'][-1]
-            if (abs(curr_loss / base_loss) < CONV_THRESHOLD):
+            if (abs(curr_loss / base_loss) < LOSS_THRESHOLD):
                 self.nn.save_weight_values()
                 plt.plot(range(state['epoch_num']), state['error'])
                 plt.show()
@@ -190,17 +191,17 @@ class Teacher:
                     number of batches
         """
 
-        train_fens = fens[:(-1) * CONV_CHECK_SIZE] # fens to train on
-        convg_fens = fens[(-1) * CONV_CHECK_SIZE:] # fens to check convergence on
+        train_fens = fens[:(-1) * VALIDATION_SIZE] # fens to train on
+        valid_fens = fens[(-1) * VALIDATION_SIZE:] # fens to check convergence on
 
-        train_values = true_values[:(-1) * CONV_CHECK_SIZE]
-        convg_values = true_values[(-1) * CONV_CHECK_SIZE:]
+        train_values = true_values[:(-1) * VALIDATION_SIZE]
+        valid_values = true_values[(-1) * VALIDATION_SIZE:]
 
         num_boards = len(train_fens)
 
-        usr_in = raw_input("This will overwrite your old weights\' pickle, do you still want to proceed (y/n)?: ")
-        if usr_in.lower() == 'n':
-            return
+        #usr_in = raw_input("This will overwrite your old weights\' pickle, do you still want to proceed (y/n)?: ")
+        #if usr_in.lower() == 'n':
+        #    return
         print "Training data on %d positions. Will save weights to pickle" % (num_boards)
 
         # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
@@ -225,12 +226,12 @@ class Teacher:
                 return
 
             # evaluate nn for convergence
-            error.append(self.evaluate_bootstrap(convg_fens, convg_values))
+            error.append(self.evaluate_bootstrap(valid_fens, valid_values))
             print error[-1]
             if (len(error) > 2):
                 base_loss = error[0] - error[1]
                 curr_loss = error[-2] - error[-1]
-                if (abs(curr_loss / base_loss) < CONV_THRESHOLD):
+                if (abs(curr_loss / base_loss) < LOSS_THRESHOLD):
                     print "Training complete: Reached convergence threshold"
                     break
 
@@ -303,9 +304,9 @@ class Teacher:
         err_sum = tf.reduce_sum(err)
 
         # Configure data
-        boards = np.zeros((CONV_CHECK_SIZE, 8, 8, NUM_CHANNELS))
-        diagonals = np.zeros((CONV_CHECK_SIZE, 10, 8, NUM_CHANNELS))
-        for i in xrange(CONV_CHECK_SIZE):
+        boards = np.zeros((VALIDATION_SIZE, 8, 8, NUM_CHANNELS))
+        diagonals = np.zeros((VALIDATION_SIZE, 10, 8, NUM_CHANNELS))
+        for i in xrange(VALIDATION_SIZE):
             boards[i] = dh.fen_to_channels(fens[i])
             diagonals[i] = dh.get_diagonals(boards[i])
 
@@ -484,7 +485,7 @@ def main():
     g = guerilla.Guerilla('Harambe', 'w')
     t = Teacher(g, ['train_bootstrap'])#, 'train_td_endgames', 'train_td_full'])
     # t.set_td_params(num_end=2, num_full=1, randomize=False)
-    t.run(training_time = None, fens_filename = "fens_1000.p", stockfish_filename = "true_values_1000.p")
+    t.run(training_time = None, fens_filename = "fens.p", stockfish_filename = "sf_scores.p")
 
 if __name__ == '__main__':
     main()

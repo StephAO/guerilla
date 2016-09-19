@@ -92,7 +92,6 @@ class Search:
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
                 if best_score >= a:
-                    # print "pruned since best: %f alpha: %f" % (best_score, a)
                     break
 
                     ##### If using search_test2() ######
@@ -153,7 +152,7 @@ def search_test_eval(fen):
         print "WARNING: This node should not be reached when using alpha-beta pruning!"
         score = 0.0
     elif board_state == "8/p7/8/1P6/8/1P6/8/8":
-        score = 1.0
+        score = 0.99
     elif board_state == "8/p7/8/Pp6/8/1P6/8/8":
         score = 0.6
     elif board_state == "8/8/pp6/P7/8/1P6/8/8":

@@ -106,6 +106,9 @@ class Teacher:
 
             self.curr_action_idx += 1
 
+        # Save new weight values
+        self.nn.save_weight_values()
+
     def save_state(self, state, filename="state.p"):
         """
             Save current state so that training can resume at another time
@@ -313,8 +316,6 @@ class Teacher:
                     break
         else:
             print "Training complete: Reached max epoch, no convergence yet"
-
-        self.nn.save_weight_values()
 
         # plt.plot(range(epoch + 1), error)
         # plt.show()

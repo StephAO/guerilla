@@ -125,7 +125,7 @@ class NeuralNet:
                     Name of the file to load weight values from
         """
         pickle_path = self.dir_path + '/../pickles/' + filename
-        print "Loading weight values from %s" % (pickle_path)
+        print "Loading weight values from %s" % pickle_path
         weight_values = pickle.load(open(pickle_path, 'rb'))
 
         self.W_grid = tf.Variable(weight_values['W_grid'])
@@ -218,7 +218,8 @@ class NeuralNet:
                     List of values with which to update weights. Must be in same order!
         """
         if len(weight_vars) != len(weight_vals):
-            raise Exception("Number of values (%d) is not the same as the number of variables (%d)" % (len(weight_vals), len(weight_vars)))
+            raise Exception("Number of values (%d) is not the same as the number of variables (%d)" %
+                            (len(weight_vals), len(weight_vars)))
 
         # Create assignment for each weight
         num_weights = len(weight_vals)

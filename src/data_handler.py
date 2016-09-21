@@ -5,13 +5,14 @@ import os
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
-#TODO: double check that there aren't unecessary imports
+# TODO: double check that there aren't unecessary imports
 
 import chess
 import numpy as np
 import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
+
 
 def flip_board(fen):
     """ switch colors of pieces
@@ -58,6 +59,7 @@ def flip_board(fen):
         new_en_passant = '-'
 
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
+
 
 # TODO: Maybe move
 def fen_to_channels(fen):
@@ -113,6 +115,7 @@ def fen_to_channels(fen):
             break
     return channels
 
+
 def get_diagonals(channels):
     """
         Retrieves and returns the diagonals from the board
@@ -150,6 +153,7 @@ def get_diagonals(channels):
 
     return diagonals
 
+
 def get_stockfish_values(boards):
     """
         Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
@@ -173,6 +177,7 @@ def get_stockfish_values(boards):
     cps = np.array(cps)
     print np.shape(cps)
     return sigmoid_array(cps)
+
 
 def sigmoid_array(values):
     """ From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to

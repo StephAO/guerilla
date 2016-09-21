@@ -36,6 +36,7 @@ class Teacher:
         self.files = None
         self.interrupt = False
         self.actions = None
+        self.curr_action_idx = None
 
         # TD-Leaf parameters
         self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
@@ -48,6 +49,8 @@ class Teacher:
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
         self.sp_length = 12  # How many moves are included in game playing
+
+    # ---------- RUNNING AND RESUMING METHODS
 
     def run(self, actions, training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p"):
         """ 
@@ -101,7 +104,7 @@ class Teacher:
             if self.interrupt:
                 break
 
-            self.curr_action_idx +=1
+            self.curr_action_idx += 1
 
     def save_state(self, state, filename="state.p"):
         """
@@ -211,6 +214,18 @@ class Teacher:
             print "Resuming self-play training..."
             self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
 
+    def out_of_time(self):
+        """
+        Returns True if training has run out of time. False otherwise
+            Output:
+                [Boolean]
+        """
+        if self.training_time is not None and time.time() - self.start_time >= self.training_time:
+            return True
+        return False
+
+    # ---------- BOOTSTRAP TRAINING METHODS
+
     def basic_board_eval(self, fen):
         """
             Assumes input fen is white's turn
@@ -305,38 +320,6 @@ class Teacher:
         # plt.show()
         return
 
-    def set_td_params(self, num_end=None, num_full=None, randomize=None,
-                      pgn_folder=None, end_length=None, full_length=None):
-        """
-        Set the parameters for TD-Leaf.
-            Inputs:
-                num_end [Int]
-                    Number of endgames to train on using TD-Leaf.
-                num_full [Int]
-                    Number of full games to train on using TD-Leaf.
-                randomize [Boolean]
-                    Whether or not to randomize across the pgn files.
-                pgn_folder [String]
-                    Folder containing chess games in PGN format.
-                end_depth [Int]
-                    Length of endgames.
-                full_depth [Int]
-                    Maximum length of full games. (-1 for no max)
-        """
-
-        if num_end:
-            self.td_num_endgame = num_end
-        if num_full:
-            self.td_num_full = num_full
-        if randomize:
-            self.td_rand_file = randomize
-        if pgn_folder:
-            self.td_pgn_folder = pgn_folder
-        if end_length:
-            self.td_end_length = end_length
-        if full_length:
-            self.td_full_length = full_length
-
     def weight_update_bootstrap(self, fens, game_indices, train_step):
         """ Weight update for multiple batches"""
 
@@ -371,16 +354,6 @@ class Teacher:
 
         return False, {}
 
-    def out_of_time(self):
-        """
-        Returns True if training has run out of time. False otherwise
-            Output:
-                [Boolean]
-        """
-        if self.training_time is not None and time.time() - self.start_time >= self.training_time:
-            return True
-        return False
-
     def evaluate_bootstrap(self, fens, true_values):
         """
             Evaluate neural net
@@ -412,6 +385,40 @@ class Teacher:
         })
 
         return abs(error[0])
+
+    # ---------- TD-LEAF TRAINING METHODS
+
+    def set_td_params(self, num_end=None, num_full=None, randomize=None,
+                      pgn_folder=None, end_length=None, full_length=None):
+        """
+        Set the parameters for TD-Leaf.
+            Inputs:
+                num_end [Int]
+                    Number of endgames to train on using TD-Leaf.
+                num_full [Int]
+                    Number of full games to train on using TD-Leaf.
+                randomize [Boolean]
+                    Whether or not to randomize across the pgn files.
+                pgn_folder [String]
+                    Folder containing chess games in PGN format.
+                end_depth [Int]
+                    Length of endgames.
+                full_depth [Int]
+                    Maximum length of full games. (-1 for no max)
+        """
+
+        if num_end:
+            self.td_num_endgame = num_end
+        if num_full:
+            self.td_num_full = num_full
+        if randomize:
+            self.td_rand_file = randomize
+        if pgn_folder:
+            self.td_pgn_folder = pgn_folder
+        if end_length:
+            self.td_end_length = end_length
+        if full_length:
+            self.td_full_length = full_length
 
     def train_td(self, endgame, game_indices=None, start_idx=0):
         """
@@ -567,6 +574,8 @@ class Teacher:
 
         return score_diff
 
+    # ---------- SELF-PLAY TRAINING METHODS
+
     def set_sp_params(self, num_selfplay=None, max_length=None):
         """
         Set the parameteres for self-play.
@@ -631,6 +640,8 @@ class Teacher:
                 self.interrupt = True
                 return
 
+    # ---------- EVALUATION METHODS
+
     def evaluate(self, boards, diagonals, true_values):
         """
             Evaluate neural net
@@ -678,7 +689,8 @@ def main():
     t = Teacher(g)
     t.set_td_params(num_end=2, num_full=2, randomize=False, end_length=5, full_length=5)
     t.set_sp_params(num_selfplay=2, max_length=5)
-    t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'],training_time=8, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=8,
+          fens_filename="fens.p", stockfish_filename="sf_scores.p")
     t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 

@@ -29,14 +29,14 @@ class ChessGUI_pygame:
         pygame.display.set_caption('Python Chess')
 
         self.textBox = ScrollingTextBox(self.screen,525,825,50,450)
-        self.LoadImages(graphicStyle)
+        self.load_images(graphicStyle)
         #pygame.font.init() - should be already called by pygame.init()
         self.fontDefault = pygame.font.Font( None, 20 )
 
         self.ranks = ['8','7','6','5','4','3','2','1']
         self.files = ['a','b','c','d','e','f','g','h']
 
-    def LoadImages(self,graphicStyle):
+    def load_images(self,graphicStyle):
         dir_path = os.path.dirname(os.path.abspath(__file__))
         if graphicStyle == 0:
             self.square_size = 50 #all images must be images 50 x 50 pixels

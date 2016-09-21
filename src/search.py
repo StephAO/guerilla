@@ -13,7 +13,7 @@ class Search:
         self.search_opts = {"recipromax": self.recipromax}
 
         if search_mode not in self.search_opts:
-            raise NotImplementedError, "Invalid Search option!"
+            raise NotImplementedError("Invalid Search option!")
         self.search_mode = search_mode
 
         self.eval_function = eval_fn
@@ -82,7 +82,7 @@ class Search:
                 score = 1 - score
                 board.pop()
                 # print "D: %d M: %s S: %.1f" % (depth, move, score)
-                if score > best_score:
+                if score >= best_score:
                     best_score = score
                     best_move = move
                     best_leaf = leaf_board
@@ -117,13 +117,12 @@ def search_test_eval(fen):
     """
     Arbitrary evaluation function for minimax test. Should yield move of b3b4 and value of 6.
     """
-    board_state, player,_,_,_,_ = fen.split(' ')
+    board_state, player, _, _, _, _ = fen.split(' ')
     if player != 'w':
         raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
 
     board_state = dh.flip_board(fen).split(' ')[0]
 
-    score = None
     if board_state == "8/p7/8/1p6/P7/1P6/8/8":
         score = 0.5
     elif board_state == "8/p7/8/1p6/1P6/P7/8/8":
@@ -160,21 +159,21 @@ def search_test_eval(fen):
     else:
         raise RuntimeError("This definitely should not happen! Invalid board.")
 
-    return 1- score
+    return 1 - score
+
 
 def search_test_eval2(fen):
-
-    board_state, player,_,_,_,_ = fen.split(' ')
+    board_state, player, _, _, _, _ = fen.split(' ')
     if player != 'w':
         raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
 
     board_state = dh.flip_board(fen).split(' ')[0]
 
-    if board_state == "8/p7/1p6/8/8/PP6/8/8": # a2a3
+    if board_state == "8/p7/1p6/8/8/PP6/8/8":  # a2a3
         return 0.5
-    elif board_state == "8/p7/1p6/8/1P6/8/P7/8": #b3b4
+    elif board_state == "8/p7/1p6/8/1P6/8/P7/8":  # b3b4
         return 0.4
-    elif board_state == "8/p7/1p6/8/P7/1P6/8/8": #a2a4
+    elif board_state == "8/p7/1p6/8/P7/1P6/8/8":  # a2a4
         return 0.7
     else:
         raise RuntimeError("This definitely should not happen! Invalid board.")
@@ -199,6 +198,7 @@ def search_test1():
         print "Test 1 failed. Expected [Score, Move]: [6, b3b4] got: [%.1f, %s]" % (score, move)
         return False
 
+
 def search_test2():
     fen_str = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
 
@@ -213,6 +213,7 @@ def search_test2():
         print "Test 2 failed. Expected [Score, Move]: [0.6, b3b4] got: [%.1f, %s]" % (score, move)
         return False
 
+
 def search_test3():
     fen_str = dh.flip_board("8/p7/1p6/8/8/1P6/P7/8 b ---- - 0 1")
 
@@ -226,6 +227,7 @@ def search_test3():
     else:
         print "Test 3 failed. Expected [Score, Move]: [0.6, b3b4] got: [%.1f, %s]" % (score, move)
         return False
+
 
 def search_test_old():
     # DEPRECATED

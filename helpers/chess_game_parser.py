@@ -8,9 +8,11 @@ import pickle
 import sys
 import os
 from os.path import isfile, join
+
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../src/')
 import data_handler as dh
+
 
 def read_pgn(filename):
     """
@@ -34,6 +36,7 @@ def read_pgn(filename):
             game = game.variation(0)
     return fens
 
+
 def get_fens(num_games=-1):
     """
     Returns a list of fens from games.
@@ -53,6 +56,7 @@ def get_fens(num_games=-1):
 
     return fens
 
+
 def load_fens(filename='fens.p'):
     """
     Loads the fens pickle.
@@ -64,6 +68,7 @@ def load_fens(filename='fens.p'):
     """
     full_path = dir_path + "/../pickles/" + filename
     return pickle.load(open(full_path, 'rb'))
+
 
 def main():
     number_of_games = -1
@@ -78,6 +83,7 @@ def main():
 
     pickle_path = dir_path + '/../pickles/fens.p'
     pickle.dump(fens, open(pickle_path, 'wb'))
+
 
 if __name__ == "__main__":
     main()

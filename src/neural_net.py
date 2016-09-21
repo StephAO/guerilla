@@ -62,12 +62,11 @@ class NeuralNet:
 
         # initialize variables
         if load_weights:
-            assert load_file is not None, "Could not load weights, file has not been specified."
+            if load_file is None:
+                raise Exception("Could not load weights, file has not been specified.")
             self.load_weight_values(load_file)
         else:
             self.initialize_tf_variables()
-
-        self.sess.run(tf.initialize_all_variables())
 
         # all weights + biases
         self.all_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
@@ -116,6 +115,7 @@ class NeuralNet:
         # Output layer
         self.W_final = weight_variable([NUM_HIDDEN, 1])
         self.b_final = bias_variable([1])
+        self.sess.run(tf.initialize_all_variables())
 
     def load_weight_values(self, filename='weight_values.p'):
         """
@@ -124,8 +124,8 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to load weight values from
         """
-        print "Loading weight values..."
         pickle_path = self.dir_path + '/../pickles/' + filename
+        print "Loading weight values from %s" % pickle_path
         weight_values = pickle.load(open(pickle_path, 'rb'))
 
         self.W_grid = tf.Variable(weight_values['W_grid'])
@@ -143,6 +143,7 @@ class NeuralNet:
         self.b_fc_1 = tf.Variable(weight_values['b_fc_1'])
         self.b_fc_2 = tf.Variable(weight_values['b_fc_2'])
         self.b_final = tf.Variable(weight_values['b_final'])
+        self.sess.run(tf.initialize_all_variables())
 
     def save_weight_values(self, filename='weight_values.p'):
         """
@@ -155,9 +156,9 @@ class NeuralNet:
         weight_values = dict()
 
         weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], weight_values['W_diag'], \
-        weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
-        weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
-        weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
+            weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
+            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
+            weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
             self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final])
 
@@ -216,10 +217,13 @@ class NeuralNet:
                 weight_vals [List]
                     List of values with which to update weights. Must be in same order!
         """
-        assert len(weight_vars) == len(weight_vals)
+        if len(weight_vars) != len(weight_vals):
+            raise Exception("Number of values (%d) is not the same as the number of variables (%d)" %
+                            (len(weight_vals), len(weight_vars)))
 
         # Create assignment for each weight
         num_weights = len(weight_vals)
+        # S: can you not make this using list comprehesion?
         assignments = [None] * num_weights
         for i in range(num_weights):
             assignments[i] = weight_vars[i].assign(weight_vals[i])
@@ -242,6 +246,7 @@ class NeuralNet:
         """
 
         #  declare gradient of predicted (output) value w.r.t. weights + biases
+        #  S: use self.all_weights. Set grad as a member variable since you're accessing it so much
         grad = tf.gradients(self.pred_value, weights)
 
         # calculate gradient
@@ -275,7 +280,7 @@ class NeuralNet:
                  fen [String]:
                      FEN of chess board.
              Output:
-                 Score between 0 (bad) and 1 (good). Represents probability of White (current player) winning.
+                 Score between 0 and 1. Represents probability of White (current player) winning.
         """
 
         if dh.black_is_next(fen):

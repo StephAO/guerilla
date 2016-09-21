@@ -5,10 +5,12 @@ import os
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
-# double check that there aren't unecessary imports
+# TODO: double check that there aren't unecessary imports
 
+import chess
 import numpy as np
 import stockfish_eval as sf
+import chess_game_parser as cgp
 from hyper_parameters import *
 
 

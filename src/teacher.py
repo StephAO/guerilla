@@ -5,6 +5,9 @@ import tensorflow as tf
 import math
 import chess.pgn
 import chess
+import time
+import matplotlib.pyplot as plt
+import pickle
 
 import guerilla
 import data_handler as dh
@@ -14,24 +17,25 @@ from hyper_parameters import *
 
 
 class Teacher:
-    def __init__(self, _guerilla, actions):
+    def __init__(self, _guerilla):
 
         # dictionary of different training/evaluation methods
-        self.actions_dict = {
-            'train_bootstrap': self.train_bootstrap,
-            'train_td_endgames': self.train_td,
-            'train_td_full': self.train_td,
-            'train_selfplay': self.train_selfplay
-        }
+        self.actions_dict = [
+            'train_bootstrap',
+            'train_td_endgames',
+            'train_td_full',
+            'load_and_resume',
+            'train_selfplay'
+        ]
 
         self.guerilla = _guerilla
         self.nn = _guerilla.nn
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
-        self.actions = actions
-
-        # Bootstrap parameters
-        self.fens_filename = "fens.p"
-        self.stockfish_filename = "sf_scores.p"
+        self.start_time = None
+        self.training_time = None
+        self.files = None
+        self.interrupt = False
+        self.actions = None
 
         # TD-Leaf parameters
         self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
@@ -39,39 +43,47 @@ class Teacher:
         self.td_num_endgame = -1  # The number of endgames to train on using TD-Leaf (-1 = All)
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
         self.td_end_length = 12  # How many moves are included in endgame training
-        self.td_full_length = -1 # Maximum number of moves for full game training (-1 = All)
+        self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
 
         # Self-play parameters
-        self.sp_num = 1 # The number of games to play against itself
-        self.sp_length = 12 # How many moves are included in game playing
+        self.sp_num = 1  # The number of games to play against itself
+        self.sp_length = 12  # How many moves are included in game playing
 
-    def run(self):
+    def run(self, actions, training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p"):
         """ 
             1. load data from file
             2. configure data
             3. run actions
         """
+        self.files = [fens_filename, stockfish_filename]
+        self.start_time = time.time()
+        self.training_time = training_time
+        self.actions = actions
+        self.curr_action_idx = 0  # This value gets modified if resuming
+        self.interrupt = False
 
-        for action in self.actions:
+        if self.actions[0] == 'load_and_resume':
+            self.resume(training_time)
+            self.curr_action_idx += 1
+
+        # Note: This cannot be a for loop as self.curr_action_idx gets set to non-zero when resuming.
+        while True:
+            # Check if done
+            if self.curr_action_idx >= len(self.actions):
+                break
+
+            # Else
+            action = self.actions[self.curr_action_idx]
             if action == 'train_bootstrap':
                 print "Performing Bootstrap training!"
                 print "Fetching stockfish values..."
 
-                # Fetch stockfish values
-                fens = cgp.load_fens(self.fens_filename)
+                fens = cgp.load_fens(fens_filename)
+                if (len(fens) % BATCH_SIZE) != 0:
+                    fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
+                true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
 
-                num_batches = len(fens) / BATCH_SIZE
-
-                true_values = sf.load_stockfish_values(self.stockfish_filename)
-                true_values = np.reshape(true_values[:num_batches * BATCH_SIZE], (num_batches, BATCH_SIZE))
-
-                print "Finished getting stockfish values. Begin training neural_net with %d items" % (len(fens))
-
-                boards = np.zeros((num_batches, BATCH_SIZE, 8, 8, NUM_CHANNELS))
-                diagonals = np.zeros((num_batches, BATCH_SIZE, 10, 8, NUM_CHANNELS))
-
-                self.train_bootstrap(boards, diagonals, true_values, num_batches, fens)
-
+                self.train_bootstrap(fens, true_values)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
                 self.train_td(endgame=True)
@@ -81,69 +93,217 @@ class Teacher:
             elif action == 'train_selfplay':
                 print "Performing self-play training!"
                 self.train_selfplay()
+            elif action == 'load_and_resume':
+                raise ValueError("Error: Resuming must be the first action in an action set.")
             else:
                 raise NotImplementedError("Error: %s is not a valid action." % action)
 
-    def train_bootstrap(self, boards, diagonals, true_values, num_batches, fens, save_weights=True):
+            if self.interrupt:
+                break
+
+            self.curr_action_idx +=1
+
+    def save_state(self, state, filename="state.p"):
         """
-            train neural net
+            Save current state so that training can resume at another time
+            Note: Can only save state at whole batch intervals (but mid-epoch is fine)
+            Inputs:
+                state[dict]:
+                    For bootstrap:
+                        game_indices[list of ints]
+                        (if action == 'train_bootstrap')
+                            epoch_num[int]
+                            loss[list of floats]
+                        (if action == 'train_td_...')
+                            start_idx [int]
+                filename[string]:
+                    filename to save pickle to
         """
+        state['files'] = self.files
 
-        # train should depend on action
-        raw_input('This will overwrite your old weights\' pickle, do you still want to proceed? (Hit Enter)')
-        print 'Training data. Will save weights to pickle'
+        state['curr_action_idx'] = self.curr_action_idx
+        state['actions'] = self.actions
 
-        num_boards = num_batches * BATCH_SIZE
+        # Save training parameters
+        state['td_leaf_param'] = {'randomize': self.td_rand_file,
+                                  'num_end': self.td_num_endgame,
+                                  'num_full': self.td_num_full,
+                                  'end_length': self.td_end_length,
+                                  'full_length': self.td_full_length}
+        state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
 
-        for epoch in xrange(NUM_EPOCHS):
-            # Configure data (shuffle fens -> fens to channel -> group batches)
-            game_indices = range(num_boards)
-            random.shuffle(game_indices)
-            for i in range(num_boards):
-                batch_num = i / BATCH_SIZE
-                batch_idx = i % BATCH_SIZE
+        pickle_path = self.dir_path + '/../pickles/' + filename
+        self.nn.save_weight_values(filename='in_training_weight_values.p')
+        pickle.dump(state, open(pickle_path, 'wb'))
 
-                boards[batch_num][batch_idx] = dh.fen_to_channels(fens[game_indices[i]])
-                for j in xrange(BATCH_SIZE):  # Maybe use matrices instead of for loop for speed
-                    diagonals[batch_num][batch_idx] = dh.get_diagonals(boards[batch_num][batch_idx])
-            # train epoch
-            self.weight_update_bootstrap(boards, diagonals, true_values, save_weights)
+    def load_state(self, filename='state.p'):
+        """
+            Load state from pickle. Returns information necessary to resume training
+            Inputs:
+                filename[string]:
+                    filename to load pickle from
+            Outputs:
+                state[dict]:
+                    action[string]
+                    epoch_num[int]
+                    remaining_boards[list of ints]
+                    loss[list of floats]
+        """
+        pickle_path = self.dir_path + '/../pickles/' + filename
+        state = pickle.load(open(pickle_path, 'rb'))
 
-        # evaluate nn
-        self.evaluate(boards, diagonals, true_values)
+        # Load training parameters
+        self.set_td_params(**state.pop('td_leaf_param'))
+        self.set_sp_params(**state.pop('sp_param'))
 
-    # move save_weights to come from action
-    def weight_update_bootstrap(self, boards, diagonals, true_values, save_weights):
+        self.files = state['files']
+        self.curr_action_idx = state['curr_action_idx']
+        self.actions = state['actions'] + self.actions[1:]
+        self.nn.load_weight_values(filename='in_training_weight_values.p')
+        return state
+
+    def resume(self, training_time=None):
+        """
+            Resumes training from a previously paused training session
+        """
+        print "Resuming training"
+        state = self.load_state()
+        fens = cgp.load_fens(self.files[0])
+
+        true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
+
+        self.start_time = time.time()
+        self.training_time = training_time
+
+        action = self.actions[self.curr_action_idx]
+
+        if action == 'train_bootstrap':
+            print "Resuming Bootstrap training..."
+            # finish epoch
+            train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
+            valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
+
+            train_values = true_values[:(-1) * VALIDATION_SIZE]
+            valid_values = true_values[(-1) * VALIDATION_SIZE:]
+            cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
+            train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+            self.weight_update_bootstrap(train_fens, state['game_indices'], train_step)
+
+            # evaluate nn for convergence
+            state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
+            base_loss = state['error'][0] - state['error'][1]
+            curr_loss = state['error'][-2] - state['error'][-1]
+            if abs(curr_loss / base_loss) < LOSS_THRESHOLD:
+                self.nn.save_weight_values()
+                plt.plot(range(state['epoch_num']), state['error'])
+                plt.show()
+                return
+
+            # continue with rests of epochs
+            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
+        elif action == 'train_td_endgames':
+            print "Resuming endgame TD-Leaf training..."
+            self.train_td(endgame=True, game_indices=state['game_indices'], start_idx=state['start_idx'])
+        elif action == 'train_td_full':
+            print "Resuming full-game TD-Leaf training..."
+            self.train_td(endgame=False, game_indices=state['game_indices'], start_idx=state['start_idx'])
+        elif action == 'train_selfplay':
+            print "Resuming self-play training..."
+            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
+
+    def basic_board_eval(self, fen):
+        """
+            Assumes input fen is white's turn
+            Inputs:
+                fen[string]:
+                    The fen representing the board state
+            Outputs:
+                value[int]
+                    sum value white pieces - sum value black pieces
+        """
+        piece_value = {
+            'p': 1,
+            'r': 5,
+            'n': 3,
+            'b': 3,
+            'q': 9,
+            'k': 1000,
+        }
+        value = 0
+        for char in fen:
+            if char == ' ':
+                break
+            if char.lower() in piece_value:
+                sign = 1 if char.isupper() else -1
+                value += sign * piece_value[char.lower()]
+        return value
+
+    def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
         """
             Train neural net
 
             Inputs:
-                nn[NeuralNet]:
-                    Neural net to train
-                boards[ndarray]:
-                    Chess board states to train neural net on. Must in correct input
-                    format - See fen_to_channels in main.py
-                diagonals[ndarray]:
-                    Diagonals of chess board states to train neural net on. Must in 
-                    correct input format - See get_diagonals in main.py
+                fens[list of strings]:
+                    The fens representing the board states
                 true_values[ndarray]:
                     Expected output for each chess board state (between 0 and 1)
-                save_weights[Bool] (optional - default = True):
-                    Save weights to file after training
+                num_batches[int]:
+                    number of batches
         """
+
+        train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
+        valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
+
+        train_values = true_values[:(-1) * VALIDATION_SIZE]
+        valid_values = true_values[(-1) * VALIDATION_SIZE:]
+
+        num_boards = len(train_fens)
+
+        if not loss:
+            loss = []
+
+        # usr_in = raw_input("This will overwrite your old weights\' pickle, do you still want to proceed (y/n)?: ")
+        # if usr_in.lower() != 'y':
+        #    return
+        print "Training data on %d positions. Will save weights to pickle" % num_boards
 
         # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
         # Using squared error instead
         cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-
         train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+        for epoch in xrange(start_epoch, NUM_EPOCHS):
+            # Configure data (shuffle fens -> fens to channel -> group batches)
+            game_indices = range(num_boards)
+            random.shuffle(game_indices)
 
-        for i in xrange(boards.shape[0]):
-            self.nn.sess.run([train_step], feed_dict={self.nn.data: boards[i], self.nn.data_diags: diagonals[i],
-                                                      self.nn.true_value: true_values[i]})
+            # update weights
+            save = self.weight_update_bootstrap(train_fens, game_indices, train_step)
 
-        if save_weights:
-            self.nn.save_weight_values()
+            # save state if timeout
+            if save[0]:
+                save[1]['epoch_num'] = epoch + 1
+                save[1]['error'] = loss
+                self.save_state(save[1])
+                self.interrupt = True
+                return
+
+            # evaluate nn for convergence
+            loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
+            print "%d: %f" % (epoch, loss[-1])
+            if len(loss) > 2:
+                base_loss = loss[0] - loss[1]
+                curr_loss = loss[-2] - loss[-1]
+                if abs(curr_loss / base_loss) < LOSS_THRESHOLD:
+                    print "Training complete: Reached convergence threshold"
+                    break
+        else:
+            print "Training complete: Reached max epoch, no convergence yet"
+
+        self.nn.save_weight_values()
+
+        # plt.plot(range(epoch + 1), error)
+        # plt.show()
+        return
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None,
                       pgn_folder=None, end_length=None, full_length=None):
@@ -177,13 +337,94 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def train_td(self, endgame):
+    def weight_update_bootstrap(self, fens, game_indices, train_step):
+        """ Weight update for multiple batches"""
+
+        if len(game_indices) % BATCH_SIZE != 0:
+            raise Exception("Error: number of fens provided (%d) is not a multiple of batch_size (%d)" %
+                            (len(game_indices), BATCH_SIZE))
+
+        num_batches = int(len(game_indices) / BATCH_SIZE)
+
+        board_num = 0
+        boards = np.zeros((BATCH_SIZE, 8, 8, NUM_CHANNELS))
+        diagonals = np.zeros((BATCH_SIZE, 10, 8, NUM_CHANNELS))
+        true_values = np.zeros(BATCH_SIZE)
+
+        for i in xrange(num_batches):
+            # if training time is up, save state
+            if self.out_of_time():
+                print "Bootstrap Timeout: Saving state and quitting"
+                return True, {'game_indices': game_indices[(i * BATCH_SIZE):]}
+
+            # set up batch
+            for j in xrange(BATCH_SIZE):
+                boards[j] = dh.fen_to_channels(fens[game_indices[board_num]])
+                diagonals[j] = dh.get_diagonals(boards[j])
+                true_values[j] = self.basic_board_eval(
+                    fens[game_indices[board_num]])  # true_values_[game_indices[board_num]]
+                board_num += 1
+
+            # train batch
+            self.nn.sess.run([train_step], feed_dict={self.nn.data: boards, self.nn.data_diags: diagonals,
+                                                      self.nn.true_value: true_values})
+
+        return False, {}
+
+    def out_of_time(self):
+        """
+        Returns True if training has run out of time. False otherwise
+            Output:
+                [Boolean]
+        """
+        if self.training_time is not None and time.time() - self.start_time >= self.training_time:
+            return True
+        return False
+
+    def evaluate_bootstrap(self, fens, true_values):
+        """
+            Evaluate neural net
+
+            Inputs:
+                fens[list of strings]:
+                    The fens representing the board states
+                true_values[ndarray]:
+                    Expected output for each chess board state (between 0 and 1)
+        """
+
+        # Create tensors
+        pred_value = tf.reshape(self.nn.pred_value, [-1])
+        err = tf.sub(self.nn.true_value, pred_value)
+        err_sum = tf.reduce_sum(err)
+
+        # Configure data
+        boards = np.zeros((VALIDATION_SIZE, 8, 8, NUM_CHANNELS))
+        diagonals = np.zeros((VALIDATION_SIZE, 10, 8, NUM_CHANNELS))
+        for i in xrange(VALIDATION_SIZE):
+            boards[i] = dh.fen_to_channels(fens[i])
+            diagonals[i] = dh.get_diagonals(boards[i])
+
+        # Get loss
+        error = self.nn.sess.run([err_sum], feed_dict={
+            self.nn.data: boards,
+            self.nn.data_diags: diagonals,
+            self.nn.true_value: true_values
+        })
+
+        return abs(error[0])
+
+    def train_td(self, endgame, game_indices=None, start_idx=0):
         """
         Trains the neural net using TD-Leaf.
             Inputs:
                 endgame [Boolean]
                     If True then only trains on endgames. Otherwise trains on a random subset of full games.
+                game_indices [List of Ints]
+                    Used when resuming. Provides (shuffled) list of indices for the games to train on.
+                start_idx [Int]
+                    Index of game_indices where training should be resumed.
         """
+        assert not ((game_indices is None) and start_idx > 0)
 
         num_games = self.td_num_endgame if endgame else self.td_num_full
 
@@ -195,13 +436,15 @@ class Teacher:
             pgn_files = [f for f in os.listdir(self.td_pgn_folder)[:num_games] if
                          os.path.isfile(os.path.join(self.td_pgn_folder, f))]
 
-        game_indices = range(num_games if num_games >= 0 else len(pgn_files))
+        if game_indices is None:
+            game_indices = range(num_games if num_games >= 0 else len(pgn_files))
 
-        # Shuffle if necessary
-        if self.td_rand_file:
-            random.shuffle(game_indices)
+            # Shuffle if necessary
+            if self.td_rand_file:
+                random.shuffle(game_indices)
 
-        for i, game_idx in enumerate(game_indices):
+        for i in xrange(start_idx, len(game_indices)):
+            game_idx = game_indices[i]
             print "Training on game %d of %d..." % (i + 1, num_games)
             fens = []
 
@@ -246,10 +489,18 @@ class Teacher:
             # Call TD-Leaf
             self.td_leaf(fens)
 
+            # Check if out of time
+            if self.out_of_time() and i != (len(game_indices) - 1):
+                print "TD-Leaf " + ("endgame" if endgame else "fullgame") + " Timeout: Saving state and quitting."
+                save = {'game_indices': game_indices,
+                        'start_idx': i + 1}
+                self.save_state(save)
+                self.interrupt = True
+                return
+
     def td_leaf(self, game):
         """
         Trains neural net using TD-Leaf algorithm.
-
             Inputs:
                 Game [List]
                     A game consists of a sequential list of board states. Each board state is a FEN.
@@ -263,13 +514,13 @@ class Teacher:
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # Note: Does not modify score of black boards.
-        print "Calculating TD-Leaf values for move ",
+        # print "Calculating TD-Leaf values for move ",
         for i, board in enumerate(game):
-            print str(i) + "... ",
+            # print str(i) + "... ",
             game_info[i]['value'], _, game_info[i]['board'] = self.guerilla.search.run(chess.Board(board))
-            #print game_info[i]
+            # print game_info[i]
 
-        print "\nTD-Leaf values calculated!"
+        # print "\nTD-Leaf values calculated!"
 
         for t in range(num_boards):
             td_val = 0
@@ -292,7 +543,7 @@ class Teacher:
         old_weights = self.nn.get_weights(self.nn.all_weights)
         new_weights = [old_weights[i] + TD_LRN_RATE * w_update[i] for i in range(len(w_update))]
         self.nn.update_weights(self.nn.all_weights, new_weights)
-        print "Weights updated."
+        # print "Weights updated."
 
     def calc_value_diff(self, curr_board, next_board):
         """
@@ -331,27 +582,32 @@ class Teacher:
         if max_length:
             self.sp_length = max_length
 
-    def train_selfplay(self):
+    def train_selfplay(self, game_indices=None, start_idx=0):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against itself.
         Self-play is performed from a random board position. The random board position is found by loading from the fens
         file and then applying a random legal move to the board.
         """
-        fens = cgp.load_fens(self.fens_filename)
-        rand_idx = np.random.choice(len(fens), self.sp_num)
+        fens = cgp.load_fens(self.files[0])
+
+        if game_indices is None:
+            game_indices = np.random.choice(len(fens), self.sp_num)
+
         max_len = float("inf") if self.sp_length == -1 else self.sp_length
 
-        for i, idx in enumerate(rand_idx):
+        for i in xrange(start_idx, len(game_indices)):
+
             print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
             # Load random fen
-            board = chess.Board(fens[idx] + " w KQkq - 0 1") # white plays next, turn counter & castling unimportant here
+            board = chess.Board(
+                fens[game_indices[i]] + " w KQkq - 0 1")  # white plays next, turn counter & castling unimportant here
 
             # Play random move to increase game variability
             board.push(random.sample(board.legal_moves, 1)[0])
 
             # Play a game against yourself
             game_fens = [board.fen()]
-            for j in range(max_len):
+            for _ in range(max_len):
                 # Check if game finished
                 if board.is_checkmate():
                     break
@@ -365,6 +621,15 @@ class Teacher:
             # Send game for TD-leaf training
             print "Training on game %d of %d..." % (i + 1, self.sp_num)
             self.td_leaf(game_fens)
+
+            # Check if out of time
+            if self.out_of_time() and i != (len(game_indices) - 1):
+                print "TD-Leaf self-play Timeout: Saving state and quitting."
+                save = {'game_indices': game_indices,
+                        'start_idx': i + 1}
+                self.save_state(save)
+                self.interrupt = True
+                return
 
     def evaluate(self, boards, diagonals, true_values):
         """
@@ -408,12 +673,13 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', 'weight_values.p')
-    g.search.max_depth = 2
-    t = Teacher(g, ['train_bootstrap','train_td_endgames', 'train_td_full','train_selfplay'])
-    t.set_td_params(num_end=2, num_full=1, randomize=False, end_length = 5, full_length = 5)
-    t.set_sp_params(num_selfplay=1, max_length=5)
-    t.run()
+    g = guerilla.Guerilla('Harambe', 'w', load_file='weight_values.p')
+    g.search.max_depth = 1
+    t = Teacher(g)
+    t.set_td_params(num_end=2, num_full=2, randomize=False, end_length=5, full_length=5)
+    t.set_sp_params(num_selfplay=2, max_length=5)
+    t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'],training_time=8, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 
 if __name__ == '__main__':

@@ -229,33 +229,6 @@ class Teacher:
 
     # ---------- BOOTSTRAP TRAINING METHODS
 
-    def basic_board_eval(self, fen):
-        """
-            Assumes input fen is white's turn
-            Inputs:
-                fen[string]:
-                    The fen representing the board state
-            Outputs:
-                value[int]
-                    sum value white pieces - sum value black pieces
-        """
-        piece_value = {
-            'p': 1,
-            'r': 5,
-            'n': 3,
-            'b': 3,
-            'q': 9,
-            'k': 1000,
-        }
-        value = 0
-        for char in fen:
-            if char == ' ':
-                break
-            if char.lower() in piece_value:
-                sign = 1 if char.isupper() else -1
-                value += sign * piece_value[char.lower()]
-        return value
-
     def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
         """
             Train neural net
@@ -289,13 +262,15 @@ class Teacher:
         # Using squared error instead
         cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
         train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+        loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
+        print "%d: %f" % (0, loss[-1])
         for epoch in xrange(start_epoch, NUM_EPOCHS):
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
 
             # update weights
-            save = self.weight_update_bootstrap(train_fens, game_indices, train_step)
+            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, train_step)
 
             # save state if timeout
             if save[0]:
@@ -307,7 +282,7 @@ class Teacher:
 
             # evaluate nn for convergence
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-            print "%d: %f" % (epoch, loss[-1])
+            print "%d: %f" % (epoch+1, loss[-1])
             if len(loss) > 2:
                 base_loss = loss[0] - loss[1]
                 curr_loss = loss[-2] - loss[-1]
@@ -321,7 +296,7 @@ class Teacher:
         # plt.show()
         return
 
-    def weight_update_bootstrap(self, fens, game_indices, train_step):
+    def weight_update_bootstrap(self, fens, true_values_, game_indices, train_step):
         """ Weight update for multiple batches"""
 
         if len(game_indices) % BATCH_SIZE != 0:
@@ -345,8 +320,7 @@ class Teacher:
             for j in xrange(BATCH_SIZE):
                 boards[j] = dh.fen_to_channels(fens[game_indices[board_num]])
                 diagonals[j] = dh.get_diagonals(boards[j])
-                true_values[j] = self.basic_board_eval(
-                    fens[game_indices[board_num]])  # true_values_[game_indices[board_num]]
+                true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
             # train batch
@@ -685,14 +659,17 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', load_file='weight_values.p')
+    g = guerilla.Guerilla('Harambe', 'w', load_file=None)
     g.search.max_depth = 1
     t = Teacher(g)
-    t.set_td_params(num_end=2, num_full=2, randomize=False, end_length=5, full_length=5)
-    t.set_sp_params(num_selfplay=2, max_length=5)
-    t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=8,
-          fens_filename="fens.p", stockfish_filename="sf_scores.p")
-    t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    t.set_td_params(num_end=1000, num_full=1000, randomize=False, end_length=5, full_length=5)
+    t.set_sp_params(num_selfplay=1000, max_length=5)
+    prev = g.nn.get_weights(g.nn.all_weights)
+    t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=None,
+          fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    print np.array_equal(prev,prev)
+    print np.array_equal(prev,g.nn.get_weights(g.nn.all_weights))
+    # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 
 if __name__ == '__main__':

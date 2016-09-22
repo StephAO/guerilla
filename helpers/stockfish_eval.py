@@ -14,7 +14,7 @@ import chess_game_parser as cgp
 
 # Modification from notbanker's stockfish.py https://gist.github.com/notbanker/3af51fd2d11ddcad7f16
 
-def stockfish_scores(fens, seconds=3, threads=None, memory=None, all_scores=False):
+def stockfish_scores(fens, seconds=1, threads=None, memory=None, all_scores=False):
     """ 
         Uses stockfishes engine to evaluate a score for each board.
         Then uses a sigmoid to map the scores to a winning probability between 
@@ -36,9 +36,12 @@ def stockfish_scores(fens, seconds=3, threads=None, memory=None, all_scores=Fals
 
     # Shell out to Stockfish
     scores = []
+    percent_done = 0
+    num_fens = len(fens)
     for i, fen in enumerate(fens):
-        if i%5 == 0:
-            print "Processing #%d..." % i
+        if math.floor(i * 100 / num_fens) > percent_done:
+            percent_done = math.floor(i * 100 / num_fens)
+            print '|' + '#' * int(percent_done) + " %d " % (percent_done) + "%" + " done"
         cmd = ' '.join([(dir_path + '/stockfish_eval.sh'), fen, str(seconds), binary, str(threads), str(memory)])
         # print cmd
         # try:
@@ -49,7 +52,7 @@ def stockfish_scores(fens, seconds=3, threads=None, memory=None, all_scores=Fals
             print "Warning: stockfish returned nothing. Skipping fen. Command was:\n%s" % cmd
             continue
         if len(output) == 2:
-            score = 10000. if int(output[1]) > 0 else -10000.
+            score = 100000. if int(output[1]) > 0 else -100000.
         else:
             score = float(output[0])
         scores.append(score)
@@ -83,7 +86,7 @@ def load_stockfish_values(filename='sf_scores.p'):
 def main():
     fens = cgp.load_fens()
 
-    print "Evaluating %d fens for 2 seconds each" % (len(fens))
+    print "Evaluating %d fens for 1 seconds each" % (len(fens))
 
     sf_scores = stockfish_scores(fens)
 

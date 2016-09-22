@@ -6,11 +6,11 @@ Hyper parameters, constants and definitions.
 
 NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
 NUM_EPOCHS = 10
-BATCH_SIZE = 5
+BATCH_SIZE = 50
 NUM_HIDDEN = 1024
-LEARNING_RATE = 0.0001
-VALIDATION_SIZE = 5
-LOSS_THRESHOLD = 0.01
+LEARNING_RATE = 0.0000001
+VALIDATION_SIZE = 1000
+LOSS_THRESHOLD = 0.0001
 
 NUM_CHANNELS = 6 * 2
 

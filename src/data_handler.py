@@ -93,6 +93,8 @@ def fen_to_channels(fen):
     c_file = 0
     c_rank = 0
     for char in fen:
+        if char == ' ':
+            break
         if char == '/':
             c_file = 0
             c_rank += 1

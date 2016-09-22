@@ -174,6 +174,9 @@ class NeuralNet:
         batch_size = tf.shape(self.data)[0]
 
         # outputs to convolutional layer
+        a = conv5x5_grid(self.data, self.W_grid)
+        print tf.shape(self.b_grid).eval()
+        b = tf.nn.relu(a + self.b_grid)
         o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
         o_rank = tf.nn.relu(conv8x1_line(self.data, self.W_rank) + self.b_rank)
         o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)

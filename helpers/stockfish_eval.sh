@@ -5,15 +5,20 @@
 # Assumes the stockfish binary is called 'stockfish_'+binary 
 
 fen=$1
-seconds=${2:-3}
-binary=${3:-linux}
-threads=${4:-12}
-memory=${5:-1024}
+turn=$2
+castling=$3
+enpassant=$4
+half_move=$5
+full_move=$6
+seconds=${7:-3}
+binary=${8:-linux}
+threads=${9:-12}
+memory=${10:-1024}
 
 (
 echo "setoption name Hash value $memory" ;
 echo "setoption name threads value $threads" ;
-echo "position fen $fen" ;
+echo "position fen $fen $turn $castling $enpassant $half_move $full_move" ;
 echo "go infinite";
 sleep $seconds
 ) | stockfish > analysis.txt

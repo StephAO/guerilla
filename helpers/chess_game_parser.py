@@ -31,7 +31,7 @@ def read_pgn(filename):
             fen = game.board().fen()
             if fen[1] == 'w':
                 fen = dh.flip_board(fen)
-            fen = fen.split(' ')[0]
+            # fen = fen.split(' ')[0]
             fens.append(fen)
             game = game.variation(0)
     return fens

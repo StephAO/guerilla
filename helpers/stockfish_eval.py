@@ -14,7 +14,7 @@ import chess_game_parser as cgp
 
 # Modification from notbanker's stockfish.py https://gist.github.com/notbanker/3af51fd2d11ddcad7f16
 
-def stockfish_scores(fens, seconds=2, threads=None, memory=None, all_scores=False):
+def stockfish_scores(fens, seconds=3, threads=None, memory=None, all_scores=False):
     """ 
         Uses stockfishes engine to evaluate a score for each board.
         Then uses a sigmoid to map the scores to a winning probability between 

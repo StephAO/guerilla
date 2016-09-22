@@ -7,7 +7,7 @@ import os
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/GUI/')
-import ChessGUI_pygame
+import ChessGUI
 
 
 class Game:
@@ -42,7 +42,7 @@ class Game:
 
         # Initialize gui
         if use_gui:
-            self.gui = ChessGUI_pygame.ChessGUI_pygame()
+            self.gui = ChessGUI.ChessGUI()
             if type(p1) is human.Human:
                 self.player1.gui = self.gui
             if type(p2) is human.Human:

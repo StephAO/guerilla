@@ -12,7 +12,7 @@ class Human(player.Player):
         if self.gui is None:
             raise Exception("No gui was provided to human")
 
-        move = self.gui.get_player_input(board, self.colour)
+        move = self.gui.get_player_input(board,)
         print move
         return chess.Move.from_uci(move)
 

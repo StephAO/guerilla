@@ -106,8 +106,9 @@ class Teacher:
 
             self.curr_action_idx += 1
 
-        # Save new weight values
-        self.nn.save_weight_values()
+            # Save new weight values
+            weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") +".p"
+            self.nn.save_weight_values(weight_file)
 
     def save_state(self, state, filename="state.p"):
         """
@@ -292,6 +293,8 @@ class Teacher:
         else:
             print "Training complete: Reached max epoch, no convergence yet"
 
+        # save loss
+        pickle.dump(loss, open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") +".p", 'wb'))
         # plt.plot(range(epoch + 1), error)
         # plt.show()
         return
@@ -362,6 +365,8 @@ class Teacher:
         return abs(error[0])
 
     # ---------- TD-LEAF TRAINING METHODS
+
+    # TODO: Handle complete fens format
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None,
                       pgn_folder=None, end_length=None, full_length=None):
@@ -660,15 +665,12 @@ class Teacher:
 
 def main():
     g = guerilla.Guerilla('Harambe', 'w', load_file=None)
-    g.search.max_depth = 1
+    g.search.max_depth = 3
     t = Teacher(g)
-    t.set_td_params(num_end=1000, num_full=1000, randomize=False, end_length=5, full_length=5)
-    t.set_sp_params(num_selfplay=1000, max_length=5)
-    prev = g.nn.get_weights(g.nn.all_weights)
+    t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
+    t.set_sp_params(num_selfplay=1000, max_length=12)
     t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=None,
           fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    print np.array_equal(prev,prev)
-    print np.array_equal(prev,g.nn.get_weights(g.nn.all_weights))
     # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 

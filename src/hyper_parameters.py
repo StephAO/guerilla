@@ -15,7 +15,7 @@ LOSS_THRESHOLD = 0.0001
 NUM_CHANNELS = 6 * 2
 
 # Hyper parameters for TD-Leaf Training Algorithm
-TD_LRN_RATE = 0.5  # Learning rate
+TD_LRN_RATE = 1.0  # Learning rate
 TD_DISCOUNT = 0.7  # Discount rate
 
 # TODO: I don't think this should be here.

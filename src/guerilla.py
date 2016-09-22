@@ -10,7 +10,7 @@ class Guerilla(player.Player):
         self.search = search.Search(self.nn.evaluate)
 
     def get_move(self, board):
-        print "Guerilla is thinking..."
+        # print "Guerilla is thinking..."
         return self.search.run(board)[1]
 
         # TODO: Evaluate function abstraction. Places it appears: td_leaf and search.

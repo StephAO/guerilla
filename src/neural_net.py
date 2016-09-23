@@ -241,12 +241,15 @@ class NeuralNet:
         board.
             Input:
                 fen [String]
-                    FEN of board where gradient is to be taken.
+                    FEN of board where gradient is to be taken. Must be for white playing next.
                 weights [List]
                     List of weight variables.
             Output:
                 Gradient [List of floats].
         """
+
+        if dh.black_is_next(fen):
+            raise ValueError("Invalid gradient input, white must be next to play.")
 
         #  declare gradient of predicted (output) value w.r.t. weights + biases
         #  S: use self.all_weights. Set grad as a member variable since you're accessing it so much

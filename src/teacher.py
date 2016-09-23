@@ -294,7 +294,7 @@ class Teacher:
             print "Training complete: Reached max epoch, no convergence yet"
 
         # save loss
-        pickle.dump(loss, open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") +".p", 'wb'))
+        pickle.dump(loss, open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") + ".p", 'wb'))
         # plt.plot(range(epoch + 1), error)
         # plt.show()
         return
@@ -495,64 +495,53 @@ class Teacher:
         # TODO: Maybe this should check that each game is valid? i.e. assert that only legal moves are played.
 
         num_boards = len(game)
-        game_info = [{'board': None, 'value': None} for _ in range(num_boards)]  # Indexed the same as num_boards
+        game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
         w_update = None
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
-        # Note: Does not modify score of black boards.
         # print "Calculating TD-Leaf values for move ",
         for i, board in enumerate(game):
             # print str(i) + "... ",
-            game_info[i]['value'], _, game_info[i]['board'] = self.guerilla.search.run(chess.Board(board))
-            # print game_info[i]
+            value, _, board_fen = self.guerilla.search.run(chess.Board(board))
 
-        # print "\nTD-Leaf values calculated!"
+            # Get values and gradients for white plays next
+            if dh.white_is_next(board_fen):
+                game_info[i]['value'] = value
+                game_info[i]['gradient'] = self.nn.get_gradient(board_fen, self.nn.all_weights)
+            else:
+                # value is probability of WHITE winning
+                game_info[i]['value'] = 1 - value
+
+                # Get NEGATIVE gradient of a flipped board
+                # Explanation:
+                #   Flipped board = Black -> White, so now white plays next (as required by NN)
+                #   Gradient of flipped board = Gradient of what used to be black
+                #   Desired gradient = Gradient of what was originally white = - Gradient of flipped board
+                game_info[i]['gradient'] = [-x for x in
+                                            self.nn.get_gradient(dh.flip_board(board_fen), self.nn.all_weights)]
 
         for t in range(num_boards):
             td_val = 0
             for j in range(t, num_boards - 1):
                 # Calculate temporal difference
-                dt = self.calc_value_diff(game_info[j], game_info[j + 1])
+                dt = game_info[j + 1]['value'] - game_info[j]['value']
                 # Add to sum
                 td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
-            # Get gradient and update sum
-            update = self.nn.get_gradient(game_info[t]['board'], self.nn.all_weights)
+            # Use gradient to update sum
             if not w_update:
-                w_update = [w * td_val for w in update]
+                w_update = [w * td_val for w in game_info[t]['gradient']]
             else:
                 # update each set of weights
-                for i in range(len(update)):
-                    w_update[i] += update[i] * td_val
+                for i in range(len(game_info[t]['gradient'])):
+                    w_update[i] += game_info[t]['gradient'][i] * td_val
 
         # Update neural net weights.
         old_weights = self.nn.get_weights(self.nn.all_weights)
         new_weights = [old_weights[i] + TD_LRN_RATE * w_update[i] for i in range(len(w_update))]
         self.nn.update_weights(self.nn.all_weights, new_weights)
         # print "Weights updated."
-
-    def calc_value_diff(self, curr_board, next_board):
-        """
-        Calculates the score difference between two board states.
-            Inputs:
-                curr_board [Dict]
-                    {'board': FEN of current board state, 'value': value of current board state}
-                next_board [Dict]
-                    {'board': FEN of next board state, 'value': value of next board state}
-            Output:
-                score_diff [Float]
-                    Value difference.
-        """
-        assert ((dh.white_is_next(curr_board['board']) and dh.black_is_next(next_board['board'])) or
-                (dh.black_is_next(curr_board['board']) and dh.white_is_next(next_board['board'])))
-
-        if dh.black_is_next(curr_board['board']):
-            score_diff = (next_board['value']) - (1 - curr_board['value'])
-        else:
-            score_diff = (1 - next_board['value']) - (curr_board['value'])
-
-        return score_diff
 
     # ---------- SELF-PLAY TRAINING METHODS
 
@@ -669,8 +658,7 @@ def main():
     t = Teacher(g)
     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=None,
-          fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
     # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 

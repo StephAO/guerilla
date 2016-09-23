@@ -18,6 +18,9 @@ class Search:
 
         self.eval_function = eval_fn
         self.max_depth = max_depth
+        self.win_value = 1
+        self.lose_value = 0
+        self.draw_values = 0.5
 
     def run(self, board):
         """
@@ -60,7 +63,12 @@ class Search:
         best_move = None
         best_leaf = None
 
-        if depth == self.max_depth:
+        # Check if draw
+        if board.is_checkmate():
+            return self.lose_value, None, board.fen()
+        elif board.can_claim_draw() or board.is_stalemate():
+            return self.draw_value, None, board.fen()
+        elif depth == self.max_depth:
             fen = leaf_board = board.fen()
             if dh.black_is_next(fen):
                 fen = dh.flip_board(fen)
@@ -229,6 +237,24 @@ def search_test3():
         return False
 
 
+def search_test4():
+    # Test that checkmates are working
+    s = Search(eval_fn=(lambda x: 1), search_mode='recipromax')
+    white_wins = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
+    black_wins = chess.Board('8/8/8/8/8/2k5/1p6/rK6 w - - 0 1')
+    result, _, _ = s.run(white_wins)
+    if result != 0:
+        print "Test failed, invalid result for white checkmate."
+        return False
+    result, _, _ = s.run(black_wins)
+    if result != 0:
+        print "Test failed, invalid result for black checkmate."
+        return False
+
+    print "Test 4 passed."
+    return True
+
+
 def search_test_old():
     # DEPRECATED
     """ Runs a basic minimax test on the search class. 
@@ -251,3 +277,4 @@ if __name__ == '__main__':
     search_test1()
     search_test2()
     search_test3()
+    search_test4()

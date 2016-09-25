@@ -20,7 +20,7 @@ class Search:
         self.max_depth = max_depth
         self.win_value = 1
         self.lose_value = 0
-        self.draw_values = 0.5
+        self.draw_value = 0.5
 
     def run(self, board):
         """

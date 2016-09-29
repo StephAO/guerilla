@@ -34,9 +34,9 @@ class Teacher:
         self.start_time = None
         self.training_time = None
         self.files = None
-        self.interrupt = False
         self.actions = None
         self.curr_action_idx = None
+        self.saved = None
 
         # TD-Leaf parameters
         self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
@@ -63,16 +63,20 @@ class Teacher:
         self.training_time = training_time
         self.actions = actions
         self.curr_action_idx = 0  # This value gets modified if resuming
-        self.interrupt = False
+        self.saved = False
 
         if self.actions[0] == 'load_and_resume':
             self.resume(training_time)
-            self.curr_action_idx += 1
 
         # Note: This cannot be a for loop as self.curr_action_idx gets set to non-zero when resuming.
         while True:
             # Check if done
             if self.curr_action_idx >= len(self.actions):
+                break
+            elif self.out_of_time():
+                # Check if run out of time between actions, save if necessary
+                if not self.saved:
+                    self.save_state(state={})
                 break
 
             # Else
@@ -101,14 +105,12 @@ class Teacher:
             else:
                 raise NotImplementedError("Error: %s is not a valid action." % action)
 
-            if self.interrupt:
-                break
-
             self.curr_action_idx += 1
 
             # Save new weight values
             weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") +".p"
             self.nn.save_weight_values(weight_file)
+            print "Weights saved to %s" % weight_file
 
     def save_state(self, state, filename="state.p"):
         """
@@ -142,6 +144,8 @@ class Teacher:
         pickle_path = self.dir_path + '/../pickles/' + filename
         self.nn.save_weight_values(filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
+        self.saved = True
+        print "State saved."
 
     def load_state(self, filename='state.p'):
         """
@@ -182,6 +186,10 @@ class Teacher:
         self.start_time = time.time()
         self.training_time = training_time
 
+        if 'game_indices' not in state:
+            # Stopped between actions.
+            return
+
         action = self.actions[self.curr_action_idx]
 
         if action == 'train_bootstrap':
@@ -194,7 +202,7 @@ class Teacher:
             valid_values = true_values[(-1) * VALIDATION_SIZE:]
             cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
             train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
-            self.weight_update_bootstrap(train_fens, state['game_indices'], train_step)
+            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], train_step)
 
             # evaluate nn for convergence
             state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
@@ -204,7 +212,6 @@ class Teacher:
                 self.nn.save_weight_values()
                 plt.plot(range(state['epoch_num']), state['error'])
                 plt.show()
-                return
 
             # continue with rests of epochs
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
@@ -217,6 +224,8 @@ class Teacher:
         elif action == 'train_selfplay':
             print "Resuming self-play training..."
             self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
+
+        self.curr_action_idx += 1
 
     def out_of_time(self):
         """
@@ -278,7 +287,6 @@ class Teacher:
                 save[1]['epoch_num'] = epoch + 1
                 save[1]['error'] = loss
                 self.save_state(save[1])
-                self.interrupt = True
                 return
 
             # evaluate nn for convergence
@@ -482,7 +490,6 @@ class Teacher:
                 save = {'game_indices': game_indices,
                         'start_idx': i + 1}
                 self.save_state(save)
-                self.interrupt = True
                 return
 
     def td_leaf(self, game):
@@ -606,7 +613,6 @@ class Teacher:
                 save = {'game_indices': game_indices,
                         'start_idx': i + 1}
                 self.save_state(save)
-                self.interrupt = True
                 return
 
     # ---------- EVALUATION METHODS

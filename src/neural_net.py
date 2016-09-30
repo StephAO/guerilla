@@ -25,7 +25,6 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 
 class NeuralNet:
-    # TODO: Add close session function to release resources.
     def __init__(self, _weight_values=None, _load_file=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
@@ -63,6 +62,7 @@ class NeuralNet:
 
         # assign variable values if any - could possibly move this to initialize_tf_variables(), but it would take some restructuring
         self.set_session(_weight_values=_weight_values, _load_file=_load_file)
+        # TODO: ^ Fix this, potentially multiple initialize calls
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
@@ -73,52 +73,69 @@ class NeuralNet:
         self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
         self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
 
-        # TODO move to function?
+        # TODO move to function? - No because self._ must be defined in the init
         # input placeholders
         self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, NUM_CHANNELS])
         self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, NUM_CHANNELS])
         self.true_value = tf.placeholder(tf.float32, shape=[None])
 
         # assignment placeholders
-        self.assign_W_grid_value = tf.placeholder(tf.float32, shape=[5, 5, NUM_CHANNELS, NUM_FEAT])
-        self.assign_W_rank_value = tf.placeholder(tf.float32, shape=[1, 8, NUM_CHANNELS, NUM_FEAT])
-        self.assign_W_file_value = tf.placeholder(tf.float32, shape=[8, 1, NUM_CHANNELS, NUM_FEAT])
-        self.assign_W_diag_value = tf.placeholder(tf.float32, shape=[1, 8, NUM_CHANNELS, NUM_FEAT])
+        self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, NUM_CHANNELS, NUM_FEAT])
+        self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, NUM_CHANNELS, NUM_FEAT])
+        self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, NUM_CHANNELS, NUM_FEAT])
+        self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, NUM_CHANNELS, NUM_FEAT])
 
-        self.assign_b_grid_value = tf.placeholder(tf.float32, shape=[NUM_FEAT])
-        self.assign_b_rank_value = tf.placeholder(tf.float32, shape=[NUM_FEAT])
-        self.assign_b_file_value = tf.placeholder(tf.float32, shape=[NUM_FEAT])
-        self.assign_b_diag_value = tf.placeholder(tf.float32, shape=[NUM_FEAT])
+        self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
+        self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
+        self.b_file_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
+        self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
 
-        self.assign_W_fc1_value = tf.placeholder(tf.float32, shape=[90 * NUM_FEAT, NUM_HIDDEN])
-        self.assign_b_fc1_value = tf.placeholder(tf.float32, shape=[NUM_HIDDEN])
-        self.assign_W_fc2_value = tf.placeholder(tf.float32, shape=[NUM_HIDDEN, NUM_HIDDEN])
-        self.assign_b_fc2_value = tf.placeholder(tf.float32, shape=[NUM_HIDDEN])
+        self.W_fc1_placeholder = tf.placeholder(tf.float32, shape=[90 * NUM_FEAT, NUM_HIDDEN])
+        self.b_fc1_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN])
+        self.W_fc2_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN, NUM_HIDDEN])
+        self.b_fc2_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN])
 
-        self.assign_W_final_value = tf.placeholder(tf.float32, shape=[NUM_HIDDEN, 1])
-        self.assign_b_final_value = tf.placeholder(tf.float32, shape=[1])
+        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN, 1])
+        self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
 
-        # assignment operatorss
-        self.W_grid_assignment = [self.W_grid.assign(self.assign_W_grid_value)]
-        self.W_rank_assignment = [self.W_rank.assign(self.assign_W_rank_value)]
-        self.W_file_assignment = [self.W_file.assign(self.assign_W_file_value)]
-        self.W_diag_assignment = [self.W_diag.assign(self.assign_W_diag_value)]
+        # same order as all weights
+        self.all_placeholders = \
+            [self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder,
+             self.W_fc1_placeholder, self.W_fc2_placeholder, self.W_final_placeholder,
+             self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder,
+             self.b_fc1_placeholder, self.b_fc2_placeholder, self.b_final_placeholder]
 
-        self.b_grid_assignment = [self.b_grid.assign(self.assign_b_grid_value)]
-        self.b_rank_assignment = [self.b_rank.assign(self.assign_b_rank_value)]
-        self.b_file_assignment = [self.b_file.assign(self.assign_b_file_value)]
-        self.b_diag_assignment = [self.b_diag.assign(self.assign_b_diag_value)]
+        # assignment operators
+        self.W_grid_assignment = self.W_grid.assign(self.W_grid_placeholder)
+        self.W_rank_assignment = self.W_rank.assign(self.W_rank_placeholder)
+        self.W_file_assignment = self.W_file.assign(self.W_file_placeholder)
+        self.W_diag_assignment = self.W_diag.assign(self.W_diag_placeholder)
 
-        self.W_fc1_assignment = [self.W_fc_1.assign(self.assign_W_fc1_value)]
-        self.b_fc1_assignment = [self.b_fc_1.assign(self.assign_b_fc1_value)]
-        self.W_fc2_assignment = [self.W_fc_2.assign(self.assign_W_fc2_value)]
-        self.b_fc2_assignment = [self.b_fc_2.assign(self.assign_b_fc2_value)]
+        self.b_grid_assignment = self.b_grid.assign(self.b_grid_placeholder)
+        self.b_rank_assignment = self.b_rank.assign(self.b_rank_placeholder)
+        self.b_file_assignment = self.b_file.assign(self.b_file_placeholder)
+        self.b_diag_assignment = self.b_diag.assign(self.b_diag_placeholder)
 
-        self.W_final_assignment = [self.W_final.assign(self.assign_W_final_value)]
-        self.b_final_assignment = [self.b_final.assign(self.assign_b_final_value)]
+        self.W_fc1_assignment = self.W_fc_1.assign(self.W_fc1_placeholder)
+        self.b_fc1_assignment = self.b_fc_1.assign(self.b_fc1_placeholder)
+        self.W_fc2_assignment = self.W_fc_2.assign(self.W_fc2_placeholder)
+        self.b_fc2_assignment = self.b_fc_2.assign(self.b_fc2_placeholder)
+
+        self.W_final_assignment = self.W_final.assign(self.W_final_placeholder)
+        self.b_final_assignment = self.b_final.assign(self.b_final_placeholder)
+
+        # same order as all weights and all placeholders
+        self.all_assignments = \
+            [self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment,
+             self.W_fc1_assignment, self.W_fc2_assignment, self.W_final_assignment,
+             self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment,
+             self.b_fc1_assignment, self.b_fc2_assignment, self.b_final_assignment]
 
         # create neural net structure
         self.neural_net()
+
+        # gradient op and placeholder (must be defined after self.pred_value is defined)
+        self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
 
     def set_session(self, _weight_values=None, _load_file=None):
         """ 
@@ -133,8 +150,6 @@ class NeuralNet:
         """
         self.sess = tf.get_default_session()
         if self.sess is None:
-            # TODO S: Why not just tf.Session()? - from what I've read the only difference is that InteractiveSession sets itself as the default session
-            # Although we could probably change it to just sess
             self.sess = tf.InteractiveSession()
             # Assign values to weights
             if _weight_values is not None:
@@ -144,7 +159,7 @@ class NeuralNet:
 
         return self.sess
 
-    def close_session(self, final=False):
+    def close_session(self):
         weight_values = self.get_weight_values()
         self.sess.close()
         return weight_values
@@ -203,8 +218,8 @@ class NeuralNet:
                           weight_values['b_fc_1'], weight_values['b_fc_2'],
                           weight_values['b_final']]
 
-        self.sess.run(tf.initialize_all_variables())
-        self.set_weights(weight_values)
+        self.sess.run(tf.initialize_all_variables()) #TODO: Is this necessary? Since we run set_all_weights anyways.
+        self.set_all_weights(weight_values)
 
     def save_weight_values(self, _filename='weight_values.p'):
         """
@@ -232,7 +247,7 @@ class NeuralNet:
 
         return weight_values
 
-    # TODO set as default graph
+    # TODO set as default graph - is this really necessary?
     def neural_net(self):
         """
             Structure of neural net.
@@ -279,45 +294,44 @@ class NeuralNet:
         """
         return self.sess.run(weight_vars)
 
-    def set_weights(self, weight_vals):
+    def set_all_weights(self, weight_vals):
         """
-        NOTE: currently only supports updating all weights
+        NOTE: currently only supports updating all weights, must be in the same order.
         Updates the neural net weights based on the input.
             Input:
-                weight_vars [List]
-                    List of weights to be updated
                 weight_vals [List]
-                    List of values with which to update weights. Must be in same order!
+                    List of values with which to update weights. Must be iin desired order.
         """
+        assert len(weight_vals) == len(self.all_weights)
+
+        # match value to placeholders
+        placeholder_dict=dict()
+        for i, placeholder in enumerate(self.all_placeholders):
+            placeholder_dict[placeholder] = weight_vals[i]
 
         # Run assignment/update
-        self.sess.run(self.W_grid_assignment, feed_dict={ self.assign_W_grid_value : weight_vals[0] })
-        self.sess.run(self.W_rank_assignment, feed_dict={ self.assign_W_rank_value : weight_vals[1] })
-        self.sess.run(self.W_file_assignment, feed_dict={ self.assign_W_file_value : weight_vals[2] })
-        self.sess.run(self.W_diag_assignment, feed_dict={ self.assign_W_diag_value : weight_vals[3] })
+        self.sess.run(self.all_assignments, feed_dict=placeholder_dict)
 
-        self.sess.run(self.W_fc1_assignment, feed_dict={ self.assign_W_fc1_value : weight_vals[4] })
-        self.sess.run(self.W_fc2_assignment, feed_dict={ self.assign_W_fc2_value : weight_vals[5] })
-        self.sess.run(self.W_final_assignment, feed_dict={ self.assign_W_final_value : weight_vals[6] })
-
-        self.sess.run(self.b_grid_assignment, feed_dict={ self.assign_b_grid_value : weight_vals[7] })
-        self.sess.run(self.b_rank_assignment, feed_dict={ self.assign_b_rank_value : weight_vals[8] })
-        self.sess.run(self.b_file_assignment, feed_dict={ self.assign_b_file_value : weight_vals[9] })
-        self.sess.run(self.b_diag_assignment, feed_dict={ self.assign_b_diag_value : weight_vals[10] })
-
-        self.sess.run(self.b_fc1_assignment, feed_dict={ self.assign_b_fc1_value : weight_vals[11] })
-        self.sess.run(self.b_fc2_assignment, feed_dict={ self.assign_b_fc2_value : weight_vals[12] })
-        self.sess.run(self.b_final_assignment, feed_dict={ self.assign_b_final_value : weight_vals[13] })
-
-    def get_gradient(self, fen, weights):
+    def add_all_weights(self, weight_vals):
         """
-        Returns the gradient of the neural net at the output node, with respect to the specified weights.
+        Increments all the weight values by the input amount.
+            Input:
+                weight_vals [List]
+                    List of values with which to update weights. Must be in desired order.
+        """
+
+        old_weights = self.get_weights(self.all_weights)
+        new_weights = [old_weights[i] + weight_vals[i] for i in range(len(weight_vals))]
+
+        self.set_all_weights(new_weights)
+
+    def get_all_weights_gradient(self, fen):
+        """
+        Returns the gradient of the neural net at the output node, with respect to all weights.
         board.
             Input:
                 fen [String]
                     FEN of board where gradient is to be taken. Must be for white playing next.
-                weights [List]
-                    List of weight variables.
             Output:
                 Gradient [List of floats].
         """
@@ -325,12 +339,8 @@ class NeuralNet:
         if dh.black_is_next(fen):
             raise ValueError("Invalid gradient input, white must be next to play.")
 
-        #  declare gradient of predicted (output) value w.r.t. weights + biases
-        #  S: use self.all_weights. Set grad as a member variable since you're accessing it so much
-        grad = tf.gradients(self.pred_value, weights) # NOWDO: define once with a placeholder
-
         # calculate gradient
-        return self.sess.run(grad, feed_dict=self.board_to_feed(fen))
+        return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen))
 
     def board_to_feed(self, fen):
         """

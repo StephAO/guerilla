@@ -463,10 +463,8 @@ class Teacher:
         for i in xrange(start_idx, len(game_indices)):
 
             # Delete once we've fully transitioned to placeholders and we know that memory isn't going to be overloaded
-            if i % 10 == 0 and i != 0:
+            if i % 5 == 0 and i != 0:
                 # Close and Reopen session every batch to avoid memory overload
-                weight_values = self.nn.close_session()
-                self.nn.set_session(_weight_values=weight_values)
                 print '-'*30
                 print hpy().heap()
 
@@ -523,7 +521,7 @@ class Teacher:
                 self.save_state(save)
                 return
 
-        return self.nn.close_session()
+        return
 
     def td_leaf(self, game):
         """
@@ -532,7 +530,6 @@ class Teacher:
                 Game [List]
                     A game consists of a sequential list of board states. Each board state is a FEN.
         """
-        # TODO: Maybe this should check that each game is valid? i.e. assert that only legal moves are played.
 
         num_boards = len(game)
         game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
@@ -548,7 +545,7 @@ class Teacher:
             # Get values and gradients for white plays next
             if dh.white_is_next(board_fen):
                 game_info[i]['value'] = value
-                game_info[i]['gradient'] = self.nn.get_gradient(board_fen, self.nn.all_weights)
+                game_info[i]['gradient'] = self.nn.get_all_weights_gradient(board_fen)
             else:
                 # value is probability of WHITE winning
                 game_info[i]['value'] = 1 - value
@@ -558,8 +555,7 @@ class Teacher:
                 #   Flipped board = Black -> White, so now white plays next (as required by NN)
                 #   Gradient of flipped board = Gradient of what used to be black
                 #   Desired gradient = Gradient of what was originally white = - Gradient of flipped board
-                game_info[i]['gradient'] = [-x for x in
-                                            self.nn.get_gradient(dh.flip_board(board_fen), self.nn.all_weights)]
+                game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
 
         for t in range(num_boards):
             td_val = 0
@@ -578,9 +574,7 @@ class Teacher:
                     w_update[i] += game_info[t]['gradient'][i] * td_val
 
         # Update neural net weights.
-        old_weights = self.nn.get_weights(self.nn.all_weights)
-        new_weights = [old_weights[i] + TD_LRN_RATE * w_update[i] for i in range(len(w_update))]
-        self.nn.set_weights(new_weights)
+        self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
         # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS
@@ -655,12 +649,12 @@ class Teacher:
 
 def main():
     g = guerilla.Guerilla('Harambe', 'w')#, _load_file='weights_train_bootstrap_20160927-025555.p')
-    g.search.max_depth = 3
+    g.search.max_depth = 1
     t = Teacher(g)
-    t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
+    t.set_td_params(num_end=40, num_full=20, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    # t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=10, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    t.run(['load_and_resume'], training_time=72000)
+    t.run(['train_td_endgames'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    # t.run(['load_and_resume'], training_time=72000)
 
 
 if __name__ == '__main__':

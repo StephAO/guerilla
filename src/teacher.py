@@ -15,6 +15,9 @@ import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
 
+##### just for testing memory #####
+from guppy import hpy
+###################################
 
 class Teacher:
 
@@ -368,9 +371,9 @@ class Teacher:
         """
 
         # Create tensors
-        pred_value = tf.reshape(self.nn.pred_value, [-1])
-        err = tf.sub(self.nn.true_value, pred_value)
-        err_sum = tf.reduce_sum(err)
+        pred_value = tf.reshape(self.nn.pred_value, [-1]) # NOWDO: define once with a placeholder
+        err = tf.sub(self.nn.true_value, pred_value) # NOWDO: define once with a placeholder
+        err_sum = tf.reduce_sum(err) # NOWDO: define once with a placeholder
 
         # Configure data
         boards = np.zeros((VALIDATION_SIZE, 8, 8, NUM_CHANNELS))
@@ -457,10 +460,14 @@ class Teacher:
                 random.shuffle(game_indices)
 
         for i in xrange(start_idx, len(game_indices)):
-            if i % BATCH_SIZE == 0 and i != 0:
+
+            # Delete once we've fully transitioned to placeholders and we know that memory isn't going to be overloaded
+            if i % 10 == 0 and i != 0:
                 # Close and Reopen session every batch to avoid memory overload
                 weight_values = self.nn.close_session()
                 self.nn.set_session(_weight_values=weight_values)
+                print '-'*30
+                print hpy().heap()
 
             game_idx = game_indices[i]
             print "Training on game %d of %d..." % (i + 1, num_games)
@@ -572,7 +579,7 @@ class Teacher:
         # Update neural net weights.
         old_weights = self.nn.get_weights(self.nn.all_weights)
         new_weights = [old_weights[i] + TD_LRN_RATE * w_update[i] for i in range(len(w_update))]
-        self.nn.update_weights(self.nn.all_weights, new_weights)
+        self.nn.update_weights(new_weights)
         # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS
@@ -609,11 +616,6 @@ class Teacher:
 
         for i in xrange(start_idx, len(game_indices)):
 
-            if i % BATCH_SIZE == 0 and i != 0:
-                # Close and Reopen session every batch to avoid memory overload
-                weight_values = self.nn.close_session()
-                self.nn.set_session(_weight_values=weight_values)
-
             print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
             # Load random fen
             board = chess.Board(
@@ -649,55 +651,15 @@ class Teacher:
 
         return self.nn.close_session()
 
-    # ---------- EVALUATION METHODS
-
-    def evaluate(self, boards, diagonals, true_values):
-        """
-            Evaluate neural net
-
-            Inputs:
-                boards[ndarray]:
-                    Chess board states to evaluate neural net on. Must in correct 
-                    input format - See fen_to_channels in main.py
-                diagonals[ndarray]:
-                    Diagonals of chess board states to evaluate neural net on. 
-                    Must in correct input format - See get_diagonals in main.py
-                true_values[ndarray]:
-                    Expected output for each chess board state (between 0 and 1)
-        """
-
-        total_boards = 0
-        right_boards = 0
-        mean_error = 0
-
-        pred_value = tf.reshape(self.nn.pred_value, [-1])
-        err = tf.sub(self.nn.true_value, pred_value)
-        err_sum = tf.reduce_sum(err)
-
-        guess_whos_winning = tf.equal(tf.round(self.nn.true_value), tf.round(pred_value))
-        num_right = tf.reduce_sum(tf.cast(guess_whos_winning, tf.float32))
-
-        for i in xrange(boards.shape[0]):
-            es, nr, gww, pv = self.nn.sess.run([err_sum, num_right, guess_whos_winning, pred_value],
-                                               feed_dict={self.nn.data: boards[i], self.nn.data_diags: diagonals[i],
-                                                          self.nn.true_value: true_values[i]})
-            total_boards += len(true_values[i])
-            right_boards += nr
-            mean_error += es
-
-        mean_error = mean_error / total_boards
-        print "mean_error: %f, guess who's winning correctly in %d out of %d games" % (
-            mean_error, right_boards, total_boards)
-
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160927-025555.p')
+    g = guerilla.Guerilla('Harambe', 'w')#, _load_file='weights_train_bootstrap_20160927-025555.p')
     g.search.max_depth = 3
     t = Teacher(g)
     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    # t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=120, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    t.run(['load_and_resume'], training_time=72000)
+    t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=2000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    # t.run(['load_and_resume'], training_time=72000)
 
 
 if __name__ == '__main__':

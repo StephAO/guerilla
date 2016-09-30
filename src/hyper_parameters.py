@@ -5,10 +5,10 @@ Hyper parameters, constants and definitions.
 # TODO S: Add definitions and explanations in comments.
 
 NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
-NUM_EPOCHS = 10
-BATCH_SIZE = 50
+NUM_EPOCHS = 25
+BATCH_SIZE = 100
 NUM_HIDDEN = 1024
-LEARNING_RATE = 0.0000001
+LEARNING_RATE = 0.00000001
 VALIDATION_SIZE = 1000
 LOSS_THRESHOLD = 0.0001
 

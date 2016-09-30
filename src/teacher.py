@@ -17,9 +17,11 @@ from hyper_parameters import *
 
 
 class Teacher:
+
     def __init__(self, _guerilla):
 
         # dictionary of different training/evaluation methods
+        # TODO: Shouldn't this be a static class variable?
         self.actions_dict = [
             'train_bootstrap',
             'train_td_endgames',
@@ -64,9 +66,10 @@ class Teacher:
         self.actions = actions
         self.curr_action_idx = 0  # This value gets modified if resuming
         self.saved = False
+        weight_values = None
 
         if self.actions[0] == 'load_and_resume':
-            self.resume(training_time)
+            weight_values = self.resume(training_time)
 
         # Note: This cannot be a for loop as self.curr_action_idx gets set to non-zero when resuming.
         while True:
@@ -90,16 +93,16 @@ class Teacher:
                     fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
                 true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
 
-                self.train_bootstrap(fens, true_values)
+                weight_values = self.train_bootstrap(fens, true_values, weight_values=weight_values)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
-                self.train_td(endgame=True)
+                weight_values = self.train_td(weight_values, True)
             elif action == 'train_td_full':
                 print "Performing full-game TD-Leaf training!"
-                self.train_td(endgame=False)
+                weight_values = self.train_td(weight_values, False)
             elif action == 'train_selfplay':
                 print "Performing self-play training!"
-                self.train_selfplay()
+                weight_values = self.train_selfplay(weight_values)
             elif action == 'load_and_resume':
                 raise ValueError("Error: Resuming must be the first action in an action set.")
             else:
@@ -108,9 +111,11 @@ class Teacher:
             self.curr_action_idx += 1
 
             # Save new weight values
-            weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") +".p"
-            self.nn.save_weight_values(weight_file)
-            print "Weights saved to %s" % weight_file
+            
+            if not self.saved:
+                weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") +".p"
+                self.nn.save_weight_values(_filename=weight_file)
+                print "Weights saved to %s" % weight_file
 
     def save_state(self, state, filename="state.p"):
         """
@@ -142,7 +147,7 @@ class Teacher:
         state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
 
         pickle_path = self.dir_path + '/../pickles/' + filename
-        self.nn.save_weight_values(filename='in_training_weight_values.p')
+        self.nn.save_weight_values(_filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
         self.saved = True
         print "State saved."
@@ -170,7 +175,8 @@ class Teacher:
         self.files = state['files']
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
-        self.nn.load_weight_values(filename='in_training_weight_values.p')
+        # TODO this will called shortly after already loading weight values, can we remove the unecessary work
+        self.nn.load_weight_values(_filename='in_training_weight_values.p') 
         return state
 
     def resume(self, training_time=None):
@@ -180,6 +186,8 @@ class Teacher:
         print "Resuming training"
         state = self.load_state()
         fens = cgp.load_fens(self.files[0])
+        if (len(fens) % BATCH_SIZE) != 0:
+            fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
 
         true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
 
@@ -191,6 +199,7 @@ class Teacher:
             return
 
         action = self.actions[self.curr_action_idx]
+        weight_values = None
 
         if action == 'train_bootstrap':
             print "Resuming Bootstrap training..."
@@ -214,18 +223,23 @@ class Teacher:
                 plt.show()
 
             # continue with rests of epochs
-            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
+            weight_values = self.train_bootstrap(fens, true_values, weight_values, start_epoch=state['epoch_num'], loss=state['error'])
         elif action == 'train_td_endgames':
             print "Resuming endgame TD-Leaf training..."
-            self.train_td(endgame=True, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            weight_values = self.train_td(weight_values, True, game_indices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'train_td_full':
             print "Resuming full-game TD-Leaf training..."
-            self.train_td(endgame=False, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            weight_values = self.train_td(weight_values, False, game_indices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'train_selfplay':
             print "Resuming self-play training..."
-            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
+            weight_values = self.train_selfplay(weight_values, game_indices=state['game_indices'], start_idx=state['start_idx'])
+        elif action == 'load_and_resume':
+                raise ValueError("Error: It's trying to resume on a resume call - This shouldn't happen.")
+        else:
+            raise NotImplementedError("Error: %s is not a valid action." % action)
 
         self.curr_action_idx += 1
+        return weight_values
 
     def out_of_time(self):
         """
@@ -233,13 +247,11 @@ class Teacher:
             Output:
                 [Boolean]
         """
-        if self.training_time is not None and time.time() - self.start_time >= self.training_time:
-            return True
-        return False
+        return self.training_time is not None and time.time() - self.start_time >= self.training_time
 
     # ---------- BOOTSTRAP TRAINING METHODS
 
-    def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
+    def train_bootstrap(self, fens, true_values, weight_values, start_epoch=0, loss=None):
         """
             Train neural net
 
@@ -251,6 +263,8 @@ class Teacher:
                 num_batches[int]:
                     number of batches
         """
+
+        self.nn.set_session(_weight_values=weight_values)
 
         train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
         valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
@@ -273,8 +287,8 @@ class Teacher:
         cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
         train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-        print "%d: %f" % (0, loss[-1])
         for epoch in xrange(start_epoch, NUM_EPOCHS):
+            print "Loss for epoch %d: %f" % (epoch+1, loss[-1])
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
@@ -305,7 +319,9 @@ class Teacher:
         pickle.dump(loss, open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") + ".p", 'wb'))
         # plt.plot(range(epoch + 1), error)
         # plt.show()
-        return
+        
+        weight_values = self.nn.close_session()
+        return weight_values
 
     def weight_update_bootstrap(self, fens, true_values_, game_indices, train_step):
         """ Weight update for multiple batches"""
@@ -408,7 +424,7 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def train_td(self, endgame, game_indices=None, start_idx=0):
+    def train_td(self, weight_values, endgame, game_indices=None, start_idx=0):
         """
         Trains the neural net using TD-Leaf.
             Inputs:
@@ -419,6 +435,8 @@ class Teacher:
                 start_idx [Int]
                     Index of game_indices where training should be resumed.
         """
+        self.nn.set_session(_weight_values=weight_values)
+
         assert not ((game_indices is None) and start_idx > 0)
 
         num_games = self.td_num_endgame if endgame else self.td_num_full
@@ -439,6 +457,11 @@ class Teacher:
                 random.shuffle(game_indices)
 
         for i in xrange(start_idx, len(game_indices)):
+            if i % BATCH_SIZE == 0 and i != 0:
+                # Close and Reopen session every batch to avoid memory overload
+                weight_values = self.nn.close_session()
+                self.nn.set_session(_weight_values=weight_values)
+
             game_idx = game_indices[i]
             print "Training on game %d of %d..." % (i + 1, num_games)
             fens = []
@@ -476,7 +499,7 @@ class Teacher:
                         sub_end = min(game_length, sub_start + self.td_full_length)
                         fens = fens[sub_start:sub_end]
 
-                        # TODO: Remove this checklater.
+                        # TODO: Remove this check later.
                         if (len(fens) != self.td_full_length and game_length >= self.td_full_length) or \
                                 (len(fens) != game_length and game_length < self.td_full_length):
                             print "Warning: This shouldn't happen!"
@@ -491,6 +514,8 @@ class Teacher:
                         'start_idx': i + 1}
                 self.save_state(save)
                 return
+
+        return self.nn.close_session()
 
     def td_leaf(self, game):
         """
@@ -567,12 +592,14 @@ class Teacher:
         if max_length:
             self.sp_length = max_length
 
-    def train_selfplay(self, game_indices=None, start_idx=0):
+    def train_selfplay(self, weight_values, game_indices=None, start_idx=0):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against itself.
         Self-play is performed from a random board position. The random board position is found by loading from the fens
         file and then applying a random legal move to the board.
         """
+        self.nn.set_session(_weight_values=weight_values)
+
         fens = cgp.load_fens(self.files[0])
 
         if game_indices is None:
@@ -581,6 +608,11 @@ class Teacher:
         max_len = float("inf") if self.sp_length == -1 else self.sp_length
 
         for i in xrange(start_idx, len(game_indices)):
+
+            if i % BATCH_SIZE == 0 and i != 0:
+                # Close and Reopen session every batch to avoid memory overload
+                weight_values = self.nn.close_session()
+                self.nn.set_session(_weight_values=weight_values)
 
             print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
             # Load random fen
@@ -615,6 +647,8 @@ class Teacher:
                 self.save_state(save)
                 return
 
+        return self.nn.close_session()
+
     # ---------- EVALUATION METHODS
 
     def evaluate(self, boards, diagonals, true_values):
@@ -622,8 +656,6 @@ class Teacher:
             Evaluate neural net
 
             Inputs:
-                nn[NeuralNet]:
-                    Neural net to evaluate
                 boards[ndarray]:
                     Chess board states to evaluate neural net on. Must in correct 
                     input format - See fen_to_channels in main.py
@@ -659,13 +691,13 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', load_file=None)
+    g = guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160927-025555.p')
     g.search.max_depth = 3
     t = Teacher(g)
     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    # t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=120, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    t.run(['load_and_resume'], training_time=72000)
 
 
 if __name__ == '__main__':

@@ -26,7 +26,7 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 class NeuralNet:
     # TODO: Add close session function to release resources.
-    def __init__(self, load_weights=False, load_file=None):
+    def __init__(self, _weight_values=None, _load_file=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -57,16 +57,12 @@ class NeuralNet:
         # declare other variables
         self.pred_value = None
 
-        # create session
-        self.set_session()
+        # Create tf session and variables
+        self.sess = tf.InteractiveSession()
+        self.initialize_tf_variables()
 
-        # initialize variables
-        if load_weights:
-            if load_file is None:
-                raise Exception("Could not load weights, file has not been specified.")
-            self.load_weight_values(load_file)
-        else:
-            self.initialize_tf_variables()
+        # assign variable values if any - could possibly move this to initialize_tf_variables(), but it would take some restructuring
+        self.set_session(_weight_values=_weight_values, _load_file=_load_file)
 
         # all weights + biases
         self.all_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
@@ -80,19 +76,41 @@ class NeuralNet:
         # create neural net structure
         self.neural_net()
 
-    def set_session(self):
-        """ Sets tensorflow session """
-
+    def set_session(self, _weight_values=None, _load_file=None):
+        """ 
+            Sets tensorflow session and initializes variables.
+            Will prioritize setting variables weights with given weights over weights from a file.
+            If neither are provided, a weights will be created with a normal distribution. 
+            Inputs:
+                _weight_values[Dict]:
+                    dictionary of weight values
+                _load_file[string]:
+                    file to load dictionary of weights from
+        """
         self.sess = tf.get_default_session()
         if self.sess is None:
-            self.sess = tf.InteractiveSession()  # TODO S: Why not just tf.Session()?
+            # TODO S: Why not just tf.Session()? - from what I've read the only difference is that InteractiveSession sets itself as the default session
+            # Although we could probably change it to just sess
+            self.sess = tf.InteractiveSession()
+            # Assign values to weights
+            if _weight_values is not None:
+                self.load_weight_values(_weight_values=_weight_values)
+            elif _load_file is not None:
+                self.load_weight_values(_filename=_load_file)
+
+        return self.sess
+
+    def close_session(self, final=False):
+        weight_values = self.get_weight_values()
+        self.sess.close()
+        return weight_values
 
     def initialize_tf_variables(self):
         """
             Initializes all weight variables to normal distribution, and all
             bias variables to a constant.
         """
-
+        print "Initializing variables from a normal distribution (this should only happen once at the very start)"
         self.W_grid = weight_variable([5, 5, NUM_CHANNELS, NUM_FEAT])
         self.W_rank = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
         self.W_file = weight_variable([8, 1, NUM_CHANNELS, NUM_FEAT])
@@ -117,35 +135,39 @@ class NeuralNet:
         self.b_final = bias_variable([1])
         self.sess.run(tf.initialize_all_variables())
 
-    def load_weight_values(self, filename='weight_values.p'):
+    def load_weight_values(self, _weight_values=None, _filename='weight_values.p'):
         """
             Sets all variables to values loaded from a file
             Input: 
                 filename[String]:
                     Name of the file to load weight values from
         """
-        pickle_path = self.dir_path + '/../pickles/' + filename
-        print "Loading weight values from %s" % pickle_path
-        weight_values = pickle.load(open(pickle_path, 'rb'))
+        if _weight_values is None:
+            pickle_path = self.dir_path + '/../pickles/' + _filename
+            print "Loading weights values from %s" % pickle_path
+            weight_values = pickle.load(open(pickle_path, 'rb'))
+        else:
+            print "Loading weights from provided weight value dictionary"
+            weight_values = _weight_values
 
-        self.W_grid = tf.Variable(weight_values['W_grid'])
-        self.W_rank = tf.Variable(weight_values['W_rank'])
-        self.W_file = tf.Variable(weight_values['W_file'])
-        self.W_diag = tf.Variable(weight_values['W_diag'])
-        self.W_fc_1 = tf.Variable(weight_values['W_fc_1'])
-        self.W_fc_2 = tf.Variable(weight_values['W_fc_2'])
-        self.W_final = tf.Variable(weight_values['W_final'])
+        self.W_grid.assign(weight_values['W_grid'])
+        self.W_rank.assign(weight_values['W_rank'])
+        self.W_file.assign(weight_values['W_file'])
+        self.W_diag.assign(weight_values['W_diag'])
+        self.W_fc_1.assign(weight_values['W_fc_1'])
+        self.W_fc_2.assign(weight_values['W_fc_2'])
+        self.W_final.assign(weight_values['W_final'])
 
-        self.b_grid = tf.Variable(weight_values['b_grid'])
-        self.b_rank = tf.Variable(weight_values['b_rank'])
-        self.b_file = tf.Variable(weight_values['b_file'])
-        self.b_diag = tf.Variable(weight_values['b_diag'])
-        self.b_fc_1 = tf.Variable(weight_values['b_fc_1'])
-        self.b_fc_2 = tf.Variable(weight_values['b_fc_2'])
-        self.b_final = tf.Variable(weight_values['b_final'])
+        self.b_grid.assign(weight_values['b_grid'])
+        self.b_rank.assign(weight_values['b_rank'])
+        self.b_file.assign(weight_values['b_file'])
+        self.b_diag.assign(weight_values['b_diag'])
+        self.b_fc_1.assign(weight_values['b_fc_1'])
+        self.b_fc_2.assign(weight_values['b_fc_2'])
+        self.b_final.assign(weight_values['b_final'])
         self.sess.run(tf.initialize_all_variables())
 
-    def save_weight_values(self, filename='weight_values.p'):
+    def save_weight_values(self, _filename='weight_values.p'):
         """
             Saves all variable values a pickle file
             Input: 
@@ -153,6 +175,13 @@ class NeuralNet:
                     Name of the file to save weight values to
         """
 
+        pickle_path = self.dir_path + '/../pickles/' + _filename
+        pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
+
+    def get_weight_values(self):
+        """ 
+            Returns values of weights as a dictionary
+        """
         weight_values = dict()
 
         weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], weight_values['W_diag'], \
@@ -162,9 +191,9 @@ class NeuralNet:
             self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final])
 
-        pickle_path = self.dir_path + '/../pickles/' + filename
-        pickle.dump(weight_values, open(pickle_path, 'wb'))
+        return weight_values
 
+    # TODO set as default graph
     def neural_net(self):
         """
             Structure of neural net.

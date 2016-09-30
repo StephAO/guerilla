@@ -150,22 +150,26 @@ class NeuralNet:
             print "Loading weights from provided weight value dictionary"
             weight_values = _weight_values
 
-        self.W_grid.assign(weight_values['W_grid'])
-        self.W_rank.assign(weight_values['W_rank'])
-        self.W_file.assign(weight_values['W_file'])
-        self.W_diag.assign(weight_values['W_diag'])
-        self.W_fc_1.assign(weight_values['W_fc_1'])
-        self.W_fc_2.assign(weight_values['W_fc_2'])
-        self.W_final.assign(weight_values['W_final'])
+        assignments = []
 
-        self.b_grid.assign(weight_values['b_grid'])
-        self.b_rank.assign(weight_values['b_rank'])
-        self.b_file.assign(weight_values['b_file'])
-        self.b_diag.assign(weight_values['b_diag'])
-        self.b_fc_1.assign(weight_values['b_fc_1'])
-        self.b_fc_2.assign(weight_values['b_fc_2'])
-        self.b_final.assign(weight_values['b_final'])
+        assignments.append(self.W_grid.assign(weight_values['W_grid']))
+        assignments.append(self.W_rank.assign(weight_values['W_rank']))
+        assignments.append(self.W_file.assign(weight_values['W_file']))
+        assignments.append(self.W_diag.assign(weight_values['W_diag']))
+        assignments.append(self.W_fc_1.assign(weight_values['W_fc_1']))
+        assignments.append(self.W_fc_2.assign(weight_values['W_fc_2']))
+        assignments.append(self.W_final.assign(weight_values['W_final']))
+
+        assignments.append(self.b_grid.assign(weight_values['b_grid']))
+        assignments.append(self.b_rank.assign(weight_values['b_rank']))
+        assignments.append(self.b_file.assign(weight_values['b_file']))
+        assignments.append(self.b_diag.assign(weight_values['b_diag']))
+        assignments.append(self.b_fc_1.assign(weight_values['b_fc_1']))
+        assignments.append(self.b_fc_2.assign(weight_values['b_fc_2']))
+        assignments.append(self.b_final.assign(weight_values['b_final']))
+
         self.sess.run(tf.initialize_all_variables())
+        self.sess.run(assignments)
 
     def save_weight_values(self, _filename='weight_values.p'):
         """

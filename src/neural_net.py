@@ -194,26 +194,17 @@ class NeuralNet:
             print "Loading weights from provided weight value dictionary"
             weight_values = _weight_values
 
-        assignments = []
-
-        assignments.append(self.W_grid.assign(weight_values['W_grid']))
-        assignments.append(self.W_rank.assign(weight_values['W_rank']))
-        assignments.append(self.W_file.assign(weight_values['W_file']))
-        assignments.append(self.W_diag.assign(weight_values['W_diag']))
-        assignments.append(self.W_fc_1.assign(weight_values['W_fc_1']))
-        assignments.append(self.W_fc_2.assign(weight_values['W_fc_2']))
-        assignments.append(self.W_final.assign(weight_values['W_final']))
-
-        assignments.append(self.b_grid.assign(weight_values['b_grid']))
-        assignments.append(self.b_rank.assign(weight_values['b_rank']))
-        assignments.append(self.b_file.assign(weight_values['b_file']))
-        assignments.append(self.b_diag.assign(weight_values['b_diag']))
-        assignments.append(self.b_fc_1.assign(weight_values['b_fc_1']))
-        assignments.append(self.b_fc_2.assign(weight_values['b_fc_2']))
-        assignments.append(self.b_final.assign(weight_values['b_final']))
+        weight_values = [ weight_values['W_grid'], weight_values['W_rank'], 
+                          weight_values['W_file'], weight_values['W_diag'],
+                          weight_values['W_fc_1'], weight_values['W_fc_2'],
+                          weight_values['W_final'],
+                          weight_values['b_grid'], weight_values['b_rank'], 
+                          weight_values['b_file'], weight_values['b_diag'],
+                          weight_values['b_fc_1'], weight_values['b_fc_2'],
+                          weight_values['b_final']]
 
         self.sess.run(tf.initialize_all_variables())
-        self.sess.run(assignments)
+        self.set_weights(weight_values)
 
     def save_weight_values(self, _filename='weight_values.p'):
         """
@@ -288,7 +279,7 @@ class NeuralNet:
         """
         return self.sess.run(weight_vars)
 
-    def update_weights(self, weight_vals):
+    def set_weights(self, weight_vals):
         """
         NOTE: currently only supports updating all weights
         Updates the neural net weights based on the input.

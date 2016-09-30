@@ -188,11 +188,6 @@ class Teacher:
         """
         print "Resuming training"
         state = self.load_state()
-        fens = cgp.load_fens(self.files[0])
-        if (len(fens) % BATCH_SIZE) != 0:
-            fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
-
-        true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
 
         self.start_time = time.time()
         self.training_time = training_time
@@ -206,6 +201,12 @@ class Teacher:
 
         if action == 'train_bootstrap':
             print "Resuming Bootstrap training..."
+
+            fens = cgp.load_fens(self.files[0])
+            if (len(fens) % BATCH_SIZE) != 0:
+                fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
+
+            true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
             # finish epoch
             train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
             valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
@@ -579,7 +580,7 @@ class Teacher:
         # Update neural net weights.
         old_weights = self.nn.get_weights(self.nn.all_weights)
         new_weights = [old_weights[i] + TD_LRN_RATE * w_update[i] for i in range(len(w_update))]
-        self.nn.update_weights(new_weights)
+        self.nn.set_weights(new_weights)
         # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS
@@ -658,8 +659,8 @@ def main():
     t = Teacher(g)
     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=2000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    # t.run(['load_and_resume'], training_time=72000)
+    # t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=10, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    t.run(['load_and_resume'], training_time=72000)
 
 
 if __name__ == '__main__':

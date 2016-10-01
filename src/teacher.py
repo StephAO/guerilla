@@ -640,13 +640,14 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w')#, _load_file='weights_train_bootstrap_20160927-025555.p')
-    g.search.max_depth = 1
+    g = guerilla.Guerilla('Harambe', 'w', _load_file=None)
+    g.search.max_depth = 3
     t = Teacher(g)
-    t.set_td_params(num_end=10, num_full=2, randomize=False, end_length=5, full_length=12)
-    t.set_sp_params(num_selfplay=5, max_length=12)
-    t.run(['train_td_endgames'], training_time=3, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    t.run(['load_and_resume'], training_time=72000)
+    t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
+    t.set_sp_params(num_selfplay=1000, max_length=12)
+    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+
 
 if __name__ == '__main__':
     main()

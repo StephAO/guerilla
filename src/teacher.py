@@ -94,7 +94,7 @@ class Teacher:
                     fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
                 true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
 
-                self.train_bootstrap(fens, true_values, weight_values=weight_values)
+                self.train_bootstrap(fens, true_values)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
                 self.train_td(True)

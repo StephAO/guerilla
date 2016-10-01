@@ -15,10 +15,6 @@ import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
 
-##### just for testing memory #####
-from guppy import hpy
-###################################
-
 class Teacher:
 
     def __init__(self, _guerilla):
@@ -268,8 +264,6 @@ class Teacher:
                     number of batches
         """
 
-        self.nn.set_session(_weight_values=weight_values)
-
         train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
         valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
 
@@ -323,9 +317,8 @@ class Teacher:
         pickle.dump(loss, open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") + ".p", 'wb'))
         # plt.plot(range(epoch + 1), error)
         # plt.show()
-        
-        weight_values = self.nn.close_session()
-        return weight_values
+
+        return
 
     def weight_update_bootstrap(self, fens, true_values_, game_indices, train_step):
         """ Weight update for multiple batches"""
@@ -439,7 +432,6 @@ class Teacher:
                 start_idx [Int]
                     Index of game_indices where training should be resumed.
         """
-        self.nn.set_session(_weight_values=weight_values)
 
         assert not ((game_indices is None) and start_idx > 0)
 
@@ -461,12 +453,6 @@ class Teacher:
                 random.shuffle(game_indices)
 
         for i in xrange(start_idx, len(game_indices)):
-
-            # Delete once we've fully transitioned to placeholders and we know that memory isn't going to be overloaded
-            if i % 5 == 0 and i != 0:
-                # Close and Reopen session every batch to avoid memory overload
-                print '-'*30
-                print hpy().heap()
 
             game_idx = game_indices[i]
             print "Training on game %d of %d..." % (i + 1, num_games)
@@ -600,7 +586,6 @@ class Teacher:
         Self-play is performed from a random board position. The random board position is found by loading from the fens
         file and then applying a random legal move to the board.
         """
-        self.nn.set_session(_weight_values=weight_values)
 
         fens = cgp.load_fens(self.files[0])
 
@@ -644,18 +629,18 @@ class Teacher:
                 self.save_state(save)
                 return
 
-        return self.nn.close_session()
+        return
 
 
 def main():
     g = guerilla.Guerilla('Harambe', 'w')#, _load_file='weights_train_bootstrap_20160927-025555.p')
     g.search.max_depth = 1
     t = Teacher(g)
-    t.set_td_params(num_end=40, num_full=20, randomize=False, end_length=5, full_length=12)
-    t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_td_endgames'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    t.set_td_params(num_end=2, num_full=2, randomize=False, end_length=5, full_length=12)
+    t.set_sp_params(num_selfplay=5, max_length=12)
+    t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
     # t.run(['load_and_resume'], training_time=72000)
-
+    g.nn.close_session()
 
 if __name__ == '__main__':
     main()

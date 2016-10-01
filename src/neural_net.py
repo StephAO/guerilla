@@ -25,7 +25,7 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 
 class NeuralNet:
-    def __init__(self, _weight_values=None, _load_file=None):
+    def __init__(self, load_file=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -58,11 +58,15 @@ class NeuralNet:
 
         # Create tf session and variables
         self.sess = tf.InteractiveSession()
-        self.initialize_tf_variables()
 
         # assign variable values if any - could possibly move this to initialize_tf_variables(), but it would take some restructuring
-        self.set_session(_weight_values=_weight_values, _load_file=_load_file)
-        # TODO: ^ Fix this, potentially multiple initialize calls
+        self.set_session()
+
+        # initialize variables
+        if load_file:
+            self.load_weight_values(load_file)
+        else:
+            self.initialize_tf_variables()
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
@@ -137,32 +141,16 @@ class NeuralNet:
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
 
-    def set_session(self, _weight_values=None, _load_file=None):
-        """ 
-            Sets tensorflow session and initializes variables.
-            Will prioritize setting variables weights with given weights over weights from a file.
-            If neither are provided, a weights will be created with a normal distribution. 
-            Inputs:
-                _weight_values[Dict]:
-                    dictionary of weight values
-                _load_file[string]:
-                    file to load dictionary of weights from
-        """
+    def set_session(self):
+        """ Sets tensorflow session """
+
         self.sess = tf.get_default_session()
         if self.sess is None:
             self.sess = tf.InteractiveSession()
-            # Assign values to weights
-            if _weight_values is not None:
-                self.load_weight_values(_weight_values=_weight_values)
-            elif _load_file is not None:
-                self.load_weight_values(_filename=_load_file)
-
-        return self.sess
 
     def close_session(self):
-        weight_values = self.get_weight_values()
         self.sess.close()
-        return weight_values
+        return
 
     def initialize_tf_variables(self):
         """
@@ -194,20 +182,17 @@ class NeuralNet:
         self.b_final = bias_variable([1])
         self.sess.run(tf.initialize_all_variables())
 
-    def load_weight_values(self, _weight_values=None, _filename='weight_values.p'):
+    def load_weight_values(self, _filename='weight_values.p'):
         """
             Sets all variables to values loaded from a file
             Input: 
                 filename[String]:
                     Name of the file to load weight values from
         """
-        if _weight_values is None:
-            pickle_path = self.dir_path + '/../pickles/' + _filename
-            print "Loading weights values from %s" % pickle_path
-            weight_values = pickle.load(open(pickle_path, 'rb'))
-        else:
-            print "Loading weights from provided weight value dictionary"
-            weight_values = _weight_values
+
+        pickle_path = self.dir_path + '/../pickles/' + _filename
+        print "Loading weights values from %s" % pickle_path
+        weight_values = pickle.load(open(pickle_path, 'rb'))
 
         weight_values = [ weight_values['W_grid'], weight_values['W_rank'], 
                           weight_values['W_file'], weight_values['W_diag'],
@@ -218,7 +203,7 @@ class NeuralNet:
                           weight_values['b_fc_1'], weight_values['b_fc_2'],
                           weight_values['b_final']]
 
-        self.sess.run(tf.initialize_all_variables()) #TODO: Is this necessary? Since we run set_all_weights anyways.
+        self.sess.run(tf.initialize_all_variables())
         self.set_all_weights(weight_values)
 
     def save_weight_values(self, _filename='weight_values.p'):

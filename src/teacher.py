@@ -565,9 +565,9 @@ class Teacher:
                     w_update[i] += game_info[t]['gradient'][i] * td_val
 
         # Update neural net weights.
-        old_weights = self.nn.get_weights(self.nn.all_weights)
+        # old_weights = self.nn.get_weights(self.nn.all_weights)
         self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
-        print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
+        # print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
         # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS

@@ -57,9 +57,7 @@ class NeuralNet:
         self.pred_value = None
 
         # Create tf session and variables
-        self.sess = tf.InteractiveSession()
-
-        # assign variable values if any - could possibly move this to initialize_tf_variables(), but it would take some restructuring
+        self.sess = None
         self.start_session()
 
         # initialize variables
@@ -204,7 +202,6 @@ class NeuralNet:
                           weight_values['b_fc_1'], weight_values['b_fc_2'],
                           weight_values['b_final']]
 
-        self.sess.run(tf.initialize_all_variables())
         self.set_all_weights(weight_values)
 
     def save_weight_values(self, _filename='weight_values.p'):

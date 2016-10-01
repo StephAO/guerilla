@@ -59,6 +59,9 @@ class Teacher:
             2. configure data
             3. run actions
         """
+
+        self.nn.start_session()
+
         self.files = [fens_filename, stockfish_filename]
         self.start_time = time.time()
         self.training_time = training_time
@@ -115,6 +118,8 @@ class Teacher:
                 weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") +".p"
                 self.nn.save_weight_values(_filename=weight_file)
                 print "Weights saved to %s" % weight_file
+
+        self.nn.close_session()
 
     def save_state(self, state, filename="state.p"):
         """
@@ -560,7 +565,9 @@ class Teacher:
                     w_update[i] += game_info[t]['gradient'][i] * td_val
 
         # Update neural net weights.
+        old_weights = self.nn.get_weights(self.nn.all_weights)
         self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
+        print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
         # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS
@@ -636,11 +643,10 @@ def main():
     g = guerilla.Guerilla('Harambe', 'w')#, _load_file='weights_train_bootstrap_20160927-025555.p')
     g.search.max_depth = 1
     t = Teacher(g)
-    t.set_td_params(num_end=2, num_full=2, randomize=False, end_length=5, full_length=12)
+    t.set_td_params(num_end=10, num_full=2, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=5, max_length=12)
-    t.run(['train_td_endgames','train_td_full','train_selfplay'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    # t.run(['load_and_resume'], training_time=72000)
-    g.nn.close_session()
+    t.run(['train_td_endgames'], training_time=3, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    t.run(['load_and_resume'], training_time=72000)
 
 if __name__ == '__main__':
     main()

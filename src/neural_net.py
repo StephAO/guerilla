@@ -193,14 +193,14 @@ class NeuralNet:
         print "Loading weights values from %s" % pickle_path
         weight_values = pickle.load(open(pickle_path, 'rb'))
 
-        weight_values = [ weight_values['W_grid'], weight_values['W_rank'], 
-                          weight_values['W_file'], weight_values['W_diag'],
-                          weight_values['W_fc_1'], weight_values['W_fc_2'],
-                          weight_values['W_final'],
-                          weight_values['b_grid'], weight_values['b_rank'], 
-                          weight_values['b_file'], weight_values['b_diag'],
-                          weight_values['b_fc_1'], weight_values['b_fc_2'],
-                          weight_values['b_final']]
+        weight_values = [weight_values['W_grid'], weight_values['W_rank'],
+                         weight_values['W_file'], weight_values['W_diag'],
+                         weight_values['W_fc_1'], weight_values['W_fc_2'],
+                         weight_values['W_final'],
+                         weight_values['b_grid'], weight_values['b_rank'],
+                         weight_values['b_file'], weight_values['b_diag'],
+                         weight_values['b_fc_1'], weight_values['b_fc_2'],
+                         weight_values['b_final']]
 
         self.set_all_weights(weight_values)
 
@@ -288,7 +288,7 @@ class NeuralNet:
         assert len(weight_vals) == len(self.all_weights)
 
         # match value to placeholders
-        placeholder_dict=dict()
+        placeholder_dict = dict()
         for i, placeholder in enumerate(self.all_placeholders):
             placeholder_dict[placeholder] = weight_vals[i]
 

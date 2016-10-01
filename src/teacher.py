@@ -15,8 +15,8 @@ import stockfish_eval as sf
 import chess_game_parser as cgp
 from hyper_parameters import *
 
-class Teacher:
 
+class Teacher:
     def __init__(self, _guerilla):
 
         # dictionary of different training/evaluation methods
@@ -68,10 +68,9 @@ class Teacher:
         self.actions = actions
         self.curr_action_idx = 0  # This value gets modified if resuming
         self.saved = False
-        weight_values = None
 
         if self.actions[0] == 'load_and_resume':
-            weight_values = self.resume(training_time)
+            self.resume(training_time)
 
         # Note: This cannot be a for loop as self.curr_action_idx gets set to non-zero when resuming.
         while True:
@@ -95,16 +94,16 @@ class Teacher:
                     fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
                 true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
 
-                weight_values = self.train_bootstrap(fens, true_values, weight_values=weight_values)
+                self.train_bootstrap(fens, true_values, weight_values=weight_values)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
-                weight_values = self.train_td(weight_values, True)
+                self.train_td(True)
             elif action == 'train_td_full':
                 print "Performing full-game TD-Leaf training!"
-                weight_values = self.train_td(weight_values, False)
+                self.train_td(False)
             elif action == 'train_selfplay':
                 print "Performing self-play training!"
-                weight_values = self.train_selfplay(weight_values)
+                self.train_selfplay()
             elif action == 'load_and_resume':
                 raise ValueError("Error: Resuming must be the first action in an action set.")
             else:
@@ -113,9 +112,9 @@ class Teacher:
             self.curr_action_idx += 1
 
             # Save new weight values
-            
+
             if not self.saved:
-                weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") +".p"
+                weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
                 self.nn.save_weight_values(_filename=weight_file)
                 print "Weights saved to %s" % weight_file
 
@@ -180,7 +179,7 @@ class Teacher:
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
         # TODO this will called shortly after already loading weight values, can we remove the unecessary work
-        self.nn.load_weight_values(_filename='in_training_weight_values.p') 
+        self.nn.load_weight_values(_filename='in_training_weight_values.p')
         return state
 
     def resume(self, training_time=None):
@@ -198,7 +197,6 @@ class Teacher:
             return
 
         action = self.actions[self.curr_action_idx]
-        weight_values = None
 
         if action == 'train_bootstrap':
             print "Resuming Bootstrap training..."
@@ -220,31 +218,31 @@ class Teacher:
 
             # evaluate nn for convergence
             state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
-            base_loss = state['error'][0] - state['error'][1]
             curr_loss = state['error'][-2] - state['error'][-1]
+            base_loss = state['error'][0] - state['error'][1]
             if abs(curr_loss / base_loss) < LOSS_THRESHOLD:
                 self.nn.save_weight_values()
                 plt.plot(range(state['epoch_num']), state['error'])
                 plt.show()
 
             # continue with rests of epochs
-            weight_values = self.train_bootstrap(fens, true_values, weight_values, start_epoch=state['epoch_num'], loss=state['error'])
+            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
         elif action == 'train_td_endgames':
             print "Resuming endgame TD-Leaf training..."
-            weight_values = self.train_td(weight_values, True, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'train_td_full':
             print "Resuming full-game TD-Leaf training..."
-            weight_values = self.train_td(weight_values, False, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(False, gameindices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'train_selfplay':
             print "Resuming self-play training..."
-            weight_values = self.train_selfplay(weight_values, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'load_and_resume':
-                raise ValueError("Error: It's trying to resume on a resume call - This shouldn't happen.")
+            raise ValueError("Error: It's trying to resume on a resume call - This shouldn't happen.")
         else:
             raise NotImplementedError("Error: %s is not a valid action." % action)
 
         self.curr_action_idx += 1
-        return weight_values
+        return
 
     def out_of_time(self):
         """
@@ -256,7 +254,7 @@ class Teacher:
 
     # ---------- BOOTSTRAP TRAINING METHODS
 
-    def train_bootstrap(self, fens, true_values, weight_values, start_epoch=0, loss=None):
+    def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
         """
             Train neural net
 
@@ -291,7 +289,7 @@ class Teacher:
         train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
         for epoch in xrange(start_epoch, NUM_EPOCHS):
-            print "Loss for epoch %d: %f" % (epoch+1, loss[-1])
+            print "Loss for epoch %d: %f" % (epoch + 1, loss[-1])
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
@@ -308,7 +306,7 @@ class Teacher:
 
             # evaluate nn for convergence
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-            print "%d: %f" % (epoch+1, loss[-1])
+            print "%d: %f" % (epoch + 1, loss[-1])
             if len(loss) > 2:
                 base_loss = loss[0] - loss[1]
                 curr_loss = loss[-2] - loss[-1]
@@ -370,9 +368,9 @@ class Teacher:
         """
 
         # Create tensors
-        pred_value = tf.reshape(self.nn.pred_value, [-1]) # NOWDO: define once with a placeholder
-        err = tf.sub(self.nn.true_value, pred_value) # NOWDO: define once with a placeholder
-        err_sum = tf.reduce_sum(err) # NOWDO: define once with a placeholder
+        pred_value = tf.reshape(self.nn.pred_value, [-1])  # NOWDO: define once with a placeholder
+        err = tf.sub(self.nn.true_value, pred_value)  # NOWDO: define once with a placeholder
+        err_sum = tf.reduce_sum(err)  # NOWDO: define once with a placeholder
 
         # Configure data
         boards = np.zeros((VALIDATION_SIZE, 8, 8, NUM_CHANNELS))
@@ -426,7 +424,7 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def train_td(self, weight_values, endgame, game_indices=None, start_idx=0):
+    def train_td(self, endgame, game_indices=None, start_idx=0):
         """
         Trains the neural net using TD-Leaf.
             Inputs:
@@ -587,7 +585,7 @@ class Teacher:
         if max_length:
             self.sp_length = max_length
 
-    def train_selfplay(self, weight_values, game_indices=None, start_idx=0):
+    def train_selfplay(self, game_indices=None, start_idx=0):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against itself.
         Self-play is performed from a random board position. The random board position is found by loading from the fens
@@ -645,7 +643,8 @@ def main():
     t = Teacher(g)
     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'],
+          training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
     # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 

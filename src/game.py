@@ -16,20 +16,17 @@ class Game:
         'human': human.Human
     }
 
-    def __init__(self, p1, p2, num_games=1, use_gui=True):
+    def __init__(self, players, num_games=1, use_gui=True):
         """ 
             Note: p1 is white, p2 is black
             Input:
-                player_1/player_2 [Class that derives Abstract Player Class]
+                [player_1, player_2] [Class that derives Abstract Player Class]
         """
-        if type(p1) not in Game.player_types.values() or type(p2) not in Game.player_types.values():
-            raise NotImplementedError("Player type selected is not supported. See README.md for player types")
-
         # Initialize players
-        self.player1 = p1
-        self.player2 = p2
-        self.player1.colour = 'w'
-        self.player2.colour = 'b'
+        self.player1 = players[0]
+        self.player2 = players[1]
+        self.player1.colour = 'white'
+        self.player2.colour = 'black'
 
         # Initialize board
         self.board = chess.Board()
@@ -47,6 +44,16 @@ class Game:
                 self.player1.gui = self.gui
             if type(p2) is human.Human:
                 self.player2.gui = self.gui
+
+    def swap_colours(self):
+        if self.player1 == 'white' and self.player2 == 'black':
+            self.player1.colour = 'black'
+            self.player2.colour = 'white'
+        elif self.player1 == 'black' and self.player2 == 'white':
+            self.player1.colour = 'white'
+            self.player2.colour = 'black'
+        else:
+            raise ValueError('Error: one of the players has an invalid colour')
 
     def start(self):
         """ 
@@ -67,15 +74,21 @@ class Game:
             # Start game
             white = True
             while not self.board.is_game_over(claim_draw=True):
-                Game.pretty_print_board(self.board)
-                self.gui.draw(self.board)
+                if use_gui:
+                    self.gui.draw(self.board)
+                else:
+                    Game.pretty_print_board(self.board)
+                
                 print self.board.fen()
 
                 # Get move
                 move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
                 print move
                 while move not in self.board.legal_moves:
-                    print "Error: Move is not legal"
+                    if use_gui:
+                        self.gui.print_msg("Error: Move is not legal, try again")
+                    else:
+                        print "Error: Move is not legal"
                     move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
                 self.board.push(move)
 
@@ -86,12 +99,19 @@ class Game:
             if result == '1-0':
                 self.data['wins'][0] += 1
                 print "%s wins." % self.player1.name
+                if use_gui:
+                    self.gui.print_msg("%s wins." % self.player1.name)
             elif result == '0-1':
                 self.data['wins'][1] += 1
                 print "%s wins." % self.player2.name
+                if use_gui:
+                    self.gui.print_msg("%s wins." % self.player2.name)
             else:
                 self.data['draws'] += 1
                 print "Draw."
+                if use_gui:
+                    self.gui.print_msg("Draw.")
+            self.swap_colours()
 
     @staticmethod
     def pretty_print_board(board):
@@ -123,37 +143,27 @@ class Game:
 
 def main():
     num_inputs = len(sys.argv)
-    if num_inputs >= 5:
-        print "Using inputs to start game"
+    choose_players = raw_input("Choose players (c) or use defaults (d): ")
+    players = [None] * 2
+    if choose_players == 'd':
 
-        p1 = {
-            'type': sys.argv[1],
-            'name': sys.argv[2]
-        }
-        p2 = {
-            'type': sys.argv[3],
-            'name': sys.argv[4]
-        }
-    else:
-        print "Under 5 (%d) inputs, using defaults to start game." % num_inputs
-        p1 = {
-            'type': 'guerilla',
-            'name': 'Harambe'
-        }
-        p2 = {
-            'type': 'human',
-            'name': 'Cincinnati Zoo'
-        }
+        players[0] = guerilla.Guerilla('Harambe', _load_file='weight_values.p')
+        players[1] = human.Human('Cincinnati Zoo')
 
-    if (p1['type'] not in Game.player_types) or (p2['type'] not in Game.player_types):
-        print "Error: Player type selected is not supported. See README.md for player types."
-        return
+    elif choose_players == 'c':
+        for i in xrange(2):
+            print "Player 1 will start as white the first game. Each game players will swap colours"
+            player_name = raw_input("Player %d name: " % (i))
+            player_type = raw_input("Player %d type %s : " % (i, Game.player_types.keys()))
+            if player_type == 'guerilla':
+                weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n") 
+                players[i] = guerilla.Guerilla(name, _load_file=weight_file)
+            elif player_type == 'human':
+                players[i] = human.Human(player_name)
+            else:
+                raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
-    # Create classes based on inputs.
-    player1 = Game.player_types[p1['type']](p1['name'], 'weights_values.p')
-    player2 = Game.player_types[p2['type']](p2['name'])
-
-    game = Game(player1, player2)
+    game = Game(players)
     game.start()
 
 

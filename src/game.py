@@ -21,7 +21,7 @@ class Game:
         """ 
             Note: p1 is white, p2 is black
             Input:
-                [player_1, player_2] [Class that derives Abstract Player Class]
+                [player1, player2] [Class that derives Abstract Player Class]
         """
         # Initialize players
         self.player1 = players[0]
@@ -66,23 +66,27 @@ class Game:
 
         for game in xrange(self.num_games):
             # Print info.
-            print "Game %d - %s [%s] (White) VS: %s [%s] (Black)" % (game, self.player1.name,
+            print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game, self.player1.name,
                                                                      type(self.player1).__name__,
+                                                                     self.player1.colour,
                                                                      self.player2.name,
-                                                                     type(self.player2).__name__)
+                                                                     type(self.player2).__name__,
+                                                                     self.player2.colour)
             if self.use_gui:
                 self.gui.print_msg("Game %d:" % (game))
-                self.gui.print_msg("%s [%s] (White)" % (self.player1.name, type(self.player1).__name__,))
+                self.gui.print_msg("%s [%s] (%s)" % (self.player1.name, 
+                                    type(self.player1).__name__, self.player1.colour))
                 self.gui.print_msg("VS:")
-                self.gui.print_msg("%s [%s] (Black)" % (self.player2.name, type(self.player2).__name__))
+                self.gui.print_msg("%s [%s] (%s)" % (self.player2.name,
+                                    type(self.player2).__name__, self.player2.colour))
             # Reset board
             self.board.reset()
 
             player1_turn = self.player1.colour == 'white'
 
             game_pgn = chess.pgn.Game()
-            game_pgn.headers["White"] = self.player1.name if player1_turn else self.player2
-            game_pgn.headers["Black"] = self.player2.name if player1_turn else self.player1
+            game_pgn.headers["White"] = self.player1.name if player1_turn else self.player2.name
+            game_pgn.headers["Black"] = self.player2.name if player1_turn else self.player1.name
             game_pgn.headers["Date"] = time.strftime("%Y.%m.%d")
             game_pgn.headers["Event"] = "Test"
             game_pgn.headers["Round"] = game
@@ -133,11 +137,12 @@ class Game:
 
             game_pgn = game_pgn.root()
             game_pgn.headers["Result"] = result
-            with open(self.player1.name + '_' + self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
+            with open(dir_path + "/../played_games/" + self.player1.name + '_' + \
+                      self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
                 pgn.write(str(game_pgn))
 
             if self.use_gui:
-                self.gui.wait_for_input()
+                self.gui.wait_for_endgame_input()
 
             self.swap_colours()
 
@@ -175,10 +180,11 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        # players[0] = guerilla.Guerilla('Harambe', _load_file='in_training_weights_start_of_selfplay.p')
-        # players[1] = guerilla.Guerilla('Donkey Kong', _load_file='in_training_weights_start_of_selfplay.p')
-        players[1] = human.Human('Cincinnati Zoo')
-        players[0] = human.Human('D')
+        players[0] = guerilla.Guerilla('Harambe (selfplay)', _load_file='in_training_weight_values.p')
+        players[1] = guerilla.Guerilla('Donkey Kong (selfplay)', _load_file='in_training_weight_values.p')
+
+        # players[0] = human.Human("A")
+        # players[1] = human.Human("B")
 
     elif choose_players == 'c':
         for i in xrange(2):
@@ -193,7 +199,7 @@ def main():
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
-    game = Game(players)
+    game = Game(players, num_games=5)
     game.start()
 
 

@@ -28,7 +28,7 @@ class ChessGUI:
 
     size = 8
 
-    def __init__(self):
+    def __init__(self, view=False):
         """
             Class Constructor. Sets params and initializes basics.
         """
@@ -48,6 +48,7 @@ class ChessGUI:
         self.ranks = ['8','7','6','5','4','3','2','1']
         self.files = ['a','b','c','d','e','f','g','h']
         self.end_of_game = False
+        self.view = view
 
     def load_images(self):
         """
@@ -60,6 +61,8 @@ class ChessGUI:
         self.cyan_square = pygame.image.load(os.path.join(dir_path,"images","cyan_square.png")).convert()
 
         self.new_game_button = pygame.image.load(os.path.join(dir_path,"images","new_game_button.png")).convert()
+        self.next_ = pygame.image.load(os.path.join(dir_path,"images","next.png")).convert()
+        self.prev_ = pygame.image.load(os.path.join(dir_path,"images","prev.png")).convert()
         
         self.black_pawn = pygame.image.load(os.path.join(dir_path,"images","Chess_tile_pd.png")).convert()
         self.black_pawn = pygame.transform.scale(self.black_pawn, (self.square_size,self.square_size))
@@ -95,6 +98,7 @@ class ChessGUI:
                 messgage[string]:
                     message to print
         """
+        print message
         self.text_box.add(message)
         self.text_box.draw()
         
@@ -245,6 +249,11 @@ class ChessGUI:
         if self.end_of_game:
             self.screen.blit(self.new_game_button, (300,525))
             self.end_of_game = False
+        
+        # Draw view button
+        if self.view:
+            self.screen.blit(self.prev_, (233,525))
+            self.screen.blit(self.next_, (517,525))
         pygame.display.flip()
             
     def get_player_input(self, board):
@@ -302,7 +311,21 @@ class ChessGUI:
 
         return from_tile + to_tile
 
-    def wait_for_input(self):
+    def wait_for_endgame_input(self):
+        pygame.event.set_blocked(MOUSEMOTION)
+            # Wait for input
+        while True:
+            e = pygame.event.wait()
+            # On click, register tile clicked, continue
+            if e.type is MOUSEBUTTONDOWN and self.end_of_game:
+                (mouse_x, mouse_y) = pygame.mouse.get_pos()
+                if mouse_x > 300 and mouse_x < 500 and mouse_y > 525 and mouse_y < 575:
+                    break
+            elif e.type is QUIT: #the "x" kill button
+                pygame.quit()
+                sys.exit(0)
+
+    def wait_for_view_input(self):
         pygame.event.set_blocked(MOUSEMOTION)
             # Wait for input
         while True:
@@ -310,9 +333,18 @@ class ChessGUI:
             # On click, register tile clicked, continue
             if e.type is MOUSEBUTTONDOWN:
                 (mouse_x, mouse_y) = pygame.mouse.get_pos()
-                if mouse_x > 300 and mouse_x < 500 and mouse_y > 525 and mouse_y < 575:
-                    break
+                if mouse_x > 233 and mouse_x < 283 and mouse_y > 525 and mouse_y < 575:
+                    return False
+                if mouse_x > 517 and mouse_x < 567 and mouse_y > 525 and mouse_y < 575:
+                    return True
+            if e.type is KEYDOWN:
+                if e.key == K_LEFT:
+                    return False
+                elif e.key == K_RIGHT:
+                    return True
             elif e.type is QUIT: #the "x" kill button
                 pygame.quit()
                 sys.exit(0)
+
+
 

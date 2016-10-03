@@ -22,6 +22,9 @@ class Search:
         self.lose_value = 0
         self.draw_value = 0.5
 
+        # Recipromax parameters
+        self.reci_prune = True
+
     def run(self, board):
         """
         Runs search based on parameter.
@@ -99,7 +102,7 @@ class Search:
                 # a is the upper bound of what's useful to search
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
-                if best_score >= a:
+                if self.reci_prune and best_score >= a:
                     break
 
                     ##### If using search_test2() ######
@@ -142,7 +145,7 @@ def search_test_eval(fen):
     elif board_state == "8/8/1p6/p7/P7/1P6/8/8":
         score = 0.8
     elif board_state == "8/8/1p6/p7/1P6/P7/8/8":
-        print "WARNING: This node should not be reached when using alpha-beta pruning!"
+        print "WARNING1: This node should not be reached when using alpha-beta pruning!"
         score = 0.0
     elif board_state == "8/p7/8/1p6/PP6/8/8/8":
         score = 0.7
@@ -153,10 +156,10 @@ def search_test_eval(fen):
     elif board_state == "8/8/1p6/P7/8/8/P7/8":
         score = 0.8
     elif board_state == "8/8/1p6/pP6/8/8/P7/8":
-        print "WARNING: This node should not be reached when using alpha-beta pruning!"
+        print "WARNING2: This node should not be reached when using alpha-beta pruning!"
         score = 0.0
     elif board_state == "8/8/1p6/p7/PP6/8/8/8":
-        print "WARNING: This node should not be reached when using alpha-beta pruning!"
+        print "WARNING3: This node should not be reached when using alpha-beta pruning!"
         score = 0.0
     elif board_state == "8/p7/8/1P6/8/1P6/8/8":
         score = 0.99

@@ -524,6 +524,9 @@ class Teacher:
         game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
         w_update = None
 
+        # turn off pruning for search
+        self.guerilla.reci_prune = False
+
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
@@ -545,6 +548,9 @@ class Teacher:
                 #   Gradient of flipped board = Gradient of what used to be black
                 #   Desired gradient = Gradient of what was originally white = - Gradient of flipped board
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
+
+        # turn pruning back on
+        self.guerilla.reci_prune = True
 
         for t in range(num_boards):
             td_val = 0

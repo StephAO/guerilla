@@ -19,7 +19,7 @@ class Player:
         elif colour.lower() in ['black', 'b']:
             self._colour = 'black'
         else:
-            raise ValueError("Error: Invalid colour! Must be 'white','w','black' or 'b'.")
+            raise ValueError("Error: Invalid colour! Must be 'white','w','black', or 'b'.")
 
     @abstractmethod
     def get_move(self, board):

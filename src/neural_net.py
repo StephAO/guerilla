@@ -59,12 +59,7 @@ class NeuralNet:
         # Create tf session and variables
         self.sess = None
         self.start_session()
-
-        # initialize variables
-        if load_file:
-            self.load_weight_values(load_file)
-        else:
-            self.initialize_tf_variables()
+        self.initialize_tf_variables()
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
@@ -138,6 +133,10 @@ class NeuralNet:
 
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
+
+        # initialize variables
+        if load_file:
+            self.load_weight_values(load_file)
 
     # TODO: Make it so you have to use "with session"
     def start_session(self):

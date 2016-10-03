@@ -35,7 +35,7 @@ class ChessGUI:
         os.environ['SDL_VIDEO_CENTERED'] = '1' #should center pygame window on the screen
         pygame.init()
         pygame.display.init()
-        self.screen = pygame.display.set_mode((850, 500))
+        self.screen = pygame.display.set_mode((850, 600))
         self.board_offset_x = 50
         self.board_offset_y = 50
         pygame.display.set_caption('Python Chess')
@@ -47,6 +47,7 @@ class ChessGUI:
 
         self.ranks = ['8','7','6','5','4','3','2','1']
         self.files = ['a','b','c','d','e','f','g','h']
+        self.end_of_game = False
 
     def load_images(self):
         """
@@ -57,6 +58,8 @@ class ChessGUI:
         self.white_square = pygame.image.load(os.path.join(dir_path,"images","white_square.png")).convert()
         self.brown_square = pygame.image.load(os.path.join(dir_path,"images","brown_square.png")).convert()
         self.cyan_square = pygame.image.load(os.path.join(dir_path,"images","cyan_square.png")).convert()
+
+        self.new_game_button = pygame.image.load(os.path.join(dir_path,"images","new_game_button.png")).convert()
         
         self.black_pawn = pygame.image.load(os.path.join(dir_path,"images","Chess_tile_pd.png")).convert()
         self.black_pawn = pygame.transform.scale(self.black_pawn, (self.square_size,self.square_size))
@@ -237,6 +240,11 @@ class ChessGUI:
                 self.screen.blit(self.white_king, (screen_x, screen_y))
             _file += 1
             
+
+        # Draw Next Game button
+        if self.end_of_game:
+            self.screen.blit(self.new_game_button, (300,525))
+            self.end_of_game = False
         pygame.display.flip()
             
     def get_player_input(self, board):
@@ -293,3 +301,18 @@ class ChessGUI:
                         tile = None
 
         return from_tile + to_tile
+
+    def wait_for_input(self):
+        pygame.event.set_blocked(MOUSEMOTION)
+            # Wait for input
+        while True:
+            e = pygame.event.wait()
+            # On click, register tile clicked, continue
+            if e.type is MOUSEBUTTONDOWN:
+                (mouse_x, mouse_y) = pygame.mouse.get_pos()
+                if mouse_x > 300 and mouse_x < 500 and mouse_y > 525 and mouse_y < 575:
+                    break
+            elif e.type is QUIT: #the "x" kill button
+                pygame.quit()
+                sys.exit(0)
+

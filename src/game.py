@@ -4,6 +4,7 @@ import player
 import guerilla
 import human
 import os
+import time
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/GUI/')
@@ -37,23 +38,25 @@ class Game:
         self.data['wins'] = [0, 0]
         self.data['draws'] = 0
 
+        self.use_gui = use_gui
         # Initialize gui
         if use_gui:
             self.gui = ChessGUI.ChessGUI()
-            if type(p1) is human.Human:
+            if type(players[0]) is human.Human:
                 self.player1.gui = self.gui
-            if type(p2) is human.Human:
+            if type(players[1]) is human.Human:
                 self.player2.gui = self.gui
 
     def swap_colours(self):
-        if self.player1 == 'white' and self.player2 == 'black':
+        if self.player1.colour == 'white' and self.player2.colour == 'black':
             self.player1.colour = 'black'
             self.player2.colour = 'white'
-        elif self.player1 == 'black' and self.player2 == 'white':
+        elif self.player1.colour == 'black' and self.player2.colour == 'white':
             self.player1.colour = 'white'
             self.player2.colour = 'black'
         else:
-            raise ValueError('Error: one of the players has an invalid colour')
+            raise ValueError('Error: one of the players has an invalid colour. ' + \
+                 'Player 1: %s, Player 2: %s' % (self.player1.colour, self.player2.colour))
 
     def start(self):
         """ 
@@ -67,50 +70,75 @@ class Game:
                                                                      type(self.player1).__name__,
                                                                      self.player2.name,
                                                                      type(self.player2).__name__)
-
+            if self.use_gui:
+                self.gui.print_msg("Game %d:" % (game))
+                self.gui.print_msg("%s [%s] (White)" % (self.player1.name, type(self.player1).__name__,))
+                self.gui.print_msg("VS:")
+                self.gui.print_msg("%s [%s] (Black)" % (self.player2.name, type(self.player2).__name__))
             # Reset board
             self.board.reset()
 
+            player1_turn = self.player1.colour == 'white'
+
+            game_pgn = chess.pgn.Game()
+            game_pgn.headers["White"] = self.player1.name if player1_turn else self.player2
+            game_pgn.headers["Black"] = self.player2.name if player1_turn else self.player1
+            game_pgn.headers["Date"] = time.strftime("%Y.%m.%d")
+            game_pgn.headers["Event"] = "Test"
+            game_pgn.headers["Round"] = game
+            game_pgn.headers["Site"] = "My PC"
+
             # Start game
-            white = True
             while not self.board.is_game_over(claim_draw=True):
-                if use_gui:
+                if self.use_gui:
                     self.gui.draw(self.board)
                 else:
                     Game.pretty_print_board(self.board)
                 
-                print self.board.fen()
-
                 # Get move
-                move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
-                print move
+                move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
+                game_pgn.add_main_variation(move)
+                game_pgn = game_pgn.variation(0)
                 while move not in self.board.legal_moves:
-                    if use_gui:
+                    if self.use_gui:
                         self.gui.print_msg("Error: Move is not legal, try again")
                     else:
                         print "Error: Move is not legal"
-                    move = self.player1.get_move(self.board) if white else self.player2.get_move(self.board)
+                    move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
                 self.board.push(move)
 
                 # Switch sides
-                white = not white
+                player1_turn = not player1_turn
 
+            if self.use_gui:
+                self.gui.end_of_game = True
+                self.gui.draw(self.board)
+                
             result = self.board.result(claim_draw=True)
             if result == '1-0':
                 self.data['wins'][0] += 1
                 print "%s wins." % self.player1.name
-                if use_gui:
+                if self.use_gui:
                     self.gui.print_msg("%s wins." % self.player1.name)
             elif result == '0-1':
                 self.data['wins'][1] += 1
                 print "%s wins." % self.player2.name
-                if use_gui:
+                if self.use_gui:
                     self.gui.print_msg("%s wins." % self.player2.name)
             else:
                 self.data['draws'] += 1
                 print "Draw."
-                if use_gui:
+                if self.use_gui:
                     self.gui.print_msg("Draw.")
+
+            game_pgn = game_pgn.root()
+            game_pgn.headers["Result"] = result
+            with open(self.player1.name + '_' + self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
+                pgn.write(str(game_pgn))
+
+            if self.use_gui:
+                self.gui.wait_for_input()
+
             self.swap_colours()
 
     @staticmethod
@@ -147,8 +175,10 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[0] = guerilla.Guerilla('Harambe', _load_file='weight_values.p')
+        # players[0] = guerilla.Guerilla('Harambe', _load_file='in_training_weights_start_of_selfplay.p')
+        # players[1] = guerilla.Guerilla('Donkey Kong', _load_file='in_training_weights_start_of_selfplay.p')
         players[1] = human.Human('Cincinnati Zoo')
+        players[0] = human.Human('D')
 
     elif choose_players == 'c':
         for i in xrange(2):
@@ -157,7 +187,7 @@ def main():
             player_type = raw_input("Player %d type %s : " % (i, Game.player_types.keys()))
             if player_type == 'guerilla':
                 weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n") 
-                players[i] = guerilla.Guerilla(name, _load_file=weight_file)
+                players[i] = guerilla.Guerilla(player_name, _load_file=weight_file)
             elif player_type == 'human':
                 players[i] = human.Human(player_name)
             else:

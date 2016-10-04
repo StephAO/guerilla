@@ -60,8 +60,6 @@ class Teacher:
             3. run actions
         """
 
-        self.nn.start_session()
-
         self.files = [fens_filename, stockfish_filename]
         self.start_time = time.time()
         self.training_time = training_time
@@ -117,8 +115,6 @@ class Teacher:
                 weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
                 self.nn.save_weight_values(_filename=weight_file)
                 print "Weights saved to %s" % weight_file
-
-        self.nn.close_session()
 
     def save_state(self, state, filename="state.p"):
         """
@@ -525,7 +521,7 @@ class Teacher:
         w_update = None
 
         # turn off pruning for search
-        self.guerilla.reci_prune = False
+        self.guerilla.search.reci_prune = False
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
@@ -550,7 +546,7 @@ class Teacher:
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
 
         # turn pruning back on
-        self.guerilla.reci_prune = True
+        self.guerilla.search.reci_prune = True
 
         for t in range(num_boards):
             td_val = 0
@@ -644,14 +640,14 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', _load_file=None)
-    g.search.max_depth = 3
-    t = Teacher(g)
-    t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
-    t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'],
-          training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
+        g.search.max_depth = 3
+        t = Teacher(g)
+        t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
+        t.set_sp_params(num_selfplay=1000, max_length=12)
+        t.run(['train_td_endgames'],
+              training_time=25200, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 
 if __name__ == '__main__':

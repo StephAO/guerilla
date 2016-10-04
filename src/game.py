@@ -23,6 +23,9 @@ class Game:
             Input:
                 [player1, player2] [Class that derives Abstract Player Class]
         """
+
+        assert all(isinstance(p, player.Player) for p in players)
+
         # Initialize players
         self.player1 = players[0]
         self.player2 = players[1]
@@ -192,16 +195,25 @@ def main():
             player_name = raw_input("Player %d name: " % (i))
             player_type = raw_input("Player %d type %s : " % (i, Game.player_types.keys()))
             if player_type == 'guerilla':
-                weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n") 
-                players[i] = guerilla.Guerilla(player_name, _load_file=weight_file)
+                weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n")
+                players[i] = guerilla.Guerilla(player_name, _load_file=(weight_file if weight_file!='d' else None))
             elif player_type == 'human':
                 players[i] = human.Human(player_name)
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
     game = Game(players, num_games=5)
-    game.start()
-
+    if isinstance(players[0], guerilla.Guerilla) and isinstance(players[1], guerilla.Guerilla):
+        with players[0], players[1]:
+            game.start()
+    elif isinstance(players[0], guerilla.Guerilla):
+        with players[0]:
+            game.start()
+    elif isinstance(players[1], guerilla.Guerilla):
+        with players[1]:
+            game.start()
+    else:
+        game.start()
 
 if __name__ == '__main__':
     main()

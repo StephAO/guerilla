@@ -142,7 +142,8 @@ class NeuralNet:
     def start_session(self):
         """ Sets tensorflow session """
 
-        self.sess = tf.Session()
+        if self.sess is None:
+            self.sess = tf.Session()
 
     def close_session(self):
         self.sess.close()

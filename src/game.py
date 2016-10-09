@@ -180,8 +180,8 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[0] = guerilla.Guerilla('Harambe (selfplay)', _load_file='in_training_weight_values.p')
-        players[1] = guerilla.Guerilla('Donkey Kong (selfplay)', _load_file='in_training_weight_values.p')
+        players[0] = guerilla.Guerilla('Harambe', _load_file='in_training_weight_values.p')
+        players[1] = guerilla.Guerilla('Donkey Kong', _load_file='in_training_weight_values.p')#weights_train_bootstrap_20160927-025555.p')
 
         # players[0] = human.Human("A")
         # players[1] = human.Human("B")

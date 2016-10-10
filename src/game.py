@@ -97,7 +97,8 @@ class Game:
                 if self.use_gui:
                     self.gui.draw(self.board)
                 else:
-                    Game.pretty_print_board(self.board)
+                    # Game.pretty_print_board(self.board)
+                    pass
                 
                 # Get move
                 move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
@@ -120,20 +121,22 @@ class Game:
                 
             result = self.board.result(claim_draw=True)
             if result == '1-0':
-                self.data['wins'][0] += 1
-                print "%s wins." % self.player1.name
-                if self.use_gui:
-                    self.gui.print_msg("%s wins." % self.player1.name)
+                winner = player1 if player1.colour == 'white' else player2
             elif result == '0-1':
-                self.data['wins'][1] += 1
-                print "%s wins." % self.player2.name
-                if self.use_gui:
-                    self.gui.print_msg("%s wins." % self.player2.name)
+                winner = player2 if player1.colour == 'white' else player1
             else:
+                winner = None
                 self.data['draws'] += 1
                 print "Draw."
                 if self.use_gui:
                     self.gui.print_msg("Draw.")
+
+            if winner is not None:
+                winner_idx = 0 if winner == player else 1
+                self.data['wins'][winner_idx] += 1
+                print "%s wins." % self.winner.name
+                if self.use_gui:
+                    self.gui.print_msg("%s wins." % self.winner.name)
 
             game_pgn = game_pgn.root()
             game_pgn.headers["Result"] = result
@@ -180,8 +183,9 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[0] = guerilla.Guerilla('Harambe (selfplay)', _load_file='in_training_weight_values.p')
-        players[1] = guerilla.Guerilla('Donkey Kong (selfplay)', _load_file='in_training_weight_values.p')
+        # players[0] = guerilla.Guerilla('in_training', _load_file='in_training_weight_values.p')
+        players[0] = guerilla.Guerilla('bootstrap', _load_file='weights_train_bootstrap_20160930-193556.p')
+        players[1] = guerilla.Guerilla('sigmoid', _load_file='weights_train_bootstrap_20161006-180717.p')
 
         # players[0] = human.Human("A")
         # players[1] = human.Human("B")
@@ -199,7 +203,7 @@ def main():
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
-    game = Game(players, num_games=5)
+    game = Game(players, num_games=2, use_gui=False)
     game.start()
 
 

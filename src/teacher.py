@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import numpy as np
 import tensorflow as tf
@@ -68,6 +69,7 @@ class Teacher:
         self.actions = actions
         self.curr_action_idx = 0  # This value gets modified if resuming
         self.saved = False
+        self.num_bootstrap_games = 1000
 
         if self.actions[0] == 'load_and_resume':
             self.resume(training_time)
@@ -97,10 +99,10 @@ class Teacher:
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
-                self.train_td(True)
+                self.train_td(True, self.num_bootstrap_games)
             elif action == 'train_td_full':
                 print "Performing full-game TD-Leaf training!"
-                self.train_td(False)
+                self.train_td(False, self.num_bootstrap_games + self.td_num_endgame)
             elif action == 'train_selfplay':
                 print "Performing self-play training!"
                 self.train_selfplay()
@@ -229,10 +231,10 @@ class Teacher:
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
         elif action == 'train_td_endgames':
             print "Resuming endgame TD-Leaf training..."
-            self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(True, self.num_bootstrap_games, game_indices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'train_td_full':
             print "Resuming full-game TD-Leaf training..."
-            self.train_td(False, gameindices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(False, self.num_bootstrap_games + self.td_num_endgame, game_indices=state['game_indices'], start_idx=state['start_idx'])
         elif action == 'train_selfplay':
             print "Resuming self-play training..."
             self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
@@ -424,7 +426,7 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def train_td(self, endgame, game_indices=None, start_idx=0):
+    def train_td(self, endgame, first_game_idx, game_indices=None, start_idx=0):
         """
         Trains the neural net using TD-Leaf.
             Inputs:
@@ -445,7 +447,7 @@ class Teacher:
             pgn_files = [f for f in os.listdir(self.td_pgn_folder) if
                          os.path.isfile(os.path.join(self.td_pgn_folder, f))]
         else:
-            pgn_files = [f for f in os.listdir(self.td_pgn_folder)[:num_games] if
+            pgn_files = [f for f in os.listdir(self.td_pgn_folder)[first_game_idx:first_game_idx+num_games] if
                          os.path.isfile(os.path.join(self.td_pgn_folder, f))]
 
         if game_indices is None:
@@ -525,7 +527,7 @@ class Teacher:
         w_update = None
 
         # turn off pruning for search
-        self.guerilla.reci_prune = False
+        self.guerilla.search.reci_prune = False
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
@@ -550,18 +552,18 @@ class Teacher:
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
 
         # turn pruning back on
-        self.guerilla.reci_prune = True
+        self.guerilla.search.reci_prune = True
 
-        for t in range(num_boards):
+        for t in xrange(num_boards):
             td_val = 0
-            for j in range(t, num_boards - 1):
+            for j in xrange(t, num_boards - 1):
                 # Calculate temporal difference
                 dt = game_info[j + 1]['value'] - game_info[j]['value']
                 # Add to sum
                 td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
             # Use gradient to update sum
-            if not w_update:
+            if w_update is None: 
                 w_update = [w * td_val for w in game_info[t]['gradient']]
             else:
                 # update each set of weights
@@ -570,7 +572,7 @@ class Teacher:
 
         # Update neural net weights.
         # old_weights = self.nn.get_weights(self.nn.all_weights)
-        self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
+        self.nn.add_all_weights([TD_LRN_RATE * wu for wu in w_update])
         # print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
         # print "Weights updated."
 
@@ -644,14 +646,30 @@ class Teacher:
 
 
 def main():
-    g = guerilla.Guerilla('Harambe', 'w', _load_file=None)
-    g.search.max_depth = 3
+    run_time = 0
+    if len(sys.argv) >= 2:
+        hours = int(sys.argv[1])
+        run_time += hours * 3600
+    if len(sys.argv) >= 3:
+        minutes = int(sys.argv[2])
+        run_time += minutes * 60
+    if len(sys.argv) >= 4:
+        seconds = int(sys.argv[3])
+        run_time += seconds
+
+    print "Training for %f hours" % (float(run_time)/3600.0)
+
+    if run_time == 0:
+        run_time = None
+
+    g = guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p')
+    g.search.max_depth = 2
     t = Teacher(g)
-    t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
+    t.set_td_params(num_end=1000, num_full=1000, randomize=False, end_length=10, full_length=12)
     t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_bootstrap','train_td_endgames','train_td_full','train_selfplay'],
-          training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    t.run(['train_td_endgames','train_td_full','train_selfplay'],
+          training_time=run_time, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    # t.run(['load_and_resume'], training_time=10000, fens_filename="fens.p", stockfish_filename="sf_scores.p")
 
 
 if __name__ == '__main__':

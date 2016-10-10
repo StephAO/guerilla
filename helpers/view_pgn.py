@@ -12,7 +12,10 @@ def view_game(filename):
     gui.print_msg("Use arrow keys or buttons to navigate")
     with open(full_path, 'r') as pgn_file:
         game = chess.pgn.read_game(pgn_file)
+        gui.print_msg("White: %s" % (game.headers["White"]))
+        gui.print_msg("Black: %s" % (game.headers["Black"]))
         while True:
+            print game.board().fen()
             gui.draw(game.board())
             next_move = gui.wait_for_view_input()
             if next_move:

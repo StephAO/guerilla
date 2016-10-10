@@ -10,13 +10,13 @@ BATCH_SIZE = 100
 NUM_HIDDEN = 1024
 LEARNING_RATE = 0.00000001
 VALIDATION_SIZE = 1000
-LOSS_THRESHOLD = 0.0001
+LOSS_THRESHOLD = 0.01
 
 NUM_CHANNELS = 6 * 2
 
 # Hyper parameters for TD-Leaf Training Algorithm
-TD_LRN_RATE = 1.0  # Learning rate
-TD_DISCOUNT = 0.7  # Discount rate
+TD_LRN_RATE = 0.001  # Learning rate
+TD_DISCOUNT = 0.6  # Discount rate
 
 # TODO: I don't think this should be here.
 piece_indices = {

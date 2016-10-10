@@ -7,7 +7,7 @@ class Search:
     Implements game tree search.
     """
 
-    def __init__(self, eval_fn, max_depth=3, search_mode="recipromax"):
+    def __init__(self, eval_fn, max_depth=2, search_mode="recipromax"):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
         self.search_opts = {"recipromax": self.recipromax}

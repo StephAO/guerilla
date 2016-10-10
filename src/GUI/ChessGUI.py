@@ -248,12 +248,12 @@ class ChessGUI:
         # Draw Next Game button
         if self.end_of_game:
             self.screen.blit(self.new_game_button, (300,525))
-            self.end_of_game = False
         
         # Draw view button
         if self.view:
             self.screen.blit(self.prev_, (233,525))
             self.screen.blit(self.next_, (517,525))
+
         pygame.display.flip()
             
     def get_player_input(self, board):
@@ -320,6 +320,7 @@ class ChessGUI:
             if e.type is MOUSEBUTTONDOWN and self.end_of_game:
                 (mouse_x, mouse_y) = pygame.mouse.get_pos()
                 if mouse_x > 300 and mouse_x < 500 and mouse_y > 525 and mouse_y < 575:
+                    self.end_of_game = False
                     break
             elif e.type is QUIT: #the "x" kill button
                 pygame.quit()

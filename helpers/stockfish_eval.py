@@ -39,6 +39,7 @@ def stockfish_scores(fens, seconds=1, threads=None, memory=None, all_scores=Fals
     percent_done = 0
     num_fens = len(fens)
     for i, fen in enumerate(fens):
+
         if math.floor(i * 100 / num_fens) > percent_done:
             percent_done = math.floor(i * 100 / num_fens)
             print '|' + '#' * int(percent_done) + " %d " % (percent_done) + "%" + " done"
@@ -86,13 +87,19 @@ def load_stockfish_values(filename='sf_scores.p'):
 def main():
     fens = cgp.load_fens()
 
+    start_num = 0
+    if os.path.isfile(dir_path + '/../pickles/start_num.txt'):
+        with open(dir_path + '/../pickles/start_num.txt', 'r') as f:
+            l = f.readline()
+            start_num = int(l)
+
     print "Evaluating %d fens for 1 seconds each" % (len(fens))
 
     sf_scores = stockfish_scores(fens)
 
-    # save stockfish_values
-    pickle_path = dir_path + '/../pickles/sf_scores.p'
-    pickle.dump(sf_scores, open(pickle_path, 'wb'))
+    # # save stockfish_values
+    # pickle_path = dir_path + '/../pickles/sf_scores.p'
+    # pickle.dump(sf_scores, open(pickle_path, 'wb'))
 
 dir_path = dir_path = os.path.dirname(os.path.abspath(__file__))
 

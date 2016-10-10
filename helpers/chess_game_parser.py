@@ -7,6 +7,7 @@ import chess.pgn
 import pickle
 import sys
 import os
+import time
 from os.path import isfile, join
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -37,7 +38,7 @@ def read_pgn(filename):
     return fens
 
 
-def get_fens(num_games=-1):
+def get_fens(time):
     """
     Returns a list of fens from games.
     Will either read from num_games games or all games in folder /pgn_files/single_game_pgns.
@@ -48,13 +49,27 @@ def get_fens(num_games=-1):
             fens:
                 list of fen strings from games
     """
-    path = dir_path + '/pgn_files/single_game_pgns'
-    files = [f for f in os.listdir(path)[:num_games] if isfile(join(path, f))]
-    fens = []
-    for f in files[:num_games]:
-        fens.extend(read_pgn(join(path, f)))
+    checkpoint_path = dir_path + '/pgn_files/game_num.txt'
+    games_path = dir_path + '/pgn_files/single_game_pgns'
 
-    return fens
+
+    game_num = 0
+    if os.path.isfile(checkpoint_path):
+        with open(checkpoint_path) as f:
+            l = f.readline()
+            game_num = int(l)
+
+    files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
+    
+    with open(dir_path + '/../pickles/numbers.nsv', 'a') as f:
+        start_time = time.clock()
+        while time.clock() - start_time < time:
+            game_num += 1
+            fens = read_pgn(files[game_num])
+            for fen in fens:
+                f.write(fen + '\n')
+
+
 
 
 def load_fens(filename='fens.p'):
@@ -71,18 +86,9 @@ def load_fens(filename='fens.p'):
 
 
 def main():
-    number_of_games = -1
-    if len(sys.argv) > 1:
-        number_of_games = int(sys.argv[1])
+    retrieve_time = raw_input("How long do you want to generate fens for?:")
 
-    fens = get_fens(num_games=number_of_games)
-
-    if len(sys.argv) > 2:
-        number_of_fens = int(sys.argv[2])
-        fens = fens[:number_of_fens]
-
-    pickle_path = dir_path + '/../pickles/fens.p'
-    pickle.dump(fens, open(pickle_path, 'wb'))
+    fens = get_fens(time=retrieve_time)
 
 
 if __name__ == "__main__":

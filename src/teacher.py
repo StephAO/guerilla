@@ -8,6 +8,7 @@ import chess
 import time
 import matplotlib.pyplot as plt
 import pickle
+from player import Player
 
 import guerilla
 import data_handler as dh
@@ -114,7 +115,6 @@ class Teacher:
             if not self.saved:
                 weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
                 self.nn.save_weight_values(_filename=weight_file)
-                print "Weights saved to %s" % weight_file
 
     def save_state(self, state, filename="state.p"):
         """
@@ -568,7 +568,6 @@ class Teacher:
         # old_weights = self.nn.get_weights(self.nn.all_weights)
         self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
         # print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
-        # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS
 
@@ -638,16 +637,176 @@ class Teacher:
 
         return
 
+    # ---------- STS EVALUATION
+
+    sts_strat_files = ['activity_of_king', 'advancement_of_abc_pawns', 'advancement_of_fgh_pawns', 'bishop_vs_knight',
+                       'center_control', 'knight_outposts', 'offer_of_simplification', 'open_files_and_diagonals',
+                       'pawn_play_in_the_center', 'queens_and_rooks_to_the_7th_rank',
+                       'recapturing', 'simplification', 'square_vacancy', 'undermining']
+    sts_piece_files = ['pawn','bishop','rook','knight','queen','king']
+
+
+    @staticmethod
+    def eval_sts(player, mode = "strategy"):
+        """
+        Evaluates the given player using the strategic test suite. Returns a score and a maximum score.
+            Inputs:
+                player [Player]
+                    Player to be tested.
+                mode [List of Strings] or [String]
+                    Select the test mode(s), see below for options. By default runs "strategy".
+                        "strategy": runs all strategic tests
+                        "pieces" : runs all piece tests
+                        other: specific EPD file
+            Outputs:
+                scores [List of Integers]
+                    List of scores the player received on the each test mode. Same order as input.
+                max_scores [Integer]
+                    List of highest possible scores on each test type. Same order as score output.
+        """
+
+        # Handle input
+        if not isinstance(player, Player):
+            raise ValueError("Invalid input! Player must derive abstract Player class.")
+
+        if type(mode) is not list:
+            mode = [mode]
+
+        # vars
+        dir = os.path.dirname(os.path.abspath(__file__)) + '/../helpers/STS/'
+        board = chess.Board()
+        scores = []
+        max_scores = []
+
+        # Run tests
+        for test in mode:
+            print "Running %s STS test." % test
+            # load STS epds
+            epds = []
+            if test == 'strategy':
+                for filename in Teacher.sts_strat_files:
+                    epds += Teacher.get_epds(dir + filename + '.epd')
+            elif test == 'sts_piece_files':
+                for filename in Teacher.sts_piece_files:
+                    epds += Teacher.get_epds(dir + filename + '.epd')
+            else:
+                # Specific file
+                try:
+                    epds += Teacher.get_epds(dir + test + '.epd')
+                except IOError:
+                    raise ValueError("Error %s is an invalid test mode." % test)
+
+            # Test epds
+            score = 0
+            max_score = 0
+            length = len(epds)
+            print "STS: Scoring %s EPDS. Progress: " % length,
+            print_perc = 5 # percent to print at
+            for i, epd in enumerate(epds):
+                # Print info
+                if (i%(length/(100.0/print_perc)) - 100.0/length) <= 0:
+                    print "%d%% " % (i/(length/100.0)),
+
+                # Set epd
+                ops = board.set_epd(epd)
+
+                # Parse move scores
+                move_scores = dict()
+                # print ops
+                if 'c0' in ops:
+                    for m, s in [x.rstrip(',').split('=') for x in ops['c0'].split(' ')]:
+                        try:
+                            move_scores[board.parse_san(m)] = int(s)
+                        except ValueError:
+                            move_scores[board.parse_uci(m)] = int(s)
+                else:
+                    move_scores[ops['bm'][0]] = 10
+
+                # Get move
+                move = player.get_move(board)
+
+                # score
+                max_score += move_scores[ops['bm'][0]]
+                try:
+                    score += move_scores[move]
+                except KeyError:
+                    # Score of 0
+                    pass
+            print ""
+
+            # append
+            scores.append(score)
+            max_scores.append(max_score)
+
+        return scores, max_scores
+
+    @staticmethod
+    def get_epds(filename):
+        """
+        Returns a list of epds from the given file.
+        Input:
+            filename [String]
+                Filename of EPD file to open. Must include absolute path.
+        Output:
+            epds [List of Strings]
+                List of epds.
+        """
+        file = open(filename)
+        epds = [line.rstrip() for line in file]
+        file.close()
+
+        return epds
+
+
+def direction_test():
+    with guerilla.Guerilla('Harambe', 'w', _load_file='in_training_weight_values.p') as g:
+        g.search.max_depth = 2
+        t = Teacher(g)
+        board = chess.Board()
+
+        num_fen = 6
+        # Build fens
+        fens = [None]*num_fen
+        for i in range(num_fen):
+            fens[i] = board.fen()
+            board.push(list(board.legal_moves)[0])
+
+        # print initial evaluations
+        for i in range(num_fen/2):
+            #print fens[2*i]
+            #print fens[2*i + 1]
+            print g.nn.evaluate(fens[2*i])
+            print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
+
+        # run td leaf
+        # t.set_td_params(end_length=2)
+        t.td_leaf(fens)
+        print "------------"
+
+        # print initial evaluations
+        for i in range(num_fen/2):
+            print g.nn.evaluate(fens[2*i])
+            print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
 
 def main():
+    print "Bootstrap"
     with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
-        g.search.max_depth = 3
-        t = Teacher(g)
-        t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=5, full_length=12)
-        t.set_sp_params(num_selfplay=1000, max_length=12)
-        t.run(['train_td_endgames'],
-              training_time=25200, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-        # t.run(['load_and_resume'], training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+        g.search.max_depth = 1
+        print Teacher.eval_sts(g)
+    print "Endgame"
+    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
+        g.search.max_depth = 1
+        print Teacher.eval_sts(g)
+
+            #
+    # with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
+    #     g.search.max_depth = 2
+    #     t = Teacher(g)
+    #     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=10, full_length=12)
+    #     t.set_sp_params(num_selfplay=1000, max_length=12)
+    #     t.run(['train_td_full'],
+    #         training_time=25200, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+    #     # t.run(['load_and_resume'], training_time=36000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
 
 
 if __name__ == '__main__':

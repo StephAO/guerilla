@@ -23,6 +23,9 @@ class Game:
             Input:
                 [player1, player2] [Class that derives Abstract Player Class]
         """
+
+        assert all(isinstance(p, player.Player) for p in players)
+
         # Initialize players
         self.player1 = players[0]
         self.player2 = players[1]
@@ -97,8 +100,7 @@ class Game:
                 if self.use_gui:
                     self.gui.draw(self.board)
                 else:
-                    # Game.pretty_print_board(self.board)
-                    pass
+                    Game.pretty_print_board(self.board)
                 
                 # Get move
                 move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
@@ -111,6 +113,7 @@ class Game:
                         print "Error: Move is not legal"
                     move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
                 self.board.push(move)
+                print "%s played %s" %(self.player1.name if player1_turn else self.player2.name, move)
 
                 # Switch sides
                 player1_turn = not player1_turn
@@ -196,16 +199,25 @@ def main():
             player_name = raw_input("Player %d name: " % (i))
             player_type = raw_input("Player %d type %s : " % (i, Game.player_types.keys()))
             if player_type == 'guerilla':
-                weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n") 
-                players[i] = guerilla.Guerilla(player_name, _load_file=weight_file)
+                weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n")
+                players[i] = guerilla.Guerilla(player_name, _load_file=(weight_file if weight_file!='d' else None))
             elif player_type == 'human':
                 players[i] = human.Human(player_name)
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
-    game = Game(players, num_games=2, use_gui=False)
-    game.start()
-
+    game = Game(players, num_games=5)
+    if isinstance(players[0], guerilla.Guerilla) and isinstance(players[1], guerilla.Guerilla):
+        with players[0], players[1]:
+            game.start()
+    elif isinstance(players[0], guerilla.Guerilla):
+        with players[0]:
+            game.start()
+    elif isinstance(players[1], guerilla.Guerilla):
+        with players[1]:
+            game.start()
+    else:
+        game.start()
 
 if __name__ == '__main__':
     main()

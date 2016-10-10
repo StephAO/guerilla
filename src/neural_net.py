@@ -36,6 +36,8 @@ class NeuralNet:
         """
         self.dir_path = os.path.dirname(__file__)
 
+        self.load_file = load_file
+
         # declare layer variables
         self.sess = None
         self.W_grid = None
@@ -53,13 +55,14 @@ class NeuralNet:
         self.W_final = None
         self.b_final = None
 
-        # declare other variables
+        # declare output variable
         self.pred_value = None
 
-        # Create tf session and variables
+        # tf session and variables
         self.sess = None
-        self.start_session()
-        self.initialize_tf_variables()
+
+        # define all variables
+        self.define_tf_variables()
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
@@ -70,7 +73,6 @@ class NeuralNet:
         self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
         self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
 
-        # TODO move to function? - No because self._ must be defined in the init
         # input placeholders
         self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, NUM_CHANNELS])
         self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, NUM_CHANNELS])
@@ -102,7 +104,7 @@ class NeuralNet:
              self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder,
              self.b_fc1_placeholder, self.b_fc2_placeholder, self.b_final_placeholder]
 
-        # assignment operators
+        # create assignment operators
         self.W_grid_assignment = self.W_grid.assign(self.W_grid_placeholder)
         self.W_rank_assignment = self.W_rank.assign(self.W_rank_placeholder)
         self.W_file_assignment = self.W_file.assign(self.W_file_placeholder)
@@ -128,33 +130,47 @@ class NeuralNet:
              self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment,
              self.b_fc1_assignment, self.b_fc2_assignment, self.b_final_assignment]
 
-        # create neural net structure
+        # create neural net graph
         self.neural_net()
 
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
 
-        # initialize variables
-        if load_file:
-            self.load_weight_values(load_file)
+    def init_graph(self):
+        """
+        Initializes the weights and assignment ops of the neural net, either from a file or a truncated Gaussian.
+        Note: The session must be open beforehand.
+        """
+        assert self.sess is not None
 
-    # TODO: Make it so you have to use "with session"
+        # initialize or load variables
+        if self.load_file:
+            self.load_weight_values(self.load_file)
+        else:
+            print "Initializing variables from a normal distribution."
+            self.sess.run(tf.initialize_all_variables())
+
     def start_session(self):
-        """ Sets tensorflow session """
+        """ Starts tensorflow session """
 
-        if self.sess is None:
-            self.sess = tf.Session()
+        assert self.sess is None
+
+        self.sess = tf.Session()
+        print "Tensorflow session opened."
 
     def close_session(self):
-        self.sess.close()
-        return
+        """ Closes tensorflow session"""
+        assert self.sess is not None
 
-    def initialize_tf_variables(self):
+        self.sess.close()
+        print "Tensorflow session closed."
+
+    def define_tf_variables(self):
         """
             Initializes all weight variables to normal distribution, and all
             bias variables to a constant.
         """
-        print "Initializing variables from a normal distribution (this should only happen once at the very start)"
+
         self.W_grid = weight_variable([5, 5, NUM_CHANNELS, NUM_FEAT])
         self.W_rank = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
         self.W_file = weight_variable([8, 1, NUM_CHANNELS, NUM_FEAT])
@@ -177,7 +193,6 @@ class NeuralNet:
         # Output layer
         self.W_final = weight_variable([NUM_HIDDEN, 1])
         self.b_final = bias_variable([1])
-        self.sess.run(tf.initialize_all_variables())
 
     def load_weight_values(self, _filename='weight_values.p'):
         """
@@ -212,6 +227,7 @@ class NeuralNet:
 
         pickle_path = self.dir_path + '/../pickles/' + _filename
         pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
+        print "Weights saved to %s" % _filename
 
     def get_weight_values(self):
         """ 
@@ -228,7 +244,6 @@ class NeuralNet:
 
         return weight_values
 
-    # TODO set as default graph - is this really necessary?
     def neural_net(self):
         """
             Structure of neural net.

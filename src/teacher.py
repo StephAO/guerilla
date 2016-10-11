@@ -52,6 +52,11 @@ class Teacher:
         self.sp_num = 1  # The number of games to play against itself
         self.sp_length = 12  # How many moves are included in game playing
 
+        # STS Evaluation Parameters
+        self.sts_on = False  # Whether STS evaluation occurs during training
+        self.sts_interval = 50  # Interval at which STS evaluation occurs, unit is number of games
+        self.sts_mode = "strategy"  # STS mode for evaluation
+
     # ---------- RUNNING AND RESUMING METHODS
 
     def run(self, actions, training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p"):
@@ -145,6 +150,11 @@ class Teacher:
                                   'full_length': self.td_full_length}
         state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
 
+        # Save STS evaluation parameters
+        state['sts_on'] = self.sts_on
+        state['sts_interval'] = self.sts_interval
+        state['sts_mode'] = self.sts_mode
+
         pickle_path = self.dir_path + '/../pickles/' + filename
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
@@ -170,6 +180,11 @@ class Teacher:
         # Load training parameters
         self.set_td_params(**state.pop('td_leaf_param'))
         self.set_sp_params(**state.pop('sp_param'))
+
+        # Load STS evaluation parameters
+        self.sts_on = state['sts_on']
+        self.sts_interval = state['sts_interval']
+        self.sts_mode = state['sts_mode']
 
         self.files = state['files']
         self.curr_action_idx = state['curr_action_idx']
@@ -225,13 +240,16 @@ class Teacher:
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
         elif action == 'train_td_endgames':
             print "Resuming endgame TD-Leaf training..."
-            self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'],
+                          sts_scores=state['sts_scores'])
         elif action == 'train_td_full':
             print "Resuming full-game TD-Leaf training..."
-            self.train_td(False, gameindices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(False, game_indices=state['game_indices'], start_idx=state['start_idx'],
+                          sts_scores=state['sts_scores'])
         elif action == 'train_selfplay':
             print "Resuming self-play training..."
-            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
+                                sts_scores=state['sts_scores'])
         elif action == 'load_and_resume':
             raise ValueError("Error: It's trying to resume on a resume call - This shouldn't happen.")
         else:
@@ -420,7 +438,7 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def train_td(self, endgame, game_indices=None, start_idx=0):
+    def train_td(self, endgame, game_indices=None, start_idx=0, sts_scores=None):
         """
         Trains the neural net using TD-Leaf.
             Inputs:
@@ -451,10 +469,13 @@ class Teacher:
             if self.td_rand_file:
                 random.shuffle(game_indices)
 
+        # Initialize STS scores if necessary
+        if sts_scores is None and self.sts_on:
+            sts_scores = []
+
         for i in xrange(start_idx, len(game_indices)):
 
             game_idx = game_indices[i]
-            print "Training on game %d of %d..." % (i + 1, num_games)
             fens = []
 
             # Open and use pgn file sequentially or at random
@@ -496,15 +517,24 @@ class Teacher:
                             print "Warning: This shouldn't happen!"
 
             # Call TD-Leaf
+            print "Training on game %d of %d..." % (i + 1, num_games)
             self.td_leaf(fens)
+
+            # Evaluate on STS if necessary
+            if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                sts_scores.append(Teacher.eval_sts(self.guerilla, mode=self.sts_mode)[0])
 
             # Check if out of time
             if self.out_of_time() and i != (len(game_indices) - 1):
                 print "TD-Leaf " + ("endgame" if endgame else "fullgame") + " Timeout: Saving state and quitting."
                 save = {'game_indices': game_indices,
-                        'start_idx': i + 1}
+                        'start_idx': i + 1,
+                        'sts_scores': sts_scores}
                 self.save_state(save)
                 return
+
+        if self.sts_on:
+            self.print_sts(sts_scores)
 
         return
 
@@ -586,7 +616,7 @@ class Teacher:
         if max_length:
             self.sp_length = max_length
 
-    def train_selfplay(self, game_indices=None, start_idx=0):
+    def train_selfplay(self, game_indices=None, start_idx=0, sts_scores=None):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against itself.
         Self-play is performed from a random board position. The random board position is found by loading from the fens
@@ -599,6 +629,10 @@ class Teacher:
             game_indices = np.random.choice(len(fens), self.sp_num)
 
         max_len = float("inf") if self.sp_length == -1 else self.sp_length
+
+        # Initialize STS scores if necessary
+        if sts_scores is None and self.sts_on:
+            sts_scores = []
 
         for i in xrange(start_idx, len(game_indices)):
 
@@ -618,7 +652,12 @@ class Teacher:
                     break
 
                 # Play move
-                board.push(self.guerilla.get_move(board))
+                try:
+                    board.push(self.guerilla.get_move(board))
+                except AttributeError:
+                    # TODO: Remove once bug is fixed
+                    print board.fen()
+                    raise
 
                 # Store fen
                 game_fens.append(board.fen())
@@ -627,13 +666,21 @@ class Teacher:
             print "Training on game %d of %d..." % (i + 1, self.sp_num)
             self.td_leaf(game_fens)
 
+            # Evaluate on STS if necessary
+            if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                sts_scores.append(Teacher.eval_sts(self.guerilla, mode=self.sts_mode)[0])
+
             # Check if out of time
             if self.out_of_time() and i != (len(game_indices) - 1):
                 print "TD-Leaf self-play Timeout: Saving state and quitting."
                 save = {'game_indices': game_indices,
-                        'start_idx': i + 1}
+                        'start_idx': i + 1,
+                        'sts_scores': sts_scores}
                 self.save_state(save)
                 return
+
+        if self.sts_on:
+            self.print_sts(sts_scores)
 
         return
 
@@ -643,11 +690,10 @@ class Teacher:
                        'center_control', 'knight_outposts', 'offer_of_simplification', 'open_files_and_diagonals',
                        'pawn_play_in_the_center', 'queens_and_rooks_to_the_7th_rank',
                        'recapturing', 'simplification', 'square_vacancy', 'undermining']
-    sts_piece_files = ['pawn','bishop','rook','knight','queen','king']
-
+    sts_piece_files = ['pawn', 'bishop', 'rook', 'knight', 'queen', 'king']
 
     @staticmethod
-    def eval_sts(player, mode = "strategy"):
+    def eval_sts(player, mode="strategy"):
         """
         Evaluates the given player using the strategic test suite. Returns a score and a maximum score.
             Inputs:
@@ -673,7 +719,7 @@ class Teacher:
             mode = [mode]
 
         # vars
-        dir = os.path.dirname(os.path.abspath(__file__)) + '/../helpers/STS/'
+        sts_dir = os.path.dirname(os.path.abspath(__file__)) + '/../helpers/STS/'
         board = chess.Board()
         scores = []
         max_scores = []
@@ -685,14 +731,14 @@ class Teacher:
             epds = []
             if test == 'strategy':
                 for filename in Teacher.sts_strat_files:
-                    epds += Teacher.get_epds(dir + filename + '.epd')
+                    epds += Teacher.get_epds(sts_dir + filename + '.epd')
             elif test == 'sts_piece_files':
                 for filename in Teacher.sts_piece_files:
-                    epds += Teacher.get_epds(dir + filename + '.epd')
+                    epds += Teacher.get_epds(sts_dir + filename + '.epd')
             else:
                 # Specific file
                 try:
-                    epds += Teacher.get_epds(dir + test + '.epd')
+                    epds += Teacher.get_epds(sts_dir + test + '.epd')
                 except IOError:
                     raise ValueError("Error %s is an invalid test mode." % test)
 
@@ -701,10 +747,10 @@ class Teacher:
             max_score = 0
             length = len(epds)
             print "STS: Scoring %s EPDS. Progress: " % length,
-            print_perc = 5 # percent to print at
+            print_perc = 5  # percent to print at
             for i, epd in enumerate(epds):
                 # Print info
-                if (i%(length/(100.0/print_perc)) - 100.0/length) <= 0:
+                if (i % (length/(100.0/print_perc)) - 100.0/length) < 0:
                     print "%d%% " % (i/(length/100.0)),
 
                 # Set epd
@@ -751,11 +797,17 @@ class Teacher:
             epds [List of Strings]
                 List of epds.
         """
-        file = open(filename)
-        epds = [line.rstrip() for line in file]
-        file.close()
+        f = open(filename)
+        epds = [line.rstrip() for line in f]
+        f.close()
 
         return epds
+
+    def print_sts(self, scores):
+        """ Prints the STS scores and corresponding intervals. """
+
+        print "Intervals: " + ",".join(map(str, [(x + 1)*self.sts_interval for x in range(len(scores))]))
+        print "Scores: " + ",".join(map(str, scores))
 
 
 def direction_test():
@@ -789,24 +841,18 @@ def direction_test():
             print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
 
 def main():
-    print "Bootstrap"
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
-        g.search.max_depth = 1
-        print Teacher.eval_sts(g)
-    print "Endgame"
+
     with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
         g.search.max_depth = 1
-        print Teacher.eval_sts(g)
-
-            #
-    # with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
-    #     g.search.max_depth = 2
-    #     t = Teacher(g)
-    #     t.set_td_params(num_end=500, num_full=500, randomize=False, end_length=10, full_length=12)
-    #     t.set_sp_params(num_selfplay=1000, max_length=12)
-    #     t.run(['train_td_full'],
-    #         training_time=25200, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    #     # t.run(['load_and_resume'], training_time=36000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        t = Teacher(g)
+        t.set_td_params(num_end=4, num_full=12, randomize=False, end_length=5, full_length=12)
+        t.set_sp_params(num_selfplay=10, max_length=12)
+        t.sts_on = True
+        t.sts_interval = 2
+        # t.sts_mode = Teacher.sts_strat_files[0]
+        t.run(['train_td_endgames'],
+            training_time=1000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        # t.run(['load_and_resume'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
 
 
 if __name__ == '__main__':

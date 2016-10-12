@@ -38,7 +38,7 @@ def read_pgn(filename):
     return fens
 
 
-def get_fens(time):
+def get_fens(generate_time):
     """
     Returns a list of fens from games.
     Will either read from num_games games or all games in folder /pgn_files/single_game_pgns.
@@ -49,9 +49,8 @@ def get_fens(time):
             fens:
                 list of fen strings from games
     """
-    checkpoint_path = dir_path + '/pgn_files/game_num.txt'
+    checkpoint_path = dir_path + '/extracted_data/game_num.txt'
     games_path = dir_path + '/pgn_files/single_game_pgns'
-
 
     game_num = 0
     if os.path.isfile(checkpoint_path):
@@ -61,34 +60,44 @@ def get_fens(time):
 
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
     
-    with open(dir_path + '/../pickles/numbers.nsv', 'a') as f:
-        start_time = time.clock()
-        while time.clock() - start_time < time:
+    start_time = time.clock()
+    with open(dir_path + '/extracted_data/fens.nsv', 'a') as fen_file:
+        
+        while (time.clock() - start_time) < generate_time:
             game_num += 1
-            fens = read_pgn(files[game_num])
+            fens = read_pgn(games_path + '/' + files[game_num])
             for fen in fens:
-                f.write(fen + '\n')
+                fen_file.write(fen + '\n')
+            with open(dir_path + '/extracted_data/game_num.txt', 'w') as num_file:
+                num_file.write(str(game_num))
 
-
-
-
-def load_fens(filename='fens.p'):
+def load_fens(filename='fens.nsv', num_values=None):
     """
     Loads the fens pickle.
         Input:
             filename:
                 Pickle filename.
+            num_values[int]:
+                Max number of stockfish values to return. 
+                (will return min of num_values and number of values stored in file)
         Output:
             Loaded pickle.
     """
-    full_path = dir_path + "/../pickles/" + filename
-    return pickle.load(open(full_path, 'rb'))
-
+    full_path = dir_path + "/extracted_data/" + filename
+    fens = []
+    count = 0
+    with open(full_path, 'r') as fen_file:
+        for line in fen_file:
+            fens.append(line.strip())
+            count += 1
+            if num_values is not None and count >= num_values:
+                break
+    return fen
 
 def main():
-    retrieve_time = raw_input("How long do you want to generate fens for?:")
+    generate_time = raw_input("How many seconds do you want to generate fens for?: ")
 
-    fens = get_fens(time=retrieve_time)
+    fens = get_fens(int(generate_time))
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ import chess_game_parser as cgp
 
 # Modification from notbanker's stockfish.py https://gist.github.com/notbanker/3af51fd2d11ddcad7f16
 
-def stockfish_scores(fens, seconds=1, threads=None, memory=None, all_scores=False):
+def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_scores=False):
     """ 
         Uses stockfishes engine to evaluate a score for each board.
         Then uses a sigmoid to map the scores to a winning probability between 
@@ -29,37 +29,68 @@ def stockfish_scores(fens, seconds=1, threads=None, memory=None, all_scores=Fals
                     a list of values for each board ranging between 0 and 1
     """
 
+    sf_num = 0
+    if os.path.isfile(dir_path + '/extracted_data/sf_num.txt'):
+        with open(dir_path + '/extracted_data/sf_num.txt', 'r') as f:
+            l = f.readline()
+            sf_num = int(l)
+
     # Defaults
     memory = memory or psutil.virtual_memory().available / (2 * 1024 * 1024)
     threads = threads or psutil.cpu_count() - 2
     binary = 'linux'
 
-    # Shell out to Stockfish
-    scores = []
-    percent_done = 0
-    num_fens = len(fens)
-    for i, fen in enumerate(fens):
+    batch_size = 5
 
-        if math.floor(i * 100 / num_fens) > percent_done:
-            percent_done = math.floor(i * 100 / num_fens)
-            print '|' + '#' * int(percent_done) + " %d " % (percent_done) + "%" + " done"
-        cmd = ' '.join([(dir_path + '/stockfish_eval.sh'), fen, str(seconds), binary, str(threads), str(memory)])
-        # print cmd
-        # try:
-        output = subprocess.check_output(cmd, shell=True).strip().split('\n')
-        # except subprocess.CalledProcessError e:
+    with open(dir_path + '/extracted_data/fens.nsv', 'r') as fen_file:
+        with open(dir_path + '/extracted_data/sf_values.nsv', 'a') as sf_file:
 
-        if output[0] == '':
-            print "Warning: stockfish returned nothing. Skipping fen. Command was:\n%s" % cmd
-            continue
-        if len(output) == 2:
-            score = 100000. if int(output[1]) > 0 else -100000.
-        else:
-            score = float(output[0])
-        scores.append(score)
+            for i in xrange(sf_num):
+                fen_file.readline()
 
-    return sigmoid_array(np.array(scores))
+            # Shell out to Stockfish
+            scores = []
+            start_time = time.time()
+            while (time.time() - start_time) < generate_time:
+                fen = fen_file.readline().strip()
+                print fen
 
+                if fen == "":
+                    break
+
+                cmd = ' '.join([(dir_path + '/stockfish_eval.sh'), fen, str(seconds), binary, str(threads), str(memory)])
+                # print cmd
+                # try:
+                output = subprocess.check_output(cmd, shell=True).strip().split('\n')
+                # except subprocess.CalledProcessError e:
+
+                if output[0] == '':
+                    print "Warning: stockfish returned nothing. Skipping fen. Command was:\n%s" % cmd
+                    continue
+                if len(output) == 2:
+                    score = 1000000. if int(output[1]) > 0 else -1000000.
+                else:
+                    score = float(output[0])
+
+                sf_num += 1
+                scores.append(score)
+
+                if (sf_num + 1) % batch_size == 0:
+                    mapped_scores = sigmoid_array(np.array(scores))
+                    for score in mapped_scores:
+                        sf_file.write(str(score) + '\n')
+                    scores = []
+
+                    with open(dir_path + '/extracted_data/sf_num.txt', 'w') as num_file:
+                        num_file.write(str(sf_num))
+
+            mapped_scores = sigmoid_array(np.array(scores))
+            for score in mapped_scores:
+                sf_file.write(str(score) + '\n')
+            scores = []
+
+            with open(dir_path + '/extracted_data/sf_num.txt', 'w') as num_file:
+                num_file.write(str(sf_num))
 
 def sigmoid_array(values):
     """ From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
@@ -72,34 +103,40 @@ def sigmoid_array(values):
     return 1. / (1. + np.exp(-0.00547 * values))
 
 
-def load_stockfish_values(filename='sf_scores.p'):
+def load_stockfish_values(filename='sf_values.nsv', num_values=None):
     """
-        Load stockfish values from a pickle file
+        Load stockfish values from a file
         Inputs:
             filename[string]:
-                pickle file to load values from
+                file to load values from
+            num_values[int]:
+                Max number of stockfish values to return. 
+                (will return min of num_values and number of values stored in file)
+        Outpus:
+            stockfish_values[list of floats]:
+                list of stockfish_values corresponding to the order of
+                fens in fens.nsv
     """
-    full_path = dir_path + "/../pickles/" + filename
-    stockfish_values = pickle.load(open(full_path, 'rb'))
+    full_path = dir_path + "/extracted_data/" + filename
+    stockfish_values = []
+    count = 0
+    with open(full_path, 'r') as sf_file:
+        for line in sf_file:
+            stockfish_values.append(float(line.strip()))
+            count += 1
+            if num_values is not None and count >= num_values:
+                break
+
     return stockfish_values
 
 
 def main():
-    fens = cgp.load_fens()
 
-    start_num = 0
-    if os.path.isfile(dir_path + '/../pickles/start_num.txt'):
-        with open(dir_path + '/../pickles/start_num.txt', 'r') as f:
-            l = f.readline()
-            start_num = int(l)
+    generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
 
-    print "Evaluating %d fens for 1 seconds each" % (len(fens))
+    print "Evaluating fens for %d seconds, spending 1 second on each" % (generate_time)
 
-    sf_scores = stockfish_scores(fens)
-
-    # # save stockfish_values
-    # pickle_path = dir_path + '/../pickles/sf_scores.p'
-    # pickle.dump(sf_scores, open(pickle_path, 'wb'))
+    stockfish_scores(generate_time)
 
 dir_path = dir_path = os.path.dirname(os.path.abspath(__file__))
 

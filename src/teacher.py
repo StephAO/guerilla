@@ -78,6 +78,12 @@ class Teacher:
 
         # Note: This cannot be a for loop as self.curr_action_idx gets set to non-zero when resuming.
         while True:
+            # Save new weight values if necessary
+            if not self.saved and self.curr_action_idx > 0:
+                weight_file = "weights_" + self.actions[self.curr_action_idx - 1] \
+                              + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
+                self.nn.save_weight_values(_filename=weight_file)
+
             # Check if done
             if self.curr_action_idx >= len(self.actions):
                 break
@@ -114,12 +120,6 @@ class Teacher:
                 raise NotImplementedError("Error: %s is not a valid action." % action)
 
             self.curr_action_idx += 1
-
-            # Save new weight values
-
-            if not self.saved:
-                weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
-                self.nn.save_weight_values(_filename=weight_file)
 
     def save_state(self, state, filename="state.p"):
         """
@@ -191,6 +191,7 @@ class Teacher:
         self.actions = state['actions'] + self.actions[1:]
         # TODO this will called shortly after already loading weight values, can we remove the unecessary work
         self.nn.load_weight_values(_filename='in_training_weight_values.p')
+
         return state
 
     def resume(self, training_time=None):
@@ -841,18 +842,17 @@ def direction_test():
             print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
 
 def main():
-
     with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_td_params(num_end=4, num_full=12, randomize=False, end_length=5, full_length=12)
+        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
-        t.sts_on = True
-        t.sts_interval = 2
+        t.sts_on = False
+        t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
         t.run(['train_td_endgames'],
-            training_time=1000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-        # t.run(['load_and_resume'], training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+            training_time=5, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        t.run(['load_and_resume'], training_time=28000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
 
 
 if __name__ == '__main__':

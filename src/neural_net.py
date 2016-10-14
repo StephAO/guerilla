@@ -227,6 +227,7 @@ class NeuralNet:
 
         pickle_path = self.dir_path + '/../pickles/' + _filename
         pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
+        print "Weights saved to %s" % _filename
 
     def get_weight_values(self):
         """ 

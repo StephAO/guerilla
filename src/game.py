@@ -113,6 +113,7 @@ class Game:
                         print "Error: Move is not legal"
                     move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
                 self.board.push(move)
+                print "%s played %s" %(self.player1.name if player1_turn else self.player2.name, move)
 
                 # Switch sides
                 player1_turn = not player1_turn
@@ -183,11 +184,15 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[0] = guerilla.Guerilla('Harambe', _load_file='in_training_weight_values.p')
-        players[1] = guerilla.Guerilla('Donkey Kong', _load_file='in_training_weight_values.p')#weights_train_bootstrap_20160927-025555.p')
+        players[1] = guerilla.Guerilla('Harambe (bootstrap)', _load_file='weights_train_bootstrap_20160930-193556.p')
+        players[0] = guerilla.Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
 
         # players[0] = human.Human("A")
         # players[1] = human.Human("B")
+
+        players[1].search.max_depth = 3
+        players[0].search.max_depth = 3
+
 
     elif choose_players == 'c':
         for i in xrange(2):

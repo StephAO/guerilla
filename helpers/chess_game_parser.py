@@ -92,7 +92,8 @@ def load_fens(filename='fens.nsv', num_values=None):
             count += 1
             if num_values is not None and count >= num_values:
                 break
-    return fen
+    print len(fens)
+    return fens
 
 def main():
     generate_time = raw_input("How many seconds do you want to generate fens for?: ")

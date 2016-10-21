@@ -223,7 +223,7 @@ class Teacher:
             train_values = true_values[:(-1) * VALIDATION_SIZE]
             valid_values = true_values[(-1) * VALIDATION_SIZE:]
             cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-            train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+            train_step = tf.train.AdagradOptimizer(LEARNING_RATE).minimize(cost)
             self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], train_step)
 
             # evaluate nn for convergence
@@ -843,18 +843,17 @@ def direction_test():
             print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
 
 def main():
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
+    with guerilla.Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-	t.set_bootstrap_params(num_bootstrap=1000)
+        t.set_bootstrap_params(num_bootstrap=488037)
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_td_endgames'],
-            training_time=5, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-        t.run(['load_and_resume'], training_time=28000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        t.run(['train_bootstrap'], training_time=None)
+        # t.run(['load_and_resume'], training_time=28000)
 
 
 if __name__ == '__main__':

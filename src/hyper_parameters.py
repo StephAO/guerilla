@@ -3,14 +3,16 @@ Hyper parameters, constants and definitions.
 """
 
 # TODO S: Add definitions and explanations in comments.
+# NOTE: VALIDATION SIZE must be a multiple of BATCH SIZE
+# NOTE: VALIDATION SIZE + BATCH SIZE < Number of fens provided
 
 NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
 NUM_EPOCHS = 25
-BATCH_SIZE = 100
+BATCH_SIZE = 1000
 NUM_HIDDEN = 1024
 LEARNING_RATE = 0.00000001
-VALIDATION_SIZE = 1000
-LOSS_THRESHOLD = 0.0001
+VALIDATION_SIZE = 10000
+LOSS_THRESHOLD = 0.00001
 
 NUM_CHANNELS = 6 * 2
 

@@ -35,10 +35,12 @@ class Teacher:
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
         self.start_time = None
         self.training_time = None
-        self.files = None
         self.actions = None
         self.curr_action_idx = None
         self.saved = None
+
+        # Bootstrap parameters
+        self.num_bootstrap = -1
 
         # TD-Leaf parameters
         self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
@@ -60,14 +62,13 @@ class Teacher:
 
     # ---------- RUNNING AND RESUMING METHODS
 
-    def run(self, actions, training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p"):
+    def run(self, actions, training_time=None):
         """ 
             1. load data from file
             2. configure data
             3. run actions
         """
 
-        self.files = [fens_filename, stockfish_filename]
         self.start_time = time.time()
         self.training_time = training_time
         self.actions = actions
@@ -100,10 +101,10 @@ class Teacher:
                 print "Performing Bootstrap training!"
                 print "Fetching stockfish values..."
 
-                fens = cgp.load_fens(fens_filename)
+                fens = cgp.load_fens(num_values=self.num_bootstrap)
                 if (len(fens) % BATCH_SIZE) != 0:
                     fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
-                true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
+                true_values = sf.load_stockfish_values(num_values=len(fens))
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_endgames':
@@ -138,8 +139,6 @@ class Teacher:
                 filename[string]:
                     filename to save pickle to
         """
-        state['files'] = self.files
-
         state['curr_action_idx'] = self.curr_action_idx
         state['actions'] = self.actions
 
@@ -189,7 +188,6 @@ class Teacher:
         self.sts_mode = state['sts_mode']
         self.sts_depth = state['std_depth']
 
-        self.files = state['files']
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
         # TODO this will called shortly after already loading weight values, can we remove the unecessary work
@@ -216,11 +214,11 @@ class Teacher:
         if action == 'train_bootstrap':
             print "Resuming Bootstrap training..."
 
-            fens = cgp.load_fens(self.files[0])
+            fens = cgp.load_fens(num_values=self.num_bootstrap)
             if (len(fens) % BATCH_SIZE) != 0:
                 fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
 
-            true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
+            true_values = sf.load_stockfish_values(num_values=len(fens))
             # finish epoch
             train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
             valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
@@ -228,7 +226,7 @@ class Teacher:
             train_values = true_values[:(-1) * VALIDATION_SIZE]
             valid_values = true_values[(-1) * VALIDATION_SIZE:]
             cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-            train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+            train_step = tf.train.AdagradOptimizer(LEARNING_RATE).minimize(cost)
             self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], train_step)
 
             # evaluate nn for convergence
@@ -271,6 +269,9 @@ class Teacher:
         return self.training_time is not None and time.time() - self.start_time >= self.training_time
 
     # ---------- BOOTSTRAP TRAINING METHODS
+
+    def set_bootstrap_params(self, num_bootstrap=None):
+        self.num_bootstrap = num_bootstrap
 
     def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
         """
@@ -632,7 +633,7 @@ class Teacher:
         file and then applying a random legal move to the board.
         """
 
-        fens = cgp.load_fens(self.files[0])
+        fens = cgp.load_fens(self.sp_num)
 
         if game_indices is None:
             game_indices = np.random.choice(len(fens), self.sp_num)
@@ -860,19 +861,17 @@ def direction_test():
 
 
 def main():
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
-        g.search.max_depth = 0
-        # print Teacher.eval_sts(g)
+    with guerilla.Guerilla('Harambe', 'w') as g:
+        g.search.max_depth = 1
         t = Teacher(g)
-        t.set_td_params(num_end=5, num_full=1000, randomize=False, end_length=10, full_length=12)
+        t.set_bootstrap_params(num_bootstrap=488037)
+        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
-        t.sts_on = True
-        t.sts_interval = 2
-        t.sts_depth = 1
+        t.sts_on = False
+        t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_td_full'],
-            training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-        # t.run(['load_and_resume'], training_time=28000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        t.run(['train_bootstrap'], training_time=None)
+        # t.run(['load_and_resume'], training_time=28000)
 
 
 if __name__ == '__main__':

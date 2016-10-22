@@ -160,7 +160,7 @@ class NeuralNet:
 
     def close_session(self):
         """ Closes tensorflow session"""
-        assert self.sess is not None
+        assert self.sess is not None # M: Not sure if this should be an assert
 
         self.sess.close()
         print "Tensorflow session closed."
@@ -368,7 +368,6 @@ class NeuralNet:
              Output:
                  Score between 0 and 1. Represents probability of White (current player) winning.
         """
-
         if dh.black_is_next(fen):
             raise ValueError("Invalid evaluate input, white must be next to play.")
 

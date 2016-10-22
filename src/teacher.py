@@ -56,6 +56,7 @@ class Teacher:
         self.sts_on = False  # Whether STS evaluation occurs during training
         self.sts_interval = 50  # Interval at which STS evaluation occurs, unit is number of games
         self.sts_mode = "strategy"  # STS mode for evaluation
+        self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
     # ---------- RUNNING AND RESUMING METHODS
 
@@ -154,6 +155,7 @@ class Teacher:
         state['sts_on'] = self.sts_on
         state['sts_interval'] = self.sts_interval
         state['sts_mode'] = self.sts_mode
+        state['sts_depth'] = self.sts_depth
 
         pickle_path = self.dir_path + '/../pickles/' + filename
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
@@ -185,6 +187,7 @@ class Teacher:
         self.sts_on = state['sts_on']
         self.sts_interval = state['sts_interval']
         self.sts_mode = state['sts_mode']
+        self.sts_depth = state['std_depth']
 
         self.files = state['files']
         self.curr_action_idx = state['curr_action_idx']
@@ -523,7 +526,11 @@ class Teacher:
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                original_depth = self.guerilla.search.max_depth
+                self.guerilla.search.max_depth = self.sts_depth
                 sts_scores.append(Teacher.eval_sts(self.guerilla, mode=self.sts_mode)[0])
+                self.guerilla.search.max_depth = original_depth
+                print "STS Result: %s" % str(sts_scores[-1])
 
             # Check if out of time
             if self.out_of_time() and i != (len(game_indices) - 1):
@@ -584,6 +591,7 @@ class Teacher:
             for j in range(t, num_boards - 1):
                 # Calculate temporal difference
                 dt = game_info[j + 1]['value'] - game_info[j]['value']
+                # print dt
                 # Add to sum
                 td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
@@ -669,7 +677,11 @@ class Teacher:
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                original_depth = self.guerilla.search.max_depth
+                self.guerilla.search.max_depth = self.sts_depth
                 sts_scores.append(Teacher.eval_sts(self.guerilla, mode=self.sts_mode)[0])
+                self.guerilla.search.max_depth = original_depth
+                print "STS Result: %s" % str(sts_scores[-1])
 
             # Check if out of time
             if self.out_of_time() and i != (len(game_indices) - 1):
@@ -807,17 +819,25 @@ class Teacher:
     def print_sts(self, scores):
         """ Prints the STS scores and corresponding intervals. """
 
+        if len(scores[0]) == 1:
+            score_out = [score[0] for score in scores]
+        else:
+            score_out = scores
+
         print "Intervals: " + ",".join(map(str, [(x + 1)*self.sts_interval for x in range(len(scores))]))
-        print "Scores: " + ",".join(map(str, scores))
+        print "Scores: " + ",".join(map(str, score_out))
 
 
 def direction_test():
-    with guerilla.Guerilla('Harambe', 'w', _load_file='in_training_weight_values.p') as g:
-        g.search.max_depth = 2
+    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
+        g.search.max_depth = 0
         t = Teacher(g)
         board = chess.Board()
 
-        num_fen = 6
+        # num_vars
+        num_fen = 2
+        num_td = 100
+
         # Build fens
         fens = [None]*num_fen
         for i in range(num_fen):
@@ -825,34 +845,34 @@ def direction_test():
             board.push(list(board.legal_moves)[0])
 
         # print initial evaluations
-        for i in range(num_fen/2):
-            #print fens[2*i]
-            #print fens[2*i + 1]
-            print g.nn.evaluate(fens[2*i])
-            print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
+        for i in range(num_td):
+            curr_vals = []
+            for j in range(num_fen/2):
+                curr_vals.append(g.nn.evaluate(fens[2*j]))
+                curr_vals.append(1 - g.nn.evaluate(dh.flip_board(fens[2*j+1])))
 
-        # run td leaf
-        # t.set_td_params(end_length=2)
-        t.td_leaf(fens)
-        print "------------"
+            a = curr_vals[0]
+            b = curr_vals[1]
+            print "%d,%f,%f,%f" % (i, a, b, abs(b - a))
 
-        # print initial evaluations
-        for i in range(num_fen/2):
-            print g.nn.evaluate(fens[2*i])
-            print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
+            # run td leaf
+            t.td_leaf(fens)
+
 
 def main():
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
-        g.search.max_depth = 1
+    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
+        g.search.max_depth = 0
+        # print Teacher.eval_sts(g)
         t = Teacher(g)
-        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
+        t.set_td_params(num_end=5, num_full=1000, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
-        t.sts_on = False
-        t.sts_interval = 100
+        t.sts_on = True
+        t.sts_interval = 2
+        t.sts_depth = 1
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_td_endgames'],
-            training_time=5, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-        t.run(['load_and_resume'], training_time=28000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        t.run(['train_td_full'],
+            training_time=None, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
+        # t.run(['load_and_resume'], training_time=28000, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
 
 
 if __name__ == '__main__':

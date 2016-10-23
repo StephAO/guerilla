@@ -305,7 +305,7 @@ class Teacher:
         # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
         # Using squared error instead
         cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-        train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
+        train_step = tf.train.AdagradOptimizer(LEARNING_RATE).minimize(cost)
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
         for epoch in xrange(start_epoch, NUM_EPOCHS):
             print "Loss for epoch %d: %f" % (epoch + 1, loss[-1])
@@ -870,7 +870,7 @@ def main():
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_bootstrap'], training_time=None)
+        t.run(['train_bootstrap'], training_time=7200)
         # t.run(['load_and_resume'], training_time=28000)
 
 

@@ -225,9 +225,7 @@ class Teacher:
 
             train_values = true_values[:(-1) * VALIDATION_SIZE]
             valid_values = true_values[(-1) * VALIDATION_SIZE:]
-            cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-            train_step = tf.train.AdagradOptimizer(LEARNING_RATE).minimize(cost)
-            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], train_step)
+            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.nn.train_step)
 
             # evaluate nn for convergence
             state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
@@ -302,10 +300,6 @@ class Teacher:
         #    return
         print "Training data on %d positions. Will save weights to pickle" % num_boards
 
-        # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
-        # Using squared error instead
-        cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-        train_step = tf.train.AdagradOptimizer(LEARNING_RATE).minimize(cost)
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
         for epoch in xrange(start_epoch, NUM_EPOCHS):
             print "Loss for epoch %d: %f" % (epoch + 1, loss[-1])
@@ -314,7 +308,7 @@ class Teacher:
             random.shuffle(game_indices)
 
             # update weights
-            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, train_step)
+            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, self.nn.train_step)
 
             # save state if timeout
             if save[0]:

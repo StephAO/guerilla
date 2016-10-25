@@ -136,6 +136,12 @@ class NeuralNet:
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
 
+        # Define training operators and variables
+        # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
+        # Using squared error instead
+        cost = tf.reduce_sum(tf.pow(tf.sub(self.pred_value, self.true_value), 2))
+        self.train_step = tf.train.AdagradOptimizer(LEARNING_RATE).minimize(cost)
+
     def init_graph(self):
         """
         Initializes the weights and assignment ops of the neural net, either from a file or a truncated Gaussian.

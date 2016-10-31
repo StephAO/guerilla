@@ -25,6 +25,7 @@ class Teacher:
         'load_and_resume',
         'train_selfplay'
     ]
+
     def __init__(self, _guerilla):
 
         # dictionary of different training/evaluation methods
@@ -767,8 +768,8 @@ class Teacher:
             print_perc = 5  # percent to print at
             for i, epd in enumerate(epds):
                 # Print info
-                if (i % (length/(100.0/print_perc)) - 100.0/length) < 0:
-                    print "%d%% " % (i/(length/100.0)),
+                if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
+                    print "%d%% " % (i / (length / 100.0)),
 
                 # Set epd
                 ops = board.set_epd(epd)
@@ -828,7 +829,7 @@ class Teacher:
         else:
             score_out = scores
 
-        print "Intervals: " + ",".join(map(str, [(x + 1)*self.sts_interval for x in range(len(scores))]))
+        print "Intervals: " + ",".join(map(str, [(x + 1) * self.sts_interval for x in range(len(scores))]))
         print "Scores: " + ",".join(map(str, score_out))
 
 
@@ -843,7 +844,7 @@ def direction_test():
         num_td = 100
 
         # Build fens
-        fens = [None]*num_fen
+        fens = [None] * num_fen
         for i in range(num_fen):
             fens[i] = board.fen()
             board.push(list(board.legal_moves)[0])
@@ -851,9 +852,9 @@ def direction_test():
         # print initial evaluations
         for i in range(num_td):
             curr_vals = []
-            for j in range(num_fen/2):
-                curr_vals.append(g.nn.evaluate(fens[2*j]))
-                curr_vals.append(1 - g.nn.evaluate(dh.flip_board(fens[2*j+1])))
+            for j in range(num_fen / 2):
+                curr_vals.append(g.nn.evaluate(fens[2 * j]))
+                curr_vals.append(1 - g.nn.evaluate(dh.flip_board(fens[2 * j + 1])))
 
             a = curr_vals[0]
             b = curr_vals[1]
@@ -867,7 +868,7 @@ def main():
     with guerilla.Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=488037) #488037
+        t.set_bootstrap_params(num_bootstrap=488037)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False

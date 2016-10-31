@@ -27,6 +27,7 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 class NeuralNet:
     training_modes = ['adagrad', 'gradient_descent']
+
     def __init__(self, load_file=None, training_mode="adagrad"):
         """
             Initializes neural net. Generates session, placeholders, variables,
@@ -153,7 +154,8 @@ class NeuralNet:
         elif self.training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE)
         self.train_step = self.train_optimizer.minimize(self.cost)
-        self.train_saver = tf.train.Saver(var_list=self.get_training_vars())
+        self.train_saver = tf.train.Saver(
+            var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 
     def init_graph(self):
         """
@@ -179,7 +181,7 @@ class NeuralNet:
 
     def close_session(self):
         """ Closes tensorflow session"""
-        assert self.sess is not None # M: Not sure if this should be an assert
+        assert self.sess is not None  # M: Not sure if this should be an assert
 
         self.sess.close()
         print "Tensorflow session closed."
@@ -224,7 +226,7 @@ class NeuralNet:
         if self.training_mode == 'adagrad':
             var_dict = dict()
             vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            slot_names = self.train_optimizer.get_slot_names() # Result should just be accumulator
+            slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
             for name in slot_names:
                 for var in vars:
                     val = self.train_optimizer.get_slot(var, name)
@@ -247,7 +249,7 @@ class NeuralNet:
         """
         filename = None
         if self.training_mode == 'adagrad':
-            filename =  self.train_saver.save(self.sess, path)
+            filename = self.train_saver.save(self.sess, path)
         elif self.training_mode == 'gradient_descent':
             pass
         else:
@@ -270,7 +272,7 @@ class NeuralNet:
         else:
             raise ValueError("Training variable saving for this mode has not yet been implemented.")
 
-        print "Loaded training vars from %s " % (filename)
+        print "Loaded training vars from %s " % filename
 
     def load_weight_values(self, _filename='weight_values.p'):
         """

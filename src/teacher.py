@@ -18,17 +18,16 @@ from hyper_parameters import *
 
 
 class Teacher:
+    actions_dict = [
+        'train_bootstrap',
+        'train_td_endgames',
+        'train_td_full',
+        'load_and_resume',
+        'train_selfplay'
+    ]
     def __init__(self, _guerilla):
 
         # dictionary of different training/evaluation methods
-        # TODO: Shouldn't this be a static class variable?
-        self.actions_dict = [
-            'train_bootstrap',
-            'train_td_endgames',
-            'train_td_full',
-            'load_and_resume',
-            'train_selfplay'
-        ]
 
         self.guerilla = _guerilla
         self.nn = _guerilla.nn
@@ -156,6 +155,12 @@ class Teacher:
         state['sts_mode'] = self.sts_mode
         state['sts_depth'] = self.sts_depth
 
+        # Save training variables
+        train_var_path = self.dir_path + '/../pickles/train_vars/in_training_vars.vars'
+        train_var_file = self.nn.save_training_vars(train_var_path)
+        if train_var_file:
+            state['train_var_file'] = train_var_file
+
         pickle_path = self.dir_path + '/../pickles/' + filename
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
@@ -186,7 +191,11 @@ class Teacher:
         self.sts_on = state['sts_on']
         self.sts_interval = state['sts_interval']
         self.sts_mode = state['sts_mode']
-        self.sts_depth = state['std_depth']
+        self.sts_depth = state['sts_depth']
+
+        # Load training variables
+        if 'train_var_file' in state:
+            self.nn.load_training_vars(state['train_var_file'])
 
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
@@ -319,7 +328,7 @@ class Teacher:
 
             # evaluate nn for convergence
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-            print "%d: %f" % (epoch + 1, loss[-1])
+            # print "%d: %f" % (epoch + 1, loss[-1])
             if len(loss) > 2:
                 base_loss = loss[0] - loss[1]
                 curr_loss = loss[-2] - loss[-1]
@@ -858,13 +867,13 @@ def main():
     with guerilla.Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=488037)
+        t.set_bootstrap_params(num_bootstrap=488037) #488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_bootstrap'], training_time=7200)
+        t.run(['train_bootstrap'], training_time=36000)
         # t.run(['load_and_resume'], training_time=28000)
 
 

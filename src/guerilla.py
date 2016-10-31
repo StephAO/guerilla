@@ -5,9 +5,9 @@ import search
 
 class Guerilla(player.Player):
 
-    def __init__(self, name, colour=None, _load_file=None):
+    def __init__(self, name, colour=None, load_file=None):
         super(Guerilla, self).__init__(name, colour)
-        self.nn = neural_net.NeuralNet(load_file=_load_file)
+        self.nn = neural_net.NeuralNet(load_file=load_file)
         self.search = search.Search(self.nn.evaluate)
 
     def __enter__(self):

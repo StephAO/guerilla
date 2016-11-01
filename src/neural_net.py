@@ -146,9 +146,11 @@ class NeuralNet:
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
 
         # Define training operators and variables
-        # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
-        # Using squared error instead
-        self.cost = tf.reduce_sum(tf.pow(tf.sub(self.pred_value, self.true_value), 2))
+        # Using MAE since value difference will always be 0 <= x <= 1, don't want the sublinear error when using MSE
+        #   Note: Ensures that both inputs are the same shape
+        self.cost = tf.reduce_sum(tf.abs(tf.sub(
+            tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value)))
+
         if self.training_mode == 'adagrad':
             self.train_optimizer = tf.train.AdagradOptimizer(LEARNING_RATE)
         elif self.training_mode == 'gradient_descent':

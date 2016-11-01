@@ -390,11 +390,6 @@ class Teacher:
                     Expected output for each chess board state (between 0 and 1)
         """
 
-        # Create tensors
-        pred_value = tf.reshape(self.nn.pred_value, [-1])  # NOWDO: define once with a placeholder
-        err = tf.sub(self.nn.true_value, pred_value)  # NOWDO: define once with a placeholder
-        err_sum = tf.reduce_sum(err)  # NOWDO: define once with a placeholder
-
         # Configure data
         boards = np.zeros((VALIDATION_SIZE, 8, 8, NUM_CHANNELS))
         diagonals = np.zeros((VALIDATION_SIZE, 10, 8, NUM_CHANNELS))
@@ -403,13 +398,13 @@ class Teacher:
             diagonals[i] = dh.get_diagonals(boards[i])
 
         # Get loss
-        error = self.nn.sess.run([err_sum], feed_dict={
+        error = self.nn.sess.run(self.nn.cost, feed_dict={
             self.nn.data: boards,
             self.nn.data_diags: diagonals,
             self.nn.true_value: true_values
         })
 
-        return abs(error[0])
+        return abs(error)
 
     # ---------- TD-LEAF TRAINING METHODS
 
@@ -874,7 +869,7 @@ def main():
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_bootstrap'], training_time=36000)
+        t.run(['train_bootstrap'], training_time=32400)
         # t.run(['load_and_resume'], training_time=28000)
 
 

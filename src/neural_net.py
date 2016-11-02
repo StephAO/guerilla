@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.framework import ops
 import numpy as np
 import pickle
 import os
@@ -25,7 +26,9 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 
 class NeuralNet:
-    def __init__(self, load_file=None):
+    training_modes = ['adagrad', 'gradient_descent']
+
+    def __init__(self, load_file=None, training_mode="adagrad"):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -33,10 +36,16 @@ class NeuralNet:
                 load_weights [Bool]:
                     If true, the neural net will load weights saved from a file
                     instead of initializing them from a normal distribution.
+                training_mode [String]
+                    Training mode to be used. Defaults to Adagrad.
         """
         self.dir_path = os.path.dirname(__file__)
 
         self.load_file = load_file
+
+        if training_mode not in NeuralNet.training_modes:
+            raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
+        self.training_mode = training_mode
 
         # declare layer variables
         self.sess = None
@@ -136,6 +145,20 @@ class NeuralNet:
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
 
+        # Define training operators and variables
+        # Using MAE since value difference will always be 0 <= x <= 1, don't want the sublinear error when using MSE
+        #   Note: Ensures that both inputs are the same shape
+        self.cost = tf.reduce_sum(tf.abs(tf.sub(
+            tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value)))
+
+        if self.training_mode == 'adagrad':
+            self.train_optimizer = tf.train.AdagradOptimizer(LEARNING_RATE)
+        elif self.training_mode == 'gradient_descent':
+            self.train_optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE)
+        self.train_step = self.train_optimizer.minimize(self.cost)
+        self.train_saver = tf.train.Saver(
+            var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
+
     def init_graph(self):
         """
         Initializes the weights and assignment ops of the neural net, either from a file or a truncated Gaussian.
@@ -160,7 +183,7 @@ class NeuralNet:
 
     def close_session(self):
         """ Closes tensorflow session"""
-        assert self.sess is not None
+        assert self.sess is not None  # M: Not sure if this should be an assert
 
         self.sess.close()
         print "Tensorflow session closed."
@@ -193,6 +216,65 @@ class NeuralNet:
         # Output layer
         self.W_final = weight_variable([NUM_HIDDEN, 1])
         self.b_final = bias_variable([1])
+
+    def get_training_vars(self):
+        """
+        Returns the training variables associated with the current training mode.
+        Returns None if there are no associated variables.
+        Output:
+            var_dict [Dict] or [None]:
+                Dictionary of variables.
+        """
+        if self.training_mode == 'adagrad':
+            var_dict = dict()
+            vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
+            for name in slot_names:
+                for var in vars:
+                    val = self.train_optimizer.get_slot(var, name)
+                    if val:
+                        var_dict[var.name] = val
+            return var_dict
+        elif self.training_mode == 'gradient_descent':
+            return None
+
+    def save_training_vars(self, path):
+        """
+        Saves the training variables associated with the current training mode to a file in path.
+        Returns the file name.
+        Input:
+            path [String]
+                Path specifying where the variables should be saved.
+        Ouput:
+            filename [String]
+                Filename specifying where the training variables were saved.
+        """
+        filename = None
+        if self.training_mode == 'adagrad':
+            filename = self.train_saver.save(self.sess, path)
+        elif self.training_mode == 'gradient_descent':
+            pass
+        else:
+            raise ValueError("Training variable saving for this mode has not yet been implemented.")
+
+        print "Saved training vars to %s" % filename
+        return filename
+
+    def load_training_vars(self, filename):
+        """
+        Loads the training variable associated with the current training mode.
+        Input:
+            filename [String]
+                Filename where training variables are stored.
+        """
+        if self.training_mode == 'adagrad':
+            self.train_saver.restore(self.sess, filename)
+        elif self.training_mode == 'gradient_descent':
+            pass
+        else:
+            raise ValueError("Training variable saving for this mode has not yet been implemented.")
+
+        print "Loaded training vars from %s " % filename
 
     def load_weight_values(self, _filename='weight_values.p'):
         """
@@ -368,7 +450,6 @@ class NeuralNet:
              Output:
                  Score between 0 and 1. Represents probability of White (current player) winning.
         """
-
         if dh.black_is_next(fen):
             raise ValueError("Invalid evaluate input, white must be next to play.")
 

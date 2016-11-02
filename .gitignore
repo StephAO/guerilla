@@ -1,5 +1,9 @@
+# Text files
+*.txt
+
 # Chess data files
 *.pgn
+*.nsv
 
 # Pickle files
 *.p

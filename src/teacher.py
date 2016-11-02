@@ -19,27 +19,29 @@ from hyper_parameters import *
 
 
 class Teacher:
+    actions_dict = [
+        'train_bootstrap',
+        'train_td_endgames',
+        'train_td_full',
+        'load_and_resume',
+        'train_selfplay'
+    ]
+
     def __init__(self, _guerilla):
 
         # dictionary of different training/evaluation methods
-        # TODO: Shouldn't this be a static class variable?
-        self.actions_dict = [
-            'train_bootstrap',
-            'train_td_endgames',
-            'train_td_full',
-            'load_and_resume',
-            'train_selfplay'
-        ]
 
         self.guerilla = _guerilla
         self.nn = _guerilla.nn
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
         self.start_time = None
         self.training_time = None
-        self.files = None
         self.actions = None
         self.curr_action_idx = None
         self.saved = None
+
+        # Bootstrap parameters
+        self.num_bootstrap = -1
 
         # TD-Leaf parameters
         self.td_pgn_folder = self.dir_path + '/../helpers/pgn_files/single_game_pgns'
@@ -53,28 +55,38 @@ class Teacher:
         self.sp_num = 1  # The number of games to play against itself
         self.sp_length = 12  # How many moves are included in game playing
 
+        # STS Evaluation Parameters
+        self.sts_on = False  # Whether STS evaluation occurs during training
+        self.sts_interval = 50  # Interval at which STS evaluation occurs, unit is number of games
+        self.sts_mode = "strategy"  # STS mode for evaluation
+        self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
+
     # ---------- RUNNING AND RESUMING METHODS
 
-    def run(self, actions, training_time=None, fens_filename="fens.p", stockfish_filename="sf_scores.p"):
+    def run(self, actions, training_time=None):
         """ 
             1. load data from file
             2. configure data
             3. run actions
         """
 
-        self.files = [fens_filename, stockfish_filename]
         self.start_time = time.time()
         self.training_time = training_time
         self.actions = actions
         self.curr_action_idx = 0  # This value gets modified if resuming
         self.saved = False
-        self.num_bootstrap_games = 1000
 
         if self.actions[0] == 'load_and_resume':
             self.resume(training_time)
 
         # Note: This cannot be a for loop as self.curr_action_idx gets set to non-zero when resuming.
         while True:
+            # Save new weight values if necessary
+            if not self.saved and self.curr_action_idx > 0:
+                weight_file = "weights_" + self.actions[self.curr_action_idx - 1] \
+                              + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
+                self.nn.save_weight_values(_filename=weight_file)
+
             # Check if done
             if self.curr_action_idx >= len(self.actions):
                 break
@@ -90,18 +102,18 @@ class Teacher:
                 print "Performing Bootstrap training!"
                 print "Fetching stockfish values..."
 
-                fens = cgp.load_fens(fens_filename)
+                fens = cgp.load_fens(num_values=self.num_bootstrap)
                 if (len(fens) % BATCH_SIZE) != 0:
                     fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
-                true_values = sf.load_stockfish_values(stockfish_filename)[:len(fens)]
+                true_values = sf.load_stockfish_values(num_values=len(fens))
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_endgames':
                 print "Performing endgame TD-Leaf training!"
-                self.train_td(True, self.num_bootstrap_games)
+                self.train_td(True)
             elif action == 'train_td_full':
                 print "Performing full-game TD-Leaf training!"
-                self.train_td(False, self.num_bootstrap_games + self.td_num_endgame)
+                self.train_td(False)
             elif action == 'train_selfplay':
                 print "Performing self-play training!"
                 self.train_selfplay()
@@ -111,13 +123,6 @@ class Teacher:
                 raise NotImplementedError("Error: %s is not a valid action." % action)
 
             self.curr_action_idx += 1
-
-            # Save new weight values
-
-            if not self.saved:
-                weight_file = "weights_" + action + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
-                self.nn.save_weight_values(_filename=weight_file)
-                print "Weights saved to %s" % weight_file
 
     def save_state(self, state, filename="state.p"):
         """
@@ -135,8 +140,6 @@ class Teacher:
                 filename[string]:
                     filename to save pickle to
         """
-        state['files'] = self.files
-
         state['curr_action_idx'] = self.curr_action_idx
         state['actions'] = self.actions
 
@@ -147,6 +150,18 @@ class Teacher:
                                   'end_length': self.td_end_length,
                                   'full_length': self.td_full_length}
         state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
+
+        # Save STS evaluation parameters
+        state['sts_on'] = self.sts_on
+        state['sts_interval'] = self.sts_interval
+        state['sts_mode'] = self.sts_mode
+        state['sts_depth'] = self.sts_depth
+
+        # Save training variables
+        train_var_path = self.dir_path + '/../pickles/train_vars/in_training_vars.vars'
+        train_var_file = self.nn.save_training_vars(train_var_path)
+        if train_var_file:
+            state['train_var_file'] = train_var_file
 
         pickle_path = self.dir_path + '/../pickles/' + filename
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
@@ -174,11 +189,21 @@ class Teacher:
         self.set_td_params(**state.pop('td_leaf_param'))
         self.set_sp_params(**state.pop('sp_param'))
 
-        self.files = state['files']
+        # Load STS evaluation parameters
+        self.sts_on = state['sts_on']
+        self.sts_interval = state['sts_interval']
+        self.sts_mode = state['sts_mode']
+        self.sts_depth = state['sts_depth']
+
+        # Load training variables
+        if 'train_var_file' in state:
+            self.nn.load_training_vars(state['train_var_file'])
+
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
         # TODO this will called shortly after already loading weight values, can we remove the unecessary work
         self.nn.load_weight_values(_filename='in_training_weight_values.p')
+
         return state
 
     def resume(self, training_time=None):
@@ -200,20 +225,18 @@ class Teacher:
         if action == 'train_bootstrap':
             print "Resuming Bootstrap training..."
 
-            fens = cgp.load_fens(self.files[0])
+            fens = cgp.load_fens(num_values=self.num_bootstrap)
             if (len(fens) % BATCH_SIZE) != 0:
                 fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
 
-            true_values = sf.load_stockfish_values(self.files[1])[:len(fens)]
+            true_values = sf.load_stockfish_values(num_values=len(fens))
             # finish epoch
             train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
             valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
 
             train_values = true_values[:(-1) * VALIDATION_SIZE]
             valid_values = true_values[(-1) * VALIDATION_SIZE:]
-            cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-            train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
-            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], train_step)
+            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.nn.train_step)
 
             # evaluate nn for convergence
             state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
@@ -228,13 +251,16 @@ class Teacher:
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
         elif action == 'train_td_endgames':
             print "Resuming endgame TD-Leaf training..."
-            self.train_td(True, self.num_bootstrap_games, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'],
+                          sts_scores=state['sts_scores'])
         elif action == 'train_td_full':
             print "Resuming full-game TD-Leaf training..."
-            self.train_td(False, self.num_bootstrap_games + self.td_num_endgame, game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_td(False, game_indices=state['game_indices'], start_idx=state['start_idx'],
+                          sts_scores=state['sts_scores'])
         elif action == 'train_selfplay':
             print "Resuming self-play training..."
-            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'])
+            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
+                                sts_scores=state['sts_scores'])
         elif action == 'load_and_resume':
             raise ValueError("Error: It's trying to resume on a resume call - This shouldn't happen.")
         else:
@@ -252,6 +278,9 @@ class Teacher:
         return self.training_time is not None and time.time() - self.start_time >= self.training_time
 
     # ---------- BOOTSTRAP TRAINING METHODS
+
+    def set_bootstrap_params(self, num_bootstrap=None):
+        self.num_bootstrap = num_bootstrap
 
     def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
         """
@@ -282,10 +311,6 @@ class Teacher:
         #    return
         print "Training data on %d positions. Will save weights to pickle" % num_boards
 
-        # From my limited understanding x_entropy is not suitable - but if im wrong it could be better
-        # Using squared error instead
-        cost = tf.reduce_sum(tf.pow(tf.sub(self.nn.pred_value, self.nn.true_value), 2))
-        train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cost)
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
         for epoch in xrange(start_epoch, NUM_EPOCHS):
             print "Loss for epoch %d: %f" % (epoch + 1, loss[-1])
@@ -294,7 +319,7 @@ class Teacher:
             random.shuffle(game_indices)
 
             # update weights
-            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, train_step)
+            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, self.nn.train_step)
 
             # save state if timeout
             if save[0]:
@@ -305,7 +330,7 @@ class Teacher:
 
             # evaluate nn for convergence
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-            print "%d: %f" % (epoch + 1, loss[-1])
+            # print "%d: %f" % (epoch + 1, loss[-1])
             if len(loss) > 2:
                 base_loss = loss[0] - loss[1]
                 curr_loss = loss[-2] - loss[-1]
@@ -366,11 +391,6 @@ class Teacher:
                     Expected output for each chess board state (between 0 and 1)
         """
 
-        # Create tensors
-        pred_value = tf.reshape(self.nn.pred_value, [-1])  # NOWDO: define once with a placeholder
-        err = tf.sub(self.nn.true_value, pred_value)  # NOWDO: define once with a placeholder
-        err_sum = tf.reduce_sum(err)  # NOWDO: define once with a placeholder
-
         # Configure data
         boards = np.zeros((VALIDATION_SIZE, 8, 8, NUM_CHANNELS))
         diagonals = np.zeros((VALIDATION_SIZE, 10, 8, NUM_CHANNELS))
@@ -379,13 +399,13 @@ class Teacher:
             diagonals[i] = dh.get_diagonals(boards[i])
 
         # Get loss
-        error = self.nn.sess.run([err_sum], feed_dict={
+        error = self.nn.sess.run(self.nn.cost, feed_dict={
             self.nn.data: boards,
             self.nn.data_diags: diagonals,
             self.nn.true_value: true_values
         })
 
-        return abs(error[0])
+        return abs(error)
 
     # ---------- TD-LEAF TRAINING METHODS
 
@@ -423,7 +443,7 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def train_td(self, endgame, game_indices=None, start_idx=0):
+    def train_td(self, endgame, game_indices=None, start_idx=0, sts_scores=None):
         """
         Trains the neural net using TD-Leaf.
             Inputs:
@@ -454,10 +474,13 @@ class Teacher:
             if self.td_rand_file:
                 random.shuffle(game_indices)
 
+        # Initialize STS scores if necessary
+        if sts_scores is None and self.sts_on:
+            sts_scores = []
+
         for i in xrange(start_idx, len(game_indices)):
 
             game_idx = game_indices[i]
-            print "Training on game %d of %d..." % (i + 1, num_games)
             fens = []
 
             # Open and use pgn file sequentially or at random
@@ -499,15 +522,28 @@ class Teacher:
                             print "Warning: This shouldn't happen!"
 
             # Call TD-Leaf
+            print "Training on game %d of %d..." % (i + 1, num_games)
             self.td_leaf(fens)
+
+            # Evaluate on STS if necessary
+            if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                original_depth = self.guerilla.search.max_depth
+                self.guerilla.search.max_depth = self.sts_depth
+                sts_scores.append(Teacher.eval_sts(self.guerilla, mode=self.sts_mode)[0])
+                self.guerilla.search.max_depth = original_depth
+                print "STS Result: %s" % str(sts_scores[-1])
 
             # Check if out of time
             if self.out_of_time() and i != (len(game_indices) - 1):
                 print "TD-Leaf " + ("endgame" if endgame else "fullgame") + " Timeout: Saving state and quitting."
                 save = {'game_indices': game_indices,
-                        'start_idx': i + 1}
+                        'start_idx': i + 1,
+                        'sts_scores': sts_scores}
                 self.save_state(save)
                 return
+
+        if self.sts_on:
+            self.print_sts(sts_scores)
 
         return
 
@@ -556,11 +592,12 @@ class Teacher:
             for j in xrange(t, num_boards - 1):
                 # Calculate temporal difference
                 dt = game_info[j + 1]['value'] - game_info[j]['value']
+                # print dt
                 # Add to sum
                 td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
             # Use gradient to update sum
-            if w_update is None: 
+            if not w_update:
                 w_update = [w * td_val for w in game_info[t]['gradient']]
             else:
                 # update each set of weights
@@ -569,9 +606,8 @@ class Teacher:
 
         # Update neural net weights.
         # old_weights = self.nn.get_weights(self.nn.all_weights)
-        self.nn.add_all_weights([TD_LRN_RATE * wu for wu in w_update])
+        self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
         # print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
-        # print "Weights updated."
 
     # ---------- SELF-PLAY TRAINING METHODS
 
@@ -590,19 +626,23 @@ class Teacher:
         if max_length:
             self.sp_length = max_length
 
-    def train_selfplay(self, game_indices=None, start_idx=0):
+    def train_selfplay(self, game_indices=None, start_idx=0, sts_scores=None):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against itself.
         Self-play is performed from a random board position. The random board position is found by loading from the fens
         file and then applying a random legal move to the board.
         """
 
-        fens = cgp.load_fens(self.files[0])
+        fens = cgp.load_fens(self.sp_num)
 
         if game_indices is None:
             game_indices = np.random.choice(len(fens), self.sp_num)
 
         max_len = float("inf") if self.sp_length == -1 else self.sp_length
+
+        # Initialize STS scores if necessary
+        if sts_scores is None and self.sts_on:
+            sts_scores = []
 
         for i in xrange(start_idx, len(game_indices)):
 
@@ -631,13 +671,25 @@ class Teacher:
             print "Training on game %d of %d..." % (i + 1, self.sp_num)
             self.td_leaf(game_fens)
 
+            # Evaluate on STS if necessary
+            if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                original_depth = self.guerilla.search.max_depth
+                self.guerilla.search.max_depth = self.sts_depth
+                sts_scores.append(Teacher.eval_sts(self.guerilla, mode=self.sts_mode)[0])
+                self.guerilla.search.max_depth = original_depth
+                print "STS Result: %s" % str(sts_scores[-1])
+
             # Check if out of time
             if self.out_of_time() and i != (len(game_indices) - 1):
                 print "TD-Leaf self-play Timeout: Saving state and quitting."
                 save = {'game_indices': game_indices,
-                        'start_idx': i + 1}
+                        'start_idx': i + 1,
+                        'sts_scores': sts_scores}
                 self.save_state(save)
                 return
+
+        if self.sts_on:
+            self.print_sts(sts_scores)
 
         return
 
@@ -647,11 +699,10 @@ class Teacher:
                        'center_control', 'knight_outposts', 'offer_of_simplification', 'open_files_and_diagonals',
                        'pawn_play_in_the_center', 'queens_and_rooks_to_the_7th_rank',
                        'recapturing', 'simplification', 'square_vacancy', 'undermining']
-    sts_piece_files = ['pawn','bishop','rook','knight','queen','king']
-
+    sts_piece_files = ['pawn', 'bishop', 'rook', 'knight', 'queen', 'king']
 
     @staticmethod
-    def eval_sts(player, mode = "strategy"):
+    def eval_sts(player, mode="strategy"):
         """
         Evaluates the given player using the strategic test suite. Returns a score and a maximum score.
             Inputs:
@@ -677,7 +728,7 @@ class Teacher:
             mode = [mode]
 
         # vars
-        dir = os.path.dirname(os.path.abspath(__file__)) + '/../helpers/STS/'
+        sts_dir = os.path.dirname(os.path.abspath(__file__)) + '/../helpers/STS/'
         board = chess.Board()
         scores = []
         max_scores = []
@@ -689,14 +740,14 @@ class Teacher:
             epds = []
             if test == 'strategy':
                 for filename in Teacher.sts_strat_files:
-                    epds += Teacher.get_epds(dir + filename + '.epd')
+                    epds += Teacher.get_epds(sts_dir + filename + '.epd')
             elif test == 'sts_piece_files':
                 for filename in Teacher.sts_piece_files:
-                    epds += Teacher.get_epds(dir + filename + '.epd')
+                    epds += Teacher.get_epds(sts_dir + filename + '.epd')
             else:
                 # Specific file
                 try:
-                    epds += Teacher.get_epds(dir + test + '.epd')
+                    epds += Teacher.get_epds(sts_dir + test + '.epd')
                 except IOError:
                     raise ValueError("Error %s is an invalid test mode." % test)
 
@@ -705,11 +756,11 @@ class Teacher:
             max_score = 0
             length = len(epds)
             print "STS: Scoring %s EPDS. Progress: " % length,
-            print_perc = 5 # percent to print at
+            print_perc = 5  # percent to print at
             for i, epd in enumerate(epds):
                 # Print info
-                if (i%(length/(100.0/print_perc)) - 100.0/length) <= 0:
-                    print "%d%% " % (i/(length/100.0)),
+                if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
+                    print "%d%% " % (i / (length / 100.0)),
 
                 # Set epd
                 ops = board.set_epd(epd)
@@ -755,54 +806,57 @@ class Teacher:
             epds [List of Strings]
                 List of epds.
         """
-        file = open(filename)
-        epds = [line.rstrip() for line in file]
-        file.close()
+        f = open(filename)
+        epds = [line.rstrip() for line in f]
+        f.close()
 
         return epds
 
+    def print_sts(self, scores):
+        """ Prints the STS scores and corresponding intervals. """
+
+        if len(scores[0]) == 1:
+            score_out = [score[0] for score in scores]
+        else:
+            score_out = scores
+
+        print "Intervals: " + ",".join(map(str, [(x + 1) * self.sts_interval for x in range(len(scores))]))
+        print "Scores: " + ",".join(map(str, score_out))
+
 
 def direction_test():
-    with guerilla.Guerilla('Harambe', 'w', _load_file='in_training_weight_values.p') as g:
-        g.search.max_depth = 2
+    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
+        g.search.max_depth = 0
         t = Teacher(g)
         board = chess.Board()
 
-        num_fen = 6
+        # num_vars
+        num_fen = 2
+        num_td = 100
+
         # Build fens
-        fens = [None]*num_fen
+        fens = [None] * num_fen
         for i in range(num_fen):
             fens[i] = board.fen()
             board.push(list(board.legal_moves)[0])
 
         # print initial evaluations
-        for i in range(num_fen/2):
-            #print fens[2*i]
-            #print fens[2*i + 1]
-            print g.nn.evaluate(fens[2*i])
-            print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
+        for i in range(num_td):
+            curr_vals = []
+            for j in range(num_fen / 2):
+                curr_vals.append(g.nn.evaluate(fens[2 * j]))
+                curr_vals.append(1 - g.nn.evaluate(dh.flip_board(fens[2 * j + 1])))
 
-        # run td leaf
-        # t.set_td_params(end_length=2)
-        t.td_leaf(fens)
-        print "------------"
+            a = curr_vals[0]
+            b = curr_vals[1]
+            print "%d,%f,%f,%f" % (i, a, b, abs(b - a))
 
-        # print initial evaluations
-        for i in range(num_fen/2):
-            print g.nn.evaluate(fens[2*i])
-            print g.nn.evaluate(dh.flip_board(fens[2*i+1]))
+            # run td leaf
+            t.td_leaf(fens)
+
 
 def main():
-
-	print "Bootstrap"
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
-        g.search.max_depth = 1
-        print Teacher.eval_sts(g)
-    print "Endgame"
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_td_endgames_20161006-065100.p') as g:
-        g.search.max_depth = 1
-        print Teacher.eval_sts(g)
-
+	
     run_time = 0
     if len(sys.argv) >= 2:
         hours = int(sys.argv[1])
@@ -819,14 +873,17 @@ def main():
     if run_time == 0:
         run_time = None
 
-    g = guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p')
-    g.search.max_depth = 2
-    t = Teacher(g)
-    t.set_td_params(num_end=1000, num_full=1000, randomize=False, end_length=10, full_length=12)
-    t.set_sp_params(num_selfplay=1000, max_length=12)
-    t.run(['train_td_endgames','train_td_full','train_selfplay'],
-          training_time=run_time, fens_filename="fens_1000.p", stockfish_filename="true_values_1000.p")
-    # t.run(['load_and_resume'], training_time=10000, fens_filename="fens.p", stockfish_filename="sf_scores.p")
+    with guerilla.Guerilla('Harambe', 'w') as g:
+        g.search.max_depth = 1
+        t = Teacher(g)
+        t.set_bootstrap_params(num_bootstrap=488037)  # 488037
+        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
+        t.set_sp_params(num_selfplay=10, max_length=12)
+        t.sts_on = False
+        t.sts_interval = 100
+        # t.sts_mode = Teacher.sts_strat_files[0]
+        t.run(['train_bootstrap'], training_time=run_time)
+        # t.run(['load_and_resume'], training_time=28000)
 
 
 if __name__ == '__main__':

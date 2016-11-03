@@ -1,16 +1,14 @@
 import os
 import random
 import numpy as np
-import tensorflow as tf
 import math
 import chess.pgn
 import chess
 import time
 import matplotlib.pyplot as plt
 import pickle
-from player import Player
+from players import Player, Guerilla
 
-import guerilla
 import data_handler as dh
 import stockfish_eval as sf
 import chess_game_parser as cgp
@@ -312,7 +310,7 @@ class Teacher:
 
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
         for epoch in xrange(start_epoch, NUM_EPOCHS):
-            print "Loss for epoch %d: %f" % (epoch + 1, loss[-1])
+            print "Loss for epoch %d: %f" % (epoch, loss[-1])
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
@@ -404,7 +402,7 @@ class Teacher:
             self.nn.true_value: true_values
         })
 
-        return abs(error)
+        return error
 
     # ---------- TD-LEAF TRAINING METHODS
 
@@ -829,7 +827,7 @@ class Teacher:
 
 
 def direction_test():
-    with guerilla.Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
+    with Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
         g.search.max_depth = 0
         t = Teacher(g)
         board = chess.Board()
@@ -860,7 +858,8 @@ def direction_test():
 
 
 def main():
-    with guerilla.Guerilla('Harambe', 'w') as g:
+
+    with Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 1
         t = Teacher(g)
         t.set_bootstrap_params(num_bootstrap=488037)  # 488037
@@ -869,7 +868,7 @@ def main():
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_bootstrap'], training_time=32400)
+        t.run(['load_and_resume'], training_time=28800)
         # t.run(['load_and_resume'], training_time=28000)
 
 

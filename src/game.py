@@ -1,8 +1,7 @@
 import sys
 import chess
-import player
-import guerilla
-import human
+import chess.pgn
+from players import *
 import os
 import time
 
@@ -13,8 +12,10 @@ import ChessGUI
 
 class Game:
     player_types = {
-        'guerilla': guerilla.Guerilla,
-        'human': human.Human
+        'guerilla': Guerilla,
+        'human': Human,
+        'sunfish': Sunfish,
+        'stockfish': Stockfish
     }
 
     def __init__(self, players, num_games=1, use_gui=True):
@@ -24,7 +25,7 @@ class Game:
                 [player1, player2] [Class that derives Abstract Player Class]
         """
 
-        assert all(isinstance(p, player.Player) for p in players)
+        assert all(isinstance(p, Player) for p in players)
 
         # Initialize players
         self.player1 = players[0]
@@ -45,9 +46,9 @@ class Game:
         # Initialize gui
         if use_gui:
             self.gui = ChessGUI.ChessGUI()
-            if type(players[0]) is human.Human:
+            if type(players[0]) is Human:
                 self.player1.gui = self.gui
-            if type(players[1]) is human.Human:
+            if type(players[1]) is Human:
                 self.player2.gui = self.gui
 
     def swap_colours(self):
@@ -58,8 +59,8 @@ class Game:
             self.player1.colour = 'white'
             self.player2.colour = 'black'
         else:
-            raise ValueError('Error: one of the players has an invalid colour. ' + \
-                 'Player 1: %s, Player 2: %s' % (self.player1.colour, self.player2.colour))
+            raise ValueError('Error: one of the players has an invalid colour. ' +
+                             'Player 1: %s, Player 2: %s' % (self.player1.colour, self.player2.colour))
 
     def start(self):
         """ 
@@ -68,22 +69,27 @@ class Game:
         """
 
         for game in xrange(self.num_games):
+
             # Print info.
             print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game, self.player1.name,
-                                                                     type(self.player1).__name__,
-                                                                     self.player1.colour,
-                                                                     self.player2.name,
-                                                                     type(self.player2).__name__,
-                                                                     self.player2.colour)
+                                                               type(self.player1).__name__,
+                                                               self.player1.colour,
+                                                               self.player2.name,
+                                                               type(self.player2).__name__,
+                                                               self.player2.colour)
             if self.use_gui:
-                self.gui.print_msg("Game %d:" % (game))
-                self.gui.print_msg("%s [%s] (%s)" % (self.player1.name, 
-                                    type(self.player1).__name__, self.player1.colour))
+                self.gui.print_msg("Game %d:" % game)
+                self.gui.print_msg("%s [%s] (%s)" % (self.player1.name,
+                                                     type(self.player1).__name__, self.player1.colour))
                 self.gui.print_msg("VS:")
                 self.gui.print_msg("%s [%s] (%s)" % (self.player2.name,
-                                    type(self.player2).__name__, self.player2.colour))
+                                                     type(self.player2).__name__, self.player2.colour))
             # Reset board
             self.board.reset()
+
+            # Signal to players that a new game is being played.
+            self.player1.new_game()
+            self.player2.new_game()
 
             player1_turn = self.player1.colour == 'white'
 
@@ -101,7 +107,7 @@ class Game:
                     self.gui.draw(self.board)
                 else:
                     Game.pretty_print_board(self.board)
-                
+
                 # Get move
                 move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
                 game_pgn.add_main_variation(move)
@@ -113,7 +119,7 @@ class Game:
                         print "Error: Move is not legal"
                     move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
                 self.board.push(move)
-                print "%s played %s" %(self.player1.name if player1_turn else self.player2.name, move)
+                print "%s played %s" % (self.player1.name if player1_turn else self.player2.name, move)
 
                 # Switch sides
                 player1_turn = not player1_turn
@@ -121,7 +127,7 @@ class Game:
             if self.use_gui:
                 self.gui.end_of_game = True
                 self.gui.draw(self.board)
-                
+
             result = self.board.result(claim_draw=True)
             if result == '1-0':
                 self.data['wins'][0] += 1
@@ -141,8 +147,8 @@ class Game:
 
             game_pgn = game_pgn.root()
             game_pgn.headers["Result"] = result
-            with open(dir_path + "/../played_games/" + self.player1.name + '_' + \
-                      self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
+            with open(dir_path + "/../played_games/" + self.player1.name + '_' +
+                        self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
                 pgn.write(str(game_pgn))
 
             if self.use_gui:
@@ -184,14 +190,14 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[1] = guerilla.Guerilla('Harambe (bootstrap)', _load_file='weights_train_bootstrap_20160930-193556.p')
-        players[0] = guerilla.Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
+        # players[1] = Guerilla('Harambe (bootstrap)', _load_file='weights_train_bootstrap_20160930-193556.p')
+        # players[0] = Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
 
-        # players[0] = human.Human("A")
-        # players[1] = human.Human("B")
+        players[0] = Sunfish("Sun")
+        players[1] = Stockfish("Stock")
 
-        players[1].search.max_depth = 3
-        players[0].search.max_depth = 3
+        # players[1].search.max_depth = 3
+        # players[0].search.max_depth = 3
 
 
     elif choose_players == 'c':
@@ -200,25 +206,27 @@ def main():
             player_name = raw_input("Player %d name: " % (i))
             player_type = raw_input("Player %d type %s : " % (i, Game.player_types.keys()))
             if player_type == 'guerilla':
-                weight_file = raw_input("Load_file or (d) for default. (File must be located in the pickles directory):\n")
-                players[i] = guerilla.Guerilla(player_name, _load_file=(weight_file if weight_file!='d' else None))
+                weight_file = raw_input(
+                    "Load_file or (d) for default. (File must be located in the pickles directory):\n")
+                players[i] = Guerilla(player_name, load_file=(weight_file if weight_file != 'd' else None))
             elif player_type == 'human':
-                players[i] = human.Human(player_name)
+                players[i] = Human(player_name)
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
     game = Game(players, num_games=5)
-    if isinstance(players[0], guerilla.Guerilla) and isinstance(players[1], guerilla.Guerilla):
+    if isinstance(players[0], Guerilla) and isinstance(players[1], Guerilla):
         with players[0], players[1]:
             game.start()
-    elif isinstance(players[0], guerilla.Guerilla):
+    elif isinstance(players[0], Guerilla):
         with players[0]:
             game.start()
-    elif isinstance(players[1], guerilla.Guerilla):
+    elif isinstance(players[1], Guerilla):
         with players[1]:
             game.start()
     else:
         game.start()
+
 
 if __name__ == '__main__':
     main()

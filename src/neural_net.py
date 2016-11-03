@@ -440,7 +440,7 @@ class NeuralNet:
 
         return {self.data: board, self.data_diags: diagonal}
 
-    # TODO S: Maybe combine the following two functions? I think this only gets used in guerilla.py but i'm not sure.
+    # TODO S: Maybe combine the following two functions? I think this only gets used in Guerilla but i'm not sure.
     def evaluate(self, fen):
         """
         Evaluates chess board.

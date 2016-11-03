@@ -7,10 +7,10 @@ Hyper parameters, constants and definitions.
 # NOTE: VALIDATION SIZE + BATCH SIZE < Number of fens provided
 
 NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
-NUM_EPOCHS = 50
+NUM_EPOCHS = 100 #50
 BATCH_SIZE = 5000
 NUM_HIDDEN = 1024
-LEARNING_RATE = 0.00001
+LEARNING_RATE = 0.0005
 VALIDATION_SIZE = 50000
 LOSS_THRESHOLD = 0.00001
 

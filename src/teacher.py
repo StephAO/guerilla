@@ -54,21 +54,7 @@ class Teacher:
         self.td_w_update = None
         self.td_fen_index = 0
         self.td_batch_size = 50
-        self.td_adagrad_acc = [
-            np.zeros([5, 5, 12, 10]),
-            np.zeros([1, 8, 12, 10]),
-            np.zeros([8, 1, 12, 10]),
-            np.zeros([1, 8, 12, 10]),
-            np.zeros([900, 1024]),
-            np.zeros([1024, 1024]),
-            np.zeros([1024, 1]),
-            np.zeros([10]),
-            np.zeros([10]),
-            np.zeros([10]),
-            np.zeros([10]),
-            np.zeros([1024]),
-            np.zeros([1024]),
-            np.zeros([1])]
+        self.td_adagrad_acc = None
 
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
@@ -512,6 +498,21 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
+        self.td_adagrad_acc = [np.zeros([5, 5, 12, 10]),
+                            np.zeros([1, 8, 12, 10]),
+                            np.zeros([8, 1, 12, 10]),
+                            np.zeros([1, 8, 12, 10]),
+                            np.zeros([900, 1024]),
+                            np.zeros([1024, 1024]),
+                            np.zeros([1024, 1]),
+                            np.zeros([10]),
+                            np.zeros([10]),
+                            np.zeros([10]),
+                            np.zeros([10]),
+                            np.zeros([1024]),
+                            np.zeros([1024]),
+                            np.zeros([1])]
+
         for i in xrange(start_idx, len(game_indices)):
 
             game_idx = game_indices[i]
@@ -682,6 +683,21 @@ class Teacher:
         # Initialize STS scores if necessary
         if sts_scores is None and self.sts_on:
             sts_scores = []
+
+        self.td_adagrad_acc = [np.zeros([5, 5, 12, 10]),
+                            np.zeros([1, 8, 12, 10]),
+                            np.zeros([8, 1, 12, 10]),
+                            np.zeros([1, 8, 12, 10]),
+                            np.zeros([900, 1024]),
+                            np.zeros([1024, 1024]),
+                            np.zeros([1024, 1]),
+                            np.zeros([10]),
+                            np.zeros([10]),
+                            np.zeros([10]),
+                            np.zeros([10]),
+                            np.zeros([1024]),
+                            np.zeros([1024]),
+                            np.zeros([1])]
 
         for i in xrange(start_idx, len(game_indices)):
 
@@ -909,8 +925,8 @@ def main():
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        # t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=100)
-        t.run(['load_and_resume'], training_time=28000)
+        t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay'], training_time=100)
+        # t.run(['load_and_resume'], training_time=28000)
 
 
 if __name__ == '__main__':

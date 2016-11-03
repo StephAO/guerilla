@@ -1,6 +1,7 @@
 import os
 import random
 import numpy as np
+import tensorflow as tf
 import math
 import chess.pgn
 import chess
@@ -8,7 +9,9 @@ import time
 import matplotlib.pyplot as plt
 import pickle
 from players import Player, Guerilla
+from operator import add
 
+import guerilla
 import data_handler as dh
 import stockfish_eval as sf
 import chess_game_parser as cgp
@@ -47,6 +50,11 @@ class Teacher:
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
         self.td_end_length = 12  # How many moves are included in endgame training
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
+        self.td_fudge_factor = 1e-6  # TODO S: Comments to explain these
+        self.td_w_update = None      # TODO S: It should be easy to turn off Adagrad, add that functionality.
+        self.td_fen_index = 0
+        self.td_batch_size = 50
+        self.td_adagrad_acc = None
 
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
@@ -145,7 +153,13 @@ class Teacher:
                                   'num_end': self.td_num_endgame,
                                   'num_full': self.td_num_full,
                                   'end_length': self.td_end_length,
-                                  'full_length': self.td_full_length}
+                                  'full_length': self.td_full_length,
+                                  'batch_size': self.td_batch_size,
+                                  'fudge_factor': self.td_fudge_factor
+                                  }
+        state['adagrad'] = {'w_update': self.td_w_update,
+                            'fen_index': self.td_fen_index,
+                            'adagrad_acc': self.td_adagrad_acc}
         state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
 
         # Save STS evaluation parameters
@@ -185,6 +199,11 @@ class Teacher:
         # Load training parameters
         self.set_td_params(**state.pop('td_leaf_param'))
         self.set_sp_params(**state.pop('sp_param'))
+
+        # Load adagrad params
+        self.td_w_update = state['adagrad']['w_update']
+        self.td_fen_index = state['adagrad']['fen_index']
+        self.td_adagrad_acc = state['adagrad']['adagrad_acc']
 
         # Load STS evaluation parameters
         self.sts_on = state['sts_on']
@@ -408,8 +427,8 @@ class Teacher:
 
     # TODO: Handle complete fens format
 
-    def set_td_params(self, num_end=None, num_full=None, randomize=None,
-                      pgn_folder=None, end_length=None, full_length=None):
+    def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
+                      end_length=None, full_length=None, batch_size=None, fudge_factor=None):
         """
         Set the parameters for TD-Leaf.
             Inputs:
@@ -439,6 +458,10 @@ class Teacher:
             self.td_end_length = end_length
         if full_length:
             self.td_full_length = full_length
+        if batch_size:
+            self.td_batch_size = batch_size
+        if fudge_factor:
+            self.td_fudge_factor = fudge_factor
 
     def train_td(self, endgame, game_indices=None, start_idx=0, sts_scores=None):
         """
@@ -474,6 +497,23 @@ class Teacher:
         # Initialize STS scores if necessary
         if sts_scores is None and self.sts_on:
             sts_scores = []
+
+        # TODO: This shouldn't be constants. These should be loaded from the neural_net file.
+        #       Otherwise this won't work for other neural net structures.
+        self.td_adagrad_acc = [np.zeros([5, 5, 12, 10]),
+                               np.zeros([1, 8, 12, 10]),
+                               np.zeros([8, 1, 12, 10]),
+                               np.zeros([1, 8, 12, 10]),
+                               np.zeros([900, 1024]),
+                               np.zeros([1024, 1024]),
+                               np.zeros([1024, 1]),
+                               np.zeros([10]),
+                               np.zeros([10]),
+                               np.zeros([10]),
+                               np.zeros([10]),
+                               np.zeros([1024]),
+                               np.zeros([1024]),
+                               np.zeros([1])]
 
         for i in xrange(start_idx, len(game_indices)):
 
@@ -544,6 +584,18 @@ class Teacher:
 
         return
 
+    # TODO: Function name is confusing, because it does way more than that. It should do a simple update it Adagrad is off.
+    def td_update_weights(self):
+        """
+        From batch of weight updates (gradients * discout values), find average. Updates adagrad accumulator.
+        Updates weights.
+        Note: The plurality of gradients is a function of the number nodes not the number of actual gradients.
+        """
+        avg_gradients = [grad / self.td_batch_size for grad in self.td_w_update]
+        self.td_adagrad_acc = map(add, self.td_adagrad_acc, [grad ** 2 for grad in avg_gradients])
+        learning_rates = [TD_LRN_RATE / (self.td_fudge_factor + np.sqrt(grad)) for grad in self.td_adagrad_acc]
+        self.nn.add_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
+
     def td_leaf(self, game):
         """
         Trains neural net using TD-Leaf algorithm.
@@ -554,17 +606,13 @@ class Teacher:
 
         num_boards = len(game)
         game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
-        w_update = None
-
-        # turn off pruning for search
-        self.guerilla.search.reci_prune = False
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
         for i, board in enumerate(game):
             # print str(i) + "... ",
-            value, _, board_fen = self.guerilla.search.run(chess.Board(board))
+            value, _, board_fen = self.guerilla.search.run(chess.Board(board), reci_prune=False)
 
             # Get values and gradients for white plays next
             if dh.white_is_next(board_fen):
@@ -581,9 +629,6 @@ class Teacher:
                 #   Desired gradient = Gradient of what was originally white = - Gradient of flipped board
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
 
-        # turn pruning back on
-        self.guerilla.search.reci_prune = True
-
         for t in range(num_boards):
             td_val = 0
             for j in range(t, num_boards - 1):
@@ -594,17 +639,20 @@ class Teacher:
                 td_val += math.pow(TD_DISCOUNT, j - t) * dt
 
             # Use gradient to update sum
-            if not w_update:
-                w_update = [w * td_val for w in game_info[t]['gradient']]
+            if not self.td_w_update:
+                self.td_w_update = [w * td_val for w in game_info[t]['gradient']]
             else:
                 # update each set of weights
                 for i in range(len(game_info[t]['gradient'])):
-                    w_update[i] += game_info[t]['gradient'][i] * td_val
+                    self.td_w_update[i] += game_info[t]['gradient'][i] * td_val
 
-        # Update neural net weights.
-        # old_weights = self.nn.get_weights(self.nn.all_weights)
-        self.nn.add_all_weights([TD_LRN_RATE * w_update[i] for i in range(len(w_update))])
-        # print np.array_equal(old_weights, self.nn.get_weights(self.nn.all_weights))
+            self.td_fen_index += 1
+
+            # TODO: why isn't this just outside the for loop?
+            if self.td_fen_index == self.td_batch_size:
+                self.td_update_weights()
+                self.td_fen_index = 0
+                self.td_w_update = None
 
     # ---------- SELF-PLAY TRAINING METHODS
 
@@ -630,7 +678,7 @@ class Teacher:
         file and then applying a random legal move to the board.
         """
 
-        fens = cgp.load_fens(self.sp_num)
+        fens = cgp.load_fens(num_values=self.sp_num)
 
         if game_indices is None:
             game_indices = np.random.choice(len(fens), self.sp_num)
@@ -641,12 +689,29 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
+        # TODO: Same as above, this causes issues for flexibility.
+        # TODO: This doesn't get used here either. Also you should change the variable name if you're using it in both TD and SP.
+        self.td_adagrad_acc = [np.zeros([5, 5, 12, 10]),
+                               np.zeros([1, 8, 12, 10]),
+                               np.zeros([8, 1, 12, 10]),
+                               np.zeros([1, 8, 12, 10]),
+                               np.zeros([900, 1024]),
+                               np.zeros([1024, 1024]),
+                               np.zeros([1024, 1]),
+                               np.zeros([10]),
+                               np.zeros([10]),
+                               np.zeros([10]),
+                               np.zeros([10]),
+                               np.zeros([1024]),
+                               np.zeros([1024]),
+                               np.zeros([1])]
+
         for i in xrange(start_idx, len(game_indices)):
 
             print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
             # Load random fen
             board = chess.Board(
-                fens[game_indices[i]] + " w KQkq - 0 1")  # white plays next, turn counter & castling unimportant here
+                fens[game_indices[i]])  # white plays next, turn counter & castling unimportant here
 
             # Play random move to increase game variability
             board.push(random.sample(board.legal_moves, 1)[0])
@@ -858,8 +923,7 @@ def direction_test():
 
 
 def main():
-
-    with Guerilla('Harambe', 'w') as g:
+    with guerilla.Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 1
         t = Teacher(g)
         t.set_bootstrap_params(num_bootstrap=488037)  # 488037

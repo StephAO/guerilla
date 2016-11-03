@@ -604,12 +604,15 @@ class Teacher:
         num_boards = len(game)
         game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
 
+        # turn pruning for search off
+        self.guerilla.search.reci_prune = False
+
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
         for i, board in enumerate(game):
             # print str(i) + "... ",
-            value, _, board_fen = self.guerilla.search.run(chess.Board(board), reci_prune=False)
+            value, _, board_fen = self.guerilla.search.run(chess.Board(board))
 
             # Get values and gradients for white plays next
             if dh.white_is_next(board_fen):
@@ -625,6 +628,9 @@ class Teacher:
                 #   Gradient of flipped board = Gradient of what used to be black
                 #   Desired gradient = Gradient of what was originally white = - Gradient of flipped board
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
+
+        # turn pruning for search back on
+        self.guerilla.search.reci_prune = True
 
         for t in range(num_boards):
             td_val = 0

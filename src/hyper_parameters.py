@@ -10,9 +10,10 @@ NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confus
 NUM_EPOCHS = 100 #50
 BATCH_SIZE = 5000
 NUM_HIDDEN = 1024
-LEARNING_RATE = 0.0005
-VALIDATION_SIZE = 50000
+LEARNING_RATE = 0.01 #0.0005
+VALIDATION_SIZE = 50000 #50k
 LOSS_THRESHOLD = 0.00001
+DECAY_RATE = 0.95 # Only used if the training mode is AdaDelta
 
 NUM_CHANNELS = 6 * 2
 

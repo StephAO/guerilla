@@ -11,7 +11,6 @@ import pickle
 from players import Player, Guerilla
 from operator import add
 
-import guerilla
 import data_handler as dh
 import stockfish_eval as sf
 import chess_game_parser as cgp
@@ -923,7 +922,7 @@ def direction_test():
 
 
 def main():
-    with guerilla.Guerilla('Harambe', 'w') as g:
+    with Guerilla('Harambe', 'w',training_mode = 'adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
         t.set_bootstrap_params(num_bootstrap=488037)  # 488037
@@ -932,7 +931,7 @@ def main():
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['load_and_resume'], training_time=28800)
+        t.run(['load_and_resume'], training_time=3600)
         # t.run(['load_and_resume'], training_time=28000)
 
 

@@ -26,9 +26,9 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 
 
 class NeuralNet:
-    training_modes = ['adagrad', 'gradient_descent']
+    training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, load_file=None, training_mode="adagrad"):
+    def __init__(self, load_file=None, training_mode=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -43,9 +43,12 @@ class NeuralNet:
 
         self.load_file = load_file
 
-        if training_mode not in NeuralNet.training_modes:
+        if training_mode is None:
+            training_mode = 'adagrad'
+        elif training_mode not in NeuralNet.training_modes:
             raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
         self.training_mode = training_mode
+        print "Training neural net using %s." % self.training_mode
 
         # declare layer variables
         self.sess = None
@@ -153,6 +156,8 @@ class NeuralNet:
 
         if self.training_mode == 'adagrad':
             self.train_optimizer = tf.train.AdagradOptimizer(LEARNING_RATE)
+        elif self.training_mode == 'adadelta':
+            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=LEARNING_RATE, rho = DECAY_RATE)
         elif self.training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE)
         self.train_step = self.train_optimizer.minimize(self.cost)
@@ -225,7 +230,9 @@ class NeuralNet:
             var_dict [Dict] or [None]:
                 Dictionary of variables.
         """
-        if self.training_mode == 'adagrad':
+        if self.training_mode == 'gradient_descent':
+            return None
+        else:
             var_dict = dict()
             vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
@@ -235,8 +242,7 @@ class NeuralNet:
                     if val:
                         var_dict[var.name] = val
             return var_dict
-        elif self.training_mode == 'gradient_descent':
-            return None
+
 
     def save_training_vars(self, path):
         """
@@ -250,12 +256,10 @@ class NeuralNet:
                 Filename specifying where the training variables were saved.
         """
         filename = None
-        if self.training_mode == 'adagrad':
-            filename = self.train_saver.save(self.sess, path)
-        elif self.training_mode == 'gradient_descent':
+        if self.training_mode == 'gradient_descent':
             pass
         else:
-            raise ValueError("Training variable saving for this mode has not yet been implemented.")
+            filename = self.train_saver.save(self.sess, path)
 
         print "Saved training vars to %s" % filename
         return filename
@@ -267,12 +271,10 @@ class NeuralNet:
             filename [String]
                 Filename where training variables are stored.
         """
-        if self.training_mode == 'adagrad':
-            self.train_saver.restore(self.sess, filename)
-        elif self.training_mode == 'gradient_descent':
+        if self.training_mode == 'gradient_descent':
             pass
         else:
-            raise ValueError("Training variable saving for this mode has not yet been implemented.")
+            self.train_saver.restore(self.sess, filename)
 
         print "Loaded training vars from %s " % filename
 

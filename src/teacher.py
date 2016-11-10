@@ -50,7 +50,7 @@ class Teacher:
         self.td_end_length = 12  # How many moves are included in endgame training
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
         self.td_fudge_factor = 1e-6  # TODO S: Comments to explain these
-        self.td_w_update = None      # TODO S: It should be easy to turn off Adagrad, add that functionality.
+        self.td_w_update = None  # TODO S: It should be easy to turn off Adagrad, add that functionality.
         self.td_fen_index = 0
         self.td_batch_size = 50
         self.td_adagrad_acc = None
@@ -245,25 +245,33 @@ class Teacher:
                 fens = fens[:(-1) * (len(fens) % BATCH_SIZE)]
 
             true_values = sf.load_stockfish_values(num_values=len(fens))
+
             # finish epoch
+            train_check_spacing = (len(fens) - VALIDATION_SIZE) / TRAIN_CHECK_SIZE
+
             train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
             valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
+            train_check_fens = train_fens[::train_check_spacing]  # fens to evaluate training error on
 
             train_values = true_values[:(-1) * VALIDATION_SIZE]
             valid_values = true_values[(-1) * VALIDATION_SIZE:]
+            train_check_values = train_values[::train_check_spacing]
+
             self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.nn.train_step)
 
-            # evaluate nn for convergence
-            state['error'].append(self.evaluate_bootstrap(valid_fens, valid_values))
-            curr_loss = state['error'][-2] - state['error'][-1]
-            base_loss = state['error'][0] - state['error'][1]
+            # evaluate nn for convergence # TODO: Fix duplicate loss being stored
+            state['loss'].append(self.evaluate_bootstrap(valid_fens, valid_values))
+            state['train_loss'].append(self.evaluate_bootstrap(train_check_fens, train_check_values))
+            curr_loss = state['loss'][-2] - state['loss'][-1]
+            base_loss = state['loss'][0] - state['loss'][1]
             if abs(curr_loss / base_loss) < LOSS_THRESHOLD:
                 self.nn.save_weight_values()
-                plt.plot(range(state['epoch_num']), state['error'])
+                plt.plot(range(state['epoch_num']), state['loss'])
                 plt.show()
 
             # continue with rests of epochs
-            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'], loss=state['error'])
+            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'],
+                                 loss=state['loss'], train_loss=state['train_loss'])
         elif action == 'train_td_endgames':
             print "Resuming endgame TD-Leaf training..."
             self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'],
@@ -297,7 +305,7 @@ class Teacher:
     def set_bootstrap_params(self, num_bootstrap=None):
         self.num_bootstrap = num_bootstrap
 
-    def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None):
+    def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None, train_loss=None):
         """
             Train neural net
 
@@ -306,29 +314,36 @@ class Teacher:
                     The fens representing the board states
                 true_values[ndarray]:
                     Expected output for each chess board state (between 0 and 1)
-                num_batches[int]:
-                    number of batches
         """
+
+        train_check_spacing = (len(fens) - VALIDATION_SIZE) / TRAIN_CHECK_SIZE
 
         train_fens = fens[:(-1) * VALIDATION_SIZE]  # fens to train on
         valid_fens = fens[(-1) * VALIDATION_SIZE:]  # fens to check convergence on
+        train_check_fens = train_fens[::train_check_spacing]  # fens to evaluate training error on
 
         train_values = true_values[:(-1) * VALIDATION_SIZE]
         valid_values = true_values[(-1) * VALIDATION_SIZE:]
+        train_check_values = train_values[::train_check_spacing]
 
         num_boards = len(train_fens)
 
         if not loss:
             loss = []
 
+        if not train_loss:
+            train_loss = []
+
         # usr_in = raw_input("This will overwrite your old weights\' pickle, do you still want to proceed (y/n)?: ")
         # if usr_in.lower() != 'y':
         #    return
         print "Training data on %d positions. Will save weights to pickle" % num_boards
 
+        print "%16s %16s %16s " % ('Epoch', 'Validation Loss', 'Training Loss')
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
+        train_loss.append(self.evaluate_bootstrap(train_check_fens, train_check_values))
+        print "%16d %16.2f %16.2f" % (start_epoch, loss[-1], train_loss[-1])
         for epoch in xrange(start_epoch, NUM_EPOCHS):
-            print "Loss for epoch %d: %f" % (epoch, loss[-1])
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
@@ -339,13 +354,16 @@ class Teacher:
             # save state if timeout
             if save[0]:
                 save[1]['epoch_num'] = epoch + 1
-                save[1]['error'] = loss
+                save[1]['loss'] = loss
+                save[1]['train_loss'] = train_loss
                 self.save_state(save[1])
                 return
 
             # evaluate nn for convergence
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-            # print "%d: %f" % (epoch + 1, loss[-1])
+            train_loss.append(self.evaluate_bootstrap(train_check_fens, train_check_values))
+            print "%16d %16.2f %16.2f" % (epoch + 1, loss[-1], train_loss[-1])
+
             if len(loss) > 2:
                 base_loss = loss[0] - loss[1]
                 curr_loss = loss[-2] - loss[-1]
@@ -356,7 +374,8 @@ class Teacher:
             print "Training complete: Reached max epoch, no convergence yet"
 
         # save loss
-        pickle.dump(loss, open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") + ".p", 'wb'))
+        pickle.dump({"loss": loss, "train_loss": train_loss},
+                    open(self.dir_path + '/../pickles/loss_' + time.strftime("%Y%m%d-%H%M%S") + ".p", 'wb'))
         # plt.plot(range(epoch + 1), error)
         # plt.show()
 
@@ -922,16 +941,16 @@ def direction_test():
 
 
 def main():
-    with Guerilla('Harambe', 'w',training_mode = 'adagrad') as g:
+    with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=488037)  # 488037
+        t.set_bootstrap_params(num_bootstrap=10000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['load_and_resume'], training_time=3600)
+        t.run(['train_bootstrap'], training_time=10800)
         # t.run(['load_and_resume'], training_time=28000)
 
 

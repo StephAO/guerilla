@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 
 # TODO: Remove this and replace with proper access.
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -125,32 +126,59 @@ def get_diagonals(channels):
                 Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
                 First 6 channels are your pieces, last 6 are opponents.
                 Each piece array has 10 diagonals with max size of 8 
-                (shorter diagonasl are 0 padded)
+                (shorter diagonals are 0 padded)
     """
     diagonals = np.zeros((10, 8, NUM_CHANNELS))
-    for _ in piece_indices.values():
-        # diagonals with length 6 and 7
-        for length in xrange(6, 8):
-            for i in xrange(length):
-                offset = 8 - length
-                diag_offset = 4 if length == 7 else 0
-                for channel in xrange(NUM_CHANNELS):
-                    # upwards diagonals
-                    diagonals[0 + diag_offset, int(offset / 2) + i, channel] = channels[i + offset, i, channel]
-                    diagonals[1 + diag_offset, int(offset / 2) + i, channel] = channels[i, i + offset, channel]
-                    # downwards diagonals
-                    diagonals[2 + diag_offset, int(offset / 2) + i, channel] = channels[7 - offset - i, i, channel]
-                    diagonals[3 + diag_offset, int(offset / 2) + i, channel] = channels[7 - i, offset - i, channel]
 
-        # diagonals with length 8
-        for i in xrange(8):
+    # diagonals with length 6 and 7
+    for length in xrange(6, 8):
+        for i in xrange(length):
+            offset = 8 - length
+            diag_offset = 4 if length == 7 else 0
             for channel in xrange(NUM_CHANNELS):
-                # upwards
-                diagonals[8, i, channel] = channels[i, i, channel]
-                # downwards
-                diagonals[9, i, channel] = channels[7 - i, i, channel]
+                # upwards diagonals
+                diagonals[0 + diag_offset, int(offset / 2) + i, channel] = channels[i + offset, i, channel]
+                diagonals[1 + diag_offset, int(offset / 2) + i, channel] = channels[i, i + offset, channel]
+                # downwards diagonals
+                diagonals[2 + diag_offset, int(offset / 2) + i, channel] = channels[7 - offset - i, i, channel]
+                diagonals[3 + diag_offset, int(offset / 2) + i, channel] = channels[7 - i, offset - i, channel]
+
+    # diagonals with length 8
+    for i in xrange(8):
+        for channel in xrange(NUM_CHANNELS):
+            # upwards
+            diagonals[8, i, channel] = channels[i, i, channel]
+            # downwards
+            diagonals[9, i, channel] = channels[7 - i, i, channel]
 
     return diagonals
+
+def new_get_diagonals(channels):
+    """
+        Retrieves and returns the diagonals from the board
+
+        Ouput:
+            Diagonals[ndarray]:
+                12 Channels: 6 for each you and your opponents piece types
+                Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
+                First 6 channels are your pieces, last 6 are opponents.
+                Each piece array has 10 diagonals with max size of 8
+                (shorter diagonals are 0 padded)
+    """
+    diagonals = np.zeros((10, 8, NUM_CHANNELS))
+    for i, c in enumerate(channels.T):
+        index = 0
+        for o in xrange(-2,3):
+            diag_up = np.diagonal(c, offset=o)
+            diag_down = np.diagonal(c.T, offset=o)
+
+            diagonals[index, 0 : 8 - abs(o), i] = diag_up
+            index += 1
+            diagonals[index, 0 : 8 - abs(o), i] = diag_down
+            index += 1
+
+    return diagonals
+
 
 
 def get_stockfish_values(boards):
@@ -212,3 +240,18 @@ def black_is_next(fen):
             True if fen is for black playing next.
     """
     return not white_is_next(fen)
+
+def main():
+    test_channel = fen_to_channels(chess.STARTING_FEN)
+    start_time = time.clock()
+    for i in xrange(10000):
+        get_diagonals(test_channel)
+    print '10000 iterations if current get_diagonals:', time.clock() - start_time
+
+    start_time = time.clock()
+    for i in xrange(10000):
+        new_get_diagonals(test_channel)
+    print '10000 iterations if new get_diagonals:', time.clock() - start_time
+
+if __name__ == '__main__':
+    main()

@@ -170,7 +170,7 @@ def new_get_diagonals(channels):
         index = 0
         for o in xrange(-2,3):
             diag_up = np.diagonal(c, offset=o)
-            diag_down = np.diagonal(c.T, offset=o)
+            diag_down = np.diagonal(np.flipud(c), offset=o)
 
             diagonals[index, 0 : 8 - abs(o), i] = diag_up
             index += 1

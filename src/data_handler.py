@@ -60,8 +60,6 @@ def flip_board(fen):
 
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
-
-# TODO: Maybe move
 # TODO: deal with en passant and castling
 def fen_to_channels(fen):
     """
@@ -79,7 +77,8 @@ def fen_to_channels(fen):
                 Consists of 12 8x8 channels (12 8x8 chess boards)
                 12 Channels: 6 for each you and your opponents piece types
                 Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
-                First 6 channels are your pieces, last 6 are opponents.
+                First 6 channels are white pieces, last 6 are black.
+                Index [0,0] corresponds to rank 1 and file a; [8,8] to rank 8 and file h.
     """
 
     # fen = fen.split(' ')
@@ -91,29 +90,27 @@ def fen_to_channels(fen):
     channels = np.zeros((8, 8, NUM_CHANNELS))
 
     c_file = 0
-    c_rank = 0
+    c_rank = 7
     for char in fen:
         if char == ' ':
             break
         if char == '/':
             c_file = 0
-            c_rank += 1
+            c_rank -= 1
             continue
         elif char.isdigit():
             c_file += int(char)
             continue
         else:
-            my_piece = char.islower()
-            # TODO: double check this. Normal FEN, black is lower, but stockfish seems use to lower as current move.
+            white = char.isupper()
             char = char.lower()
-            if my_piece:
+            if white:
                 channels[c_rank, c_file, piece_indices[char]] = 1
             else:
                 channels[c_rank, c_file, piece_indices[char] + 6] = 1
 
-                # channels[rank, file, piece_indices[char] + 12] = 1 if my_piece else -1
         c_file += 1
-        if c_rank == 7 and c_file == 8:
+        if c_rank == 0 and c_file == 8:
             break
     return channels
 

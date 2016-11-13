@@ -30,7 +30,7 @@ def read_pgn(filename):
         game = chess.pgn.read_game(pgn)
         while not game.is_end():
             fen = game.board().fen()
-            if fen[1] == 'w':
+            if fen.split(' ')[1] == 'b':
                 fen = dh.flip_board(fen)
             # fen = fen.split(' ')[0]
             fens.append(fen)
@@ -98,6 +98,7 @@ def load_fens(filename='fens.nsv', num_values=None):
     return fens
 
 def main():
+
     generate_time = raw_input("How many seconds do you want to generate fens for?: ")
 
     fens = get_fens(int(generate_time))

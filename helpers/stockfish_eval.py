@@ -35,11 +35,6 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
             l = f.readline()
             sf_num = int(l)
 
-    # Defaults
-    memory = memory or psutil.virtual_memory().available / (2 * 1024 * 1024)
-    threads = threads or psutil.cpu_count() - 2
-    binary = 'linux'
-
     batch_size = 5
 
     with open(dir_path + '/extracted_data/fens.nsv', 'r') as fen_file:
@@ -58,19 +53,10 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                 if fen == "":
                     break
 
-                cmd = ' '.join([(dir_path + '/stockfish_eval.sh'), fen, str(seconds), binary, str(threads), str(memory)])
-                # print cmd
-                # try:
-                output = subprocess.check_output(cmd, shell=True).strip().split('\n')
-                # except subprocess.CalledProcessError e:
-
-                if output[0] == '':
-                    print "Warning: stockfish returned nothing. Skipping fen. Command was:\n%s" % cmd
+                score = get_stockfish_score(fen, seconds = seconds, threads = threads, memory = memory)
+                if score is None:
+                    print "Skipping fen."
                     continue
-                if len(output) == 2:
-                    score = 1000000. if int(output[1]) > 0 else -1000000.
-                else:
-                    score = float(output[0])
 
                 sf_num += 1
                 scores.append(score)
@@ -91,6 +77,52 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
 
             with open(dir_path + '/extracted_data/sf_num.txt', 'w') as num_file:
                 num_file.write(str(sf_num))
+
+def get_stockfish_score(fen, seconds, threads=None, memory=None):
+    """
+    Input:
+        fen [String]
+            Chess board to evaluate.
+        seconds [Int]
+            Number of seconds to evaluate the board.
+        threads [Int]
+            Number of threads to use for stockfish.
+        memory [Int]
+            Amount of memory to use for stockfish
+
+    Output:
+        score [Float]
+            Stockfish score. Returns None if no score found.
+    """
+
+    # Base for mate scoring
+    MATE_BASE = 5000 # 50 pawn advantage (>5 queens)
+
+    memory = memory or psutil.virtual_memory().available / (2 * 1024 * 1024)
+    threads = threads or psutil.cpu_count() - 2
+    binary = 'linux'
+
+    cmd = ' '.join([(dir_path + '/stockfish_eval.sh'), fen, str(seconds), binary, str(threads), str(memory)])
+    output = subprocess.check_output(cmd, shell=True).strip().split('\n')
+
+    if output[0] == '':
+        print "Warning: stockfish returned nothing. Command was:\n%s" % cmd
+        return None
+
+    # If checkmate then only focus on mate
+    if len(output) == 2:
+        output = [output[1]]
+
+    output = output[0].split(' ')
+    if output[0] == 'mate':
+        mate_in = int(output[1])
+        score = MATE_BASE * (1 + 1.0 / abs(mate_in))
+        if mate_in < 0:
+            score *= -1
+    else:  # cp
+        score = float(output[1])
+
+    return score
 
 def sigmoid_array(values):
     """ From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
@@ -138,7 +170,7 @@ def main():
 
     stockfish_scores(generate_time)
 
-dir_path = dir_path = os.path.dirname(os.path.abspath(__file__))
+dir_path = os.path.dirname(os.path.abspath(__file__))
 
 if __name__ == "__main__":
     main()

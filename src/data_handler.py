@@ -62,11 +62,11 @@ def flip_board(fen):
 
 
 # TODO: Maybe move
+# TODO: deal with en passant and castling
 def fen_to_channels(fen):
     """
         Converts a fen string to channels for neural net.
         Always assumes that it's white's turn
-        @TODO deal with en passant and castling
 
         Inputs:
             fen[string]:

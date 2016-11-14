@@ -166,11 +166,11 @@ def new_get_diagonals(channels):
                 (shorter diagonals are 0 padded)
     """
     diagonals = np.zeros((10, 8, NUM_CHANNELS))
-    for i, c in enumerate(channels.T):
+    for i in xrange(NUM_CHANNELS):
         index = 0
         for o in xrange(-2,3):
-            diag_up = np.diagonal(c, offset=o)
-            diag_down = np.diagonal(np.flipud(c), offset=o)
+            diag_up = np.diagonal(channels[:, :, i], offset=o)
+            diag_down = np.diagonal(np.flipud(channels[:, :, i]), offset=o)
 
             diagonals[index, 0 : 8 - abs(o), i] = diag_up
             index += 1

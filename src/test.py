@@ -241,12 +241,24 @@ def channel_input_test():
 
 def main():
     print "-------- Input Tests --------"
+    success = True
     print "Testing Stockfish handling..."
-    stockfish_test()
+    if not stockfish_test():
+        print "Stockfish test failed"
+        success = False
     print "Testing board to channels..."
-    channel_input_test()
+    if not channel_input_test():
+        print "board to channels test failed"
+        success = False
     print "Testing channels to diagonal..."
-    diag_input_test()
+    if not diag_input_test():
+        print "Channels to diagonal test failed"
+        success = False
+
+    if success:
+        print "All tests passed"
+    else:
+        print "You broke something - go fix it"
 
 
 if __name__ == '__main__':

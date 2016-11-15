@@ -7,6 +7,7 @@ dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, dir_path + '/../helpers/')
 
 import numpy as np
+import random as rnd
 import data_handler as dh
 import stockfish_eval as sf
 
@@ -238,12 +239,69 @@ def channel_input_test():
 
     return success
 
+def nsv_test(num_check=10, max_step=15, tolerance=1e-2, allow_err=0.3, score_repeat=3):
+    """
+    Tests that fens.nsv and sf_values.nsv file are properly aligned.
+    NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
+    Input:
+        num_check [Int]
+            Number of fens to check.
+        max_step [Int]
+            Maximum size of the random line jump within a file. i.e. at most, the next line checked will be max_step
+            lines away from the current line.
+        tolerance [Float]
+            How far away the expected stockfish score can be from the actual stockfish score. 0 < tolerance < 1
+        allow_err [Float]
+            The percentage of mismatching stockfish scores allowed. 0 < allow_err < 1
+        score_repeat [Int]
+            Each stockfish scoring is repeated score_repeat times and the median is taken. Allows for variations in
+            available memory.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+    # Number of seconds spent on each stockfish score
+    seconds = 1
+    wrong = []
+    max_wrong = num_check*allow_err
+
+    with open(dir_path +'/../helpers/extracted_data/fens.nsv') as fens_file, \
+            open(dir_path +'/../helpers/extracted_data/sf_values.nsv') as sf_file:
+        fens_count = 0
+        while fens_count < num_check and len(wrong) <= max_wrong:
+            for i in range(rnd.randint(0,max_step)):
+                fens_file.readline()
+                sf_file.readline()
+
+            # Get median stockfish score
+            fen = fens_file.readline().rstrip()
+            median_arr=[]
+            for i in range(score_repeat):
+                median_arr.append(sf.get_stockfish_score(fen, seconds=seconds))
+
+            # Convert to probability of winning
+            expected = sf.sigmoid_array(np.median(median_arr))
+            actual = float(sf_file.readline().rstrip())
+
+            if abs(expected - actual) > tolerance:
+                wrong.append("For FEN '%s' expected score of %f, got file score of %f." % (fen, expected, actual))
+
+            fens_count += 1
+
+    if len(wrong) > max_wrong:
+        for info in wrong:
+            print info
+
+        return False
+
+    return True
 
 def main():
     print "-------- Input Tests --------"
     input_tests = {'Stockfish handling': stockfish_test,
                    'Board to channels': channel_input_test,
-                   'Channels to diagonals': diag_input_test
+                   'Channels to diagonals': diag_input_test,
+                   'NSV alignment': nsv_test
                    }
     success = True
     for name, test in input_tests.iteritems():

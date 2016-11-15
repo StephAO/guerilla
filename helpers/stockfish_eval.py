@@ -14,7 +14,7 @@ import chess_game_parser as cgp
 
 # Modification from notbanker's stockfish.py https://gist.github.com/notbanker/3af51fd2d11ddcad7f16
 
-def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_scores=False):
+def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_scores=False, num_attempt = 3):
     """ 
         Uses stockfishes engine to evaluate a score for each board.
         Then uses a sigmoid to map the scores to a winning probability between 
@@ -23,6 +23,8 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
             Inputs:
                 boards[list of strings]:
                     list of board fens
+                num_attempt [Int]
+                    The number of times to attempt to score a fen.
 
             Outputs:
                 values[list of floats]:
@@ -53,13 +55,20 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                 if fen == "":
                     break
 
-                score = get_stockfish_score(fen, seconds = seconds, threads = threads, memory = memory)
-                if score is None:
-                    print "Skipping fen."
-                    continue
+                attempt = 0
+                while attempt < num_attempt:
+                    score = get_stockfish_score(fen, seconds = seconds, threads = threads, memory = memory)
+                    if score is not None:
+                        break
+                    print "Failed to score fen on attempt #" + str(attempt)
+                    attempt += 1
 
-                sf_num += 1
+                if score is None:
+                    print "Failed to score fen '%s' after %d attempts. Exiting." % (fen, num_attempt)
+                    break
+
                 scores.append(score)
+                sf_num += 1
 
                 if (sf_num + 1) % batch_size == 0:
                     mapped_scores = sigmoid_array(np.array(scores))
@@ -73,10 +82,10 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
             mapped_scores = sigmoid_array(np.array(scores))
             for score in mapped_scores:
                 sf_file.write(str(score) + '\n')
-            scores = []
 
-            with open(dir_path + '/extracted_data/sf_num.txt', 'w') as num_file:
-                num_file.write(str(sf_num))
+    # Write out the index of the next fen to score
+    with open(dir_path + '/extracted_data/sf_num.txt', 'w') as num_file:
+        num_file.write(str(sf_num))
 
 def get_stockfish_score(fen, seconds, threads=None, memory=None):
     """

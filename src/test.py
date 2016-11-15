@@ -145,7 +145,7 @@ def diag_input_test():
 
     success = True
     for i in range(len(fens)):
-        actual = dh.new_get_diagonals(dh.fen_to_channels(fens[i]))
+        actual = dh.get_diagonals(dh.fen_to_channels(fens[i]))
         if not np.array_equal(corr[i], actual):
             print "Failed converting fen to diagonals:"
             print fens[i]
@@ -241,19 +241,16 @@ def channel_input_test():
 
 def main():
     print "-------- Input Tests --------"
+    input_tests = {'Stockfish handling': stockfish_test,
+                   'Board to channels': channel_input_test,
+                   'Channels to diagonals': diag_input_test
+                   }
     success = True
-    print "Testing Stockfish handling..."
-    if not stockfish_test():
-        print "Stockfish test failed"
-        success = False
-    print "Testing board to channels..."
-    if not channel_input_test():
-        print "board to channels test failed"
-        success = False
-    print "Testing channels to diagonal..."
-    if not diag_input_test():
-        print "Channels to diagonal test failed"
-        success = False
+    for name, test in input_tests.iteritems():
+        print "Testing " + name + "..."
+        if not test():
+            print "%s test failed" % name.capitalize()
+            success = False
 
     if success:
         print "All tests passed"

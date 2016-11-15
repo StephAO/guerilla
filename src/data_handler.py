@@ -115,7 +115,6 @@ def fen_to_channels(fen):
             break
     return channels
 
-
 def get_diagonals(channels):
     """
         Retrieves and returns the diagonals from the board
@@ -125,45 +124,8 @@ def get_diagonals(channels):
                 12 Channels: 6 for each you and your opponents piece types
                 Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
                 First 6 channels are your pieces, last 6 are opponents.
-                Each piece array has 10 diagonals with max size of 8 
-                (shorter diagonals are 0 padded)
-    """
-    diagonals = np.zeros((10, 8, NUM_CHANNELS))
-
-    # diagonals with length 6 and 7
-    for length in xrange(6, 8):
-        for i in xrange(length):
-            offset = 8 - length
-            diag_offset = 4 if length == 7 else 0
-            for channel in xrange(NUM_CHANNELS):
-                # upwards diagonals
-                diagonals[0 + diag_offset, int(offset / 2) + i, channel] = channels[i + offset, i, channel]
-                diagonals[1 + diag_offset, int(offset / 2) + i, channel] = channels[i, i + offset, channel]
-                # downwards diagonals
-                diagonals[2 + diag_offset, int(offset / 2) + i, channel] = channels[7 - offset - i, i, channel]
-                diagonals[3 + diag_offset, int(offset / 2) + i, channel] = channels[7 - i, offset - i, channel]
-
-    # diagonals with length 8
-    for i in xrange(8):
-        for channel in xrange(NUM_CHANNELS):
-            # upwards
-            diagonals[8, i, channel] = channels[i, i, channel]
-            # downwards
-            diagonals[9, i, channel] = channels[7 - i, i, channel]
-
-    return diagonals
-
-def new_get_diagonals(channels):
-    """
-        Retrieves and returns the diagonals from the board
-
-        Ouput:
-            Diagonals[ndarray]:
-                12 Channels: 6 for each you and your opponents piece types
-                Types in order are: Pawns, Rooks, Knights, Bishops, Queens, King
-                First 6 channels are your pieces, last 6 are opponents.
-                Each piece array has 10 diagonals with max size of 8
-                (shorter diagonals are 0 padded)
+                Each piece array has 10 diagonals with max size of 8 (shorter diagonals are 0 padded at the end)
+                Diagonal ordering is a3 up, a6 down, a2 up, a7 down, a1 up, a8 down, b1 up, b8 down, c1 up, c8 down
     """
     diagonals = np.zeros((10, 8, NUM_CHANNELS))
     for i in xrange(NUM_CHANNELS):
@@ -246,12 +208,7 @@ def main():
     start_time = time.clock()
     for i in xrange(10000):
         get_diagonals(test_channel)
-    print '10000 iterations if current get_diagonals:', time.clock() - start_time
-
-    start_time = time.clock()
-    for i in xrange(10000):
-        new_get_diagonals(test_channel)
-    print '10000 iterations if new get_diagonals:', time.clock() - start_time
+    print '10000 iterations of get_diagonals:', time.clock() - start_time
 
 if __name__ == '__main__':
     main()

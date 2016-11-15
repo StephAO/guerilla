@@ -52,7 +52,7 @@ def get_fens(generate_time):
     checkpoint_path = dir_path + '/extracted_data/game_num.txt'
     games_path = dir_path + '/pgn_files/single_game_pgns'
 
-    game_num = 0
+    game_num = -1
     if os.path.isfile(checkpoint_path):
         with open(checkpoint_path) as f:
             l = f.readline()
@@ -69,9 +69,10 @@ def get_fens(generate_time):
             for fen in fens:
                 fen_file.write(fen + '\n')
 
-            with open(dir_path + '/extracted_data/game_num.txt', 'w') as num_file:
-                num_file.write(str(game_num))
-            print "Wrote out game %d..." % game_num
+            print "Processed game %d..." % game_num
+
+    with open(dir_path + '/extracted_data/game_num.txt', 'w') as num_file:
+        num_file.write(str(game_num))
 
 def load_fens(filename='fens.nsv', num_values=None):
     """

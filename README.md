@@ -14,6 +14,12 @@ Project uses python 2.7
   - `sudo apt-get build-dep python-pygame`
   - `sudo apt-get install python-pygame`
 
+### Optional Packages
+
+- sunfish (chess engine):
+  - `cd ../guerilla/engines/`
+  - `git clone https://github.com/thomasahle/sunfish.git`
+  
 ### How to Run
 
 1. Get fens:

@@ -71,7 +71,7 @@ class Game:
         for game in xrange(self.num_games):
 
             # Print info.
-            print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game, self.player1.name,
+            print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game + 1, self.player1.name,
                                                                type(self.player1).__name__,
                                                                self.player1.colour,
                                                                self.player2.name,
@@ -139,16 +139,18 @@ class Game:
             else:
                 winner = None
                 self.data['draws'] += 1
-                print "Draw."
                 if self.use_gui:
                     self.gui.print_msg("Draw.")
+                else:
+                    print "Draw."
 
             if winner is not None:
                 winner_idx = 0 if winner == self.player1 else 1
                 self.data['wins'][winner_idx] += 1
-                print "%s wins." % self.winner.name
                 if self.use_gui:
-                    self.gui.print_msg("%s wins." % self.winner.name)
+                    self.gui.print_msg("%s wins." % winner.name)
+                else:
+                    print "%s wins." % winner.name
 
             game_pgn = game_pgn.root()
             game_pgn.headers["Result"] = result

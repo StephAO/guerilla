@@ -55,13 +55,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                 if fen == "":
                     break
 
-                attempt = 0
-                while attempt < num_attempt:
-                    score = get_stockfish_score(fen, seconds = seconds, threads = threads, memory = memory)
-                    if score is not None:
-                        break
-                    print "Failed to score fen on attempt #" + str(attempt)
-                    attempt += 1
+                score = get_stockfish_score(fen, seconds = seconds, threads = threads, memory = memory, num_attempt=num_attempt)
 
                 if score is None:
                     print "Failed to score fen '%s' after %d attempts. Exiting." % (fen, num_attempt)
@@ -87,7 +81,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
     with open(dir_path + '/extracted_data/sf_num.txt', 'w') as num_file:
         num_file.write(str(sf_num))
 
-def get_stockfish_score(fen, seconds, threads=None, memory=None):
+def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
     """
     Input:
         fen [String]
@@ -98,6 +92,8 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None):
             Number of threads to use for stockfish.
         memory [Int]
             Amount of memory to use for stockfish
+        num_attempt [Int]
+            Number of attempts which should be made to get a stockfish score for the given fen.
 
     Output:
         score [Float]
@@ -112,9 +108,21 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None):
     binary = 'linux'
 
     cmd = ' '.join([(dir_path + '/stockfish_eval.sh'), fen, str(seconds), binary, str(threads), str(memory)])
-    output = subprocess.check_output(cmd, shell=True).strip().split('\n')
 
-    if output[0] == '':
+    attempt = 0
+    while attempt < num_attempt:
+        try:
+            output = subprocess.check_output(cmd, shell=True).strip().split('\n')
+            if output is not None:
+                break
+        except subprocess.CalledProcessError as e:
+            print e
+
+        attempt += 1
+
+    if output is None:
+        return output
+    elif output[0] == '':
         print "Warning: stockfish returned nothing. Command was:\n%s" % cmd
         return None
 

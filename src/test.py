@@ -24,6 +24,7 @@ def stockfish_test():
             True if test passed, False if test failed.
     """
     seconds = 1
+    max_attempts = 3
 
     # Fens in INCREASING score value
     fens = [None] * 8
@@ -39,7 +40,7 @@ def stockfish_test():
     # Test white play next
     prev_score = float('-inf')
     for i, fen in enumerate(fens):
-        score = sf.get_stockfish_score(fen, seconds=seconds)
+        score = sf.get_stockfish_score(fen, seconds=seconds, num_attempt=max_attempts)
         if score < prev_score:
             print "Failure: Fen (%s) scored %d while fen (%s) scored %d. The former should have a lower score." \
                   % (fens[i - 1], prev_score, fens[i], score)
@@ -53,7 +54,7 @@ def stockfish_test():
     # Test black play next
     prev_score = float('-inf')
     for i, fen in enumerate(fens):
-        score = sf.get_stockfish_score(dh.flip_board(fen), seconds=seconds)
+        score = sf.get_stockfish_score(fen, seconds=seconds, num_attempt=max_attempts)
         if score < prev_score:
             print "Failure: Fen (%s) scored %d while fen (%s) scored %d. The former should have a lower score." \
                   % (dh.flip_board(fens[i - 1]), prev_score, dh.flip_board(fens[i]), score)
@@ -239,9 +240,9 @@ def channel_input_test():
 
     return success
 
-def nsv_test(num_check=10, max_step=15, tolerance=1e-2, allow_err=0.3, score_repeat=3):
+def nsv_test(num_check=20, max_step=1000, tolerance=1e-2, allow_err=0.3, score_repeat=3):
     """
-    Tests that fens.nsv and sf_values.nsv file are properly aligned.
+    Tests that fens.nsv and sf_values.nsv file are properly aligned. Also checks that the FENS are "white plays next".
     NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
     Input:
         num_check [Int]
@@ -285,6 +286,10 @@ def nsv_test(num_check=10, max_step=15, tolerance=1e-2, allow_err=0.3, score_rep
 
             if abs(expected - actual) > tolerance:
                 wrong.append("For FEN '%s' expected score of %f, got file score of %f." % (fen, expected, actual))
+
+            if dh.black_is_next(fen):
+                print "White does not play next in this FEN: %s" % fen
+                return False
 
             fens_count += 1
 

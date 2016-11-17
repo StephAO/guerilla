@@ -30,7 +30,7 @@ def read_pgn(filename):
         game = chess.pgn.read_game(pgn)
         while not game.is_end():
             fen = game.board().fen()
-            if fen[1] == 'w':
+            if fen.split(' ')[1] == 'b':
                 fen = dh.flip_board(fen)
             # fen = fen.split(' ')[0]
             fens.append(fen)
@@ -61,17 +61,19 @@ def get_fens(generate_time):
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
     
     start_time = time.clock()
-    with open(dir_path + '/extracted_data/fens.nsv', 'a') as fen_file, \
-        open(dir_path + '/extracted_data/game_num.txt', 'w') as num_file:
+    with open(dir_path + '/extracted_data/fens.nsv', 'a') as fen_file:
         print "Opened fens output file..."
         while (time.clock() - start_time) < generate_time:
-            game_num += 1
             fens = read_pgn(games_path + '/' + files[game_num])
             for fen in fens:
                 fen_file.write(fen + '\n')
 
-            num_file.write(str(game_num))
-            print "Wrote out game %d..." % game_num
+            print "Processed game %d..." % game_num
+            game_num += 1
+
+    # Write out next game to be processed
+    with open(dir_path + '/extracted_data/game_num.txt', 'w') as num_file:
+        num_file.write(str(game_num))
 
 def load_fens(filename='fens.nsv', num_values=None):
     """
@@ -98,6 +100,7 @@ def load_fens(filename='fens.nsv', num_values=None):
     return fens
 
 def main():
+
     generate_time = raw_input("How many seconds do you want to generate fens for?: ")
 
     fens = get_fens(int(generate_time))

@@ -22,10 +22,7 @@ class Search:
         self.lose_value = 0
         self.draw_value = 0.5
 
-        # Recipromax parameters
-        self.reci_prune = True
-
-    def run(self, board):
+    def run(self, board, reci_prune=True):
         """
         Runs search based on parameter.
         Inputs:
@@ -40,9 +37,9 @@ class Search:
                     FEN of the board of the leaf node which yielded the highest value.
         """
 
-        return self.search_opts[self.search_mode](board)
+        return self.search_opts[self.search_mode](board, reci_prune=reci_prune)
 
-    def recipromax(self, board, depth=0, a=1.0):
+    def recipromax(self, board, depth=0, a=1.0, reci_prune=True):
         """ 
             Recursive function to search for best move using recipromax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -102,7 +99,7 @@ class Search:
                 # a is the upper bound of what's useful to search
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
-                if self.reci_prune and best_score >= a:
+                if reci_prune and best_score >= a:
                     break
 
                     ##### If using search_test2() ######

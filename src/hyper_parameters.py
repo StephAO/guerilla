@@ -7,12 +7,14 @@ Hyper parameters, constants and definitions.
 # NOTE: VALIDATION SIZE + BATCH SIZE < Number of fens provided
 
 NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
-NUM_EPOCHS = 50
-BATCH_SIZE = 5000
+NUM_EPOCHS = 1000 #50
+BATCH_SIZE = 500 #5000
 NUM_HIDDEN = 1024
-LEARNING_RATE = 0.00001
-VALIDATION_SIZE = 50000
+LEARNING_RATE = 0.0005 #0.0005
+VALIDATION_SIZE = 500 #50k
+TRAIN_CHECK_SIZE = 500 #50k
 LOSS_THRESHOLD = 0.00001
+DECAY_RATE = 0.95 # Only used if the training mode is AdaDelta
 
 NUM_CHANNELS = 6 * 2
 

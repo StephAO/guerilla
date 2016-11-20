@@ -67,6 +67,8 @@ class NeuralNet:
         self.b_fc_1 = None
         self.W_fc_2 = None
         self.b_fc_2 = None
+        self.W_fc_3 = None
+        self.b_fc_3 = None
         self.W_final = None
         self.b_final = None
 
@@ -81,8 +83,8 @@ class NeuralNet:
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
-        self.all_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
-                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final]
+        self.all_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_fc_3, self.W_final,
+                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_fc_3,self.b_final]
 
         # subsets of weights and biases
         self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
@@ -108,6 +110,8 @@ class NeuralNet:
         self.b_fc1_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
         self.W_fc2_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
         self.b_fc2_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
+        self.W_fc3_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+        self.b_fc3_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
 
         self.W_final_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], 1])
         self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
@@ -115,9 +119,9 @@ class NeuralNet:
         # same order as all weights
         self.all_placeholders = \
             [self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder,
-             self.W_fc1_placeholder, self.W_fc2_placeholder, self.W_final_placeholder,
+             self.W_fc1_placeholder, self.W_fc2_placeholder, self.W_fc3_placeholder, self.W_final_placeholder,
              self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder,
-             self.b_fc1_placeholder, self.b_fc2_placeholder, self.b_final_placeholder]
+             self.b_fc1_placeholder, self.b_fc2_placeholder, self.b_fc3_placeholder, self.b_final_placeholder]
 
         # create assignment operators
         self.W_grid_assignment = self.W_grid.assign(self.W_grid_placeholder)
@@ -134,6 +138,8 @@ class NeuralNet:
         self.b_fc1_assignment = self.b_fc_1.assign(self.b_fc1_placeholder)
         self.W_fc2_assignment = self.W_fc_2.assign(self.W_fc2_placeholder)
         self.b_fc2_assignment = self.b_fc_2.assign(self.b_fc2_placeholder)
+        self.W_fc3_assignment = self.W_fc_3.assign(self.W_fc3_placeholder)
+        self.b_fc3_assignment = self.b_fc_3.assign(self.b_fc3_placeholder)
 
         self.W_final_assignment = self.W_final.assign(self.W_final_placeholder)
         self.b_final_assignment = self.b_final.assign(self.b_final_placeholder)
@@ -141,9 +147,9 @@ class NeuralNet:
         # same order as all weights and all placeholders
         self.all_assignments = \
             [self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment,
-             self.W_fc1_assignment, self.W_fc2_assignment, self.W_final_assignment,
+             self.W_fc1_assignment, self.W_fc2_assignment, self.W_fc3_assignment, self.W_final_assignment,
              self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment,
-             self.b_fc1_assignment, self.b_fc2_assignment, self.b_final_assignment]
+             self.b_fc1_assignment, self.b_fc2_assignment,  self.b_fc3_assignment, self.b_final_assignment]
 
         # create neural net graph
         self.neural_net()
@@ -227,6 +233,10 @@ class NeuralNet:
         self.W_fc_2 = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
         self.b_fc_2 = bias_variable([hp['NUM_HIDDEN']])
 
+        # fully connected layer 3, weights + biases
+        self.W_fc_3 = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+        self.b_fc_3 = bias_variable([hp['NUM_HIDDEN']])
+
         # Output layer
         self.W_final = weight_variable([hp['NUM_HIDDEN'], 1])
         self.b_final = bias_variable([1])
@@ -243,10 +253,10 @@ class NeuralNet:
             return None
         else:
             var_dict = dict()
-            vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
             for name in slot_names:
-                for var in vars:
+                for var in train_vars:
                     val = self.train_optimizer.get_slot(var, name)
                     if val:
                         var_dict[var.name] = val
@@ -305,10 +315,12 @@ class NeuralNet:
         weight_values = [weight_values['W_grid'], weight_values['W_rank'],
                          weight_values['W_file'], weight_values['W_diag'],
                          weight_values['W_fc_1'], weight_values['W_fc_2'],
+                         weight_values['W_fc_3'],
                          weight_values['W_final'],
                          weight_values['b_grid'], weight_values['b_rank'],
                          weight_values['b_file'], weight_values['b_diag'],
                          weight_values['b_fc_1'], weight_values['b_fc_2'],
+                         weight_values['b_fc_3'],
                          weight_values['b_final']]
 
         self.set_all_weights(weight_values)
@@ -372,8 +384,11 @@ class NeuralNet:
         # output of fully connected layer 2
         o_fc_2 = tf.nn.relu(tf.matmul(o_fc_1, self.W_fc_2) + self.b_fc_2)
 
+        # output of fully connected layer 3
+        o_fc_3 = tf.nn.relu(tf.matmul(o_fc_2, self.W_fc_3) + self.b_fc_3)
+
         # final_output
-        self.pred_value = tf.sigmoid(tf.matmul(o_fc_2, self.W_final) + self.b_final)
+        self.pred_value = tf.sigmoid(tf.matmul(o_fc_3, self.W_final) + self.b_final)
 
     def get_weights(self, weight_vars):
         """

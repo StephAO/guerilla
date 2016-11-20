@@ -957,7 +957,7 @@ def direction_test():
 
 
 def main():
-	
+
     run_time = 0
     if len(sys.argv) >= 2:
         hours = int(sys.argv[1])
@@ -977,7 +977,7 @@ def main():
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=10000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=50000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False

@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import numpy as np
 import tensorflow as tf
@@ -940,6 +941,23 @@ def direction_test():
 
 
 def main():
+
+    run_time = 0
+    if len(sys.argv) >= 2:
+        hours = int(sys.argv[1])
+        run_time += hours * 3600
+    if len(sys.argv) >= 3:
+        minutes = int(sys.argv[2])
+        run_time += minutes * 60
+    if len(sys.argv) >= 4:
+        seconds = int(sys.argv[3])
+        run_time += seconds
+
+    print "Training for %f hours" % (float(run_time)/3600.0)
+
+    if run_time == 0:
+        run_time = None
+
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
@@ -949,7 +967,7 @@ def main():
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_bootstrap'], training_time=7200)
+        t.run(['train_bootstrap'], training_time=run_time)
         # t.run(['load_and_resume'], training_time=28000)
 
 

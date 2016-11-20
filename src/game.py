@@ -71,7 +71,7 @@ class Game:
         for game in xrange(self.num_games):
 
             # Print info.
-            print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game, self.player1.name,
+            print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game + 1, self.player1.name,
                                                                type(self.player1).__name__,
                                                                self.player1.colour,
                                                                self.player2.name,
@@ -119,7 +119,10 @@ class Game:
                         print "Error: Move is not legal"
                     move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
                 self.board.push(move)
-                print "%s played %s" % (self.player1.name if player1_turn else self.player2.name, move)
+                if self.use_gui:
+                    self.gui.print_msg("%s played %s" % (self.player1.name if player1_turn else self.player2.name, move))
+                else:
+                    print "%s played %s" % (self.player1.name if player1_turn else self.player2.name, move)
 
                 # Switch sides
                 player1_turn = not player1_turn
@@ -130,20 +133,24 @@ class Game:
 
             result = self.board.result(claim_draw=True)
             if result == '1-0':
-                self.data['wins'][0] += 1
-                print "%s wins." % self.player1.name
-                if self.use_gui:
-                    self.gui.print_msg("%s wins." % self.player1.name)
+                winner = self.player1 if self.player1.colour == 'white' else self.player2
             elif result == '0-1':
-                self.data['wins'][1] += 1
-                print "%s wins." % self.player2.name
-                if self.use_gui:
-                    self.gui.print_msg("%s wins." % self.player2.name)
+                winner = self.player2 if self.player1.colour == 'white' else self.player1
             else:
+                winner = None
                 self.data['draws'] += 1
-                print "Draw."
                 if self.use_gui:
                     self.gui.print_msg("Draw.")
+                else:
+                    print "Draw."
+
+            if winner is not None:
+                winner_idx = 0 if winner == self.player1 else 1
+                self.data['wins'][winner_idx] += 1
+                if self.use_gui:
+                    self.gui.print_msg("%s wins." % winner.name)
+                else:
+                    print "%s wins." % winner.name
 
             game_pgn = game_pgn.root()
             game_pgn.headers["Result"] = result

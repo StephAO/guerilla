@@ -96,7 +96,6 @@ def load_fens(filename='fens.nsv', num_values=None):
             count += 1
             if num_values is not None and count >= num_values:
                 break
-    print len(fens)
     return fens
 
 def main():

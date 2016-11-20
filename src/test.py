@@ -10,7 +10,14 @@ import numpy as np
 import random as rnd
 import data_handler as dh
 import stockfish_eval as sf
-
+import neural_net as nn
+import teacher
+import pickle
+import traceback
+from hyper_parameters import *
+from players import Guerilla
+# To test memory usage
+from guppy import hpy
 
 ###############################################################################
 # Input Tests
@@ -301,12 +308,88 @@ def nsv_test(num_check=20, max_step=1000, tolerance=1e-2, allow_err=0.3, score_r
 
     return True
 
+# TODO test pausing and resuming
+def training_test(verbose=False):
+    """ 
+    Runs training in variety of fashions. 
+    Checks crasching, decrease in cost over epochs, consistent output, and memory usage. 
+    """
+    success = True
+    # Set hyper params for mini-test
+    hp['NUM_FEAT'] = 10
+    hp['NUM_EPOCHS'] = 5
+    hp['BATCH_SIZE'] = 500
+    hp['VALIDATION_SIZE'] = 500
+    hp['TRAIN_CHECK_SIZE'] = 500
+    hp['TD_LRN_RATE'] = 0.00001  # Learning rate
+    TD_DISCOUNT = 0.7  # Discount rate
+    
+    for t_m in nn.NeuralNet.training_modes:
+        if t_m == 'adagrad':
+            hp['LEARNING_RATE'] = 0.00001
+        elif t_m == 'adadelta':
+            continue # TODO remove when adadelta is fully implemented
+            hp['LEARNING_RATE'] = 0.00001
+        elif t_m == 'bootstrap':
+            hp['LEARNING_RATE'] = 0.00001
+
+        error_msg = ""
+        try:
+            with Guerilla('Harambe', 'w', training_mode=t_m, verbose=False) as g:
+                g.search.max_depth = 1
+                t = teacher.Teacher(g, test=True, verbose=False)
+                t.set_bootstrap_params(num_bootstrap=1000)  # 488037
+                t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
+                t.set_sp_params(num_selfplay=1, max_length=3)
+                t.sts_on = False
+                t.sts_interval = 100
+
+                pre_heap_size = hpy().heap().size
+                t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay',], training_time=60)
+                post_heap_size = hpy().heap().size
+
+            loss = pickle.load(open(dir_path + '/../pickles/loss_test.p', 'rb'))
+            # Wrong number of losses
+            if len(loss['train_loss']) != hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != hp['NUM_EPOCHS'] + 1:
+                error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
+                              "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d" % \
+                              (hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
+                success = False
+            # Training loss went up
+            if loss['train_loss'][0] <= loss['train_loss'][-1]:
+                error_msg += "Bootstrap training loss went up. Losses:\n%s" % (loss['train_loss'])
+                success = False
+            # Validation loss went up
+            if loss['loss'][0] <= loss['loss'][-1]:
+                error_msg += "Bootstrap validation loss went up. Losses:\n%s" % (loss['loss'])
+                success = False
+            # Memory usage increased significantly
+            if float(abs(post_heap_size - pre_heap_size))/float(pre_heap_size) > 0.01:
+                success = False
+                error_msg += "Memory increasing significantly when running training.\n" \
+                             "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%" \
+                             % (pre_heap_size, post_heap_size, 100. * float(abs(post_heap_size - pre_heap_size))/float(pre_heap_size))
+        # Training failed                    
+        except Exception as e:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            error_msg += "The following error occured during the training:" \
+                          "\n  type:\n    %s\n\n  Error msg:\n    %s\n\n  traceback:\n    %s\n" % \
+                         (str(exc_type).split('.')[1][:-2], exc_value, \
+                         '\n    '.join(''.join(traceback.format_tb(exc_traceback)).split('\n')))
+            success = False
+
+        if not success:
+            print "Training with type %s fails:\n%s" % (t_m, error_msg)
+
+    return success
+
 def main():
     print "-------- Input Tests --------"
     input_tests = {'Stockfish handling': stockfish_test,
                    'Board to channels': channel_input_test,
                    'Channels to diagonals': diag_input_test,
-                   'NSV alignment': nsv_test
+                   'NSV alignment': nsv_test,
+                   'Training' : training_test
                    }
     success = True
     for name, test in input_tests.iteritems():

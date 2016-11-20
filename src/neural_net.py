@@ -28,7 +28,7 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, load_file=None, training_mode=None):
+    def __init__(self, load_file=None, training_mode=None, verbose=True):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -42,13 +42,16 @@ class NeuralNet:
         self.dir_path = os.path.dirname(__file__)
 
         self.load_file = load_file
+        self.verbose = verbose
 
         if training_mode is None:
             training_mode = 'adagrad'
         elif training_mode not in NeuralNet.training_modes:
             raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
         self.training_mode = training_mode
-        print "Training neural net using %s." % self.training_mode
+
+        if self.verbose:
+            print "Training neural net using %s." % self.training_mode
 
         # declare layer variables
         self.sess = None
@@ -86,27 +89,27 @@ class NeuralNet:
         self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
 
         # input placeholders
-        self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, NUM_CHANNELS])
-        self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, NUM_CHANNELS])
+        self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, hp['NUM_CHANNELS']])
+        self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, hp['NUM_CHANNELS']])
         self.true_value = tf.placeholder(tf.float32, shape=[None])
 
         # assignment placeholders
-        self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, NUM_CHANNELS, NUM_FEAT])
-        self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, NUM_CHANNELS, NUM_FEAT])
-        self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, NUM_CHANNELS, NUM_FEAT])
-        self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, NUM_CHANNELS, NUM_FEAT])
+        self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
 
-        self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
-        self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
-        self.b_file_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
-        self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[NUM_FEAT])
+        self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+        self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+        self.b_file_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+        self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
 
-        self.W_fc1_placeholder = tf.placeholder(tf.float32, shape=[90 * NUM_FEAT, NUM_HIDDEN])
-        self.b_fc1_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN])
-        self.W_fc2_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN, NUM_HIDDEN])
-        self.b_fc2_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN])
+        self.W_fc1_placeholder = tf.placeholder(tf.float32, shape=[90 * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
+        self.b_fc1_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
+        self.W_fc2_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+        self.b_fc2_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
 
-        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[NUM_HIDDEN, 1])
+        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], 1])
         self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
 
         # same order as all weights
@@ -158,11 +161,11 @@ class NeuralNet:
             tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value), 2))
 
         if self.training_mode == 'adagrad':
-            self.train_optimizer = tf.train.AdagradOptimizer(LEARNING_RATE)
+            self.train_optimizer = tf.train.AdagradOptimizer(hp['LEARNING_RATE'])
         elif self.training_mode == 'adadelta':
-            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=LEARNING_RATE, rho = DECAY_RATE)
+            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=hp['LEARNING_RATE'], rho = hp['DECAY_RATE'])
         elif self.training_mode == 'gradient_descent':
-            self.train_optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE)
+            self.train_optimizer = tf.train.GradientDescentOptimizer(hp['LEARNING_RATE'])
         self.train_step = self.train_optimizer.minimize(self.MSE)
         self.train_saver = tf.train.Saver(
             var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
@@ -178,7 +181,8 @@ class NeuralNet:
         if self.load_file:
             self.load_weight_values(self.load_file)
         else:
-            print "Initializing variables from a normal distribution."
+            if self.verbose:
+                print "Initializing variables from a normal distribution."
             self.sess.run(tf.initialize_all_variables())
 
     def start_session(self):
@@ -187,14 +191,16 @@ class NeuralNet:
         assert self.sess is None
 
         self.sess = tf.Session()
-        print "Tensorflow session opened."
+        if self.verbose:
+            print "Tensorflow session opened."
 
     def close_session(self):
         """ Closes tensorflow session"""
         assert self.sess is not None  # M: Not sure if this should be an assert
 
         self.sess.close()
-        print "Tensorflow session closed."
+        if self.verbose:
+            print "Tensorflow session closed."
 
     def define_tf_variables(self):
         """
@@ -202,27 +208,27 @@ class NeuralNet:
             bias variables to a constant.
         """
 
-        self.W_grid = weight_variable([5, 5, NUM_CHANNELS, NUM_FEAT])
-        self.W_rank = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
-        self.W_file = weight_variable([8, 1, NUM_CHANNELS, NUM_FEAT])
-        self.W_diag = weight_variable([1, 8, NUM_CHANNELS, NUM_FEAT])
+        self.W_grid = weight_variable([5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        self.W_rank = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        self.W_file = weight_variable([8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        self.W_diag = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
 
         # biases
-        self.b_grid = bias_variable([NUM_FEAT])
-        self.b_rank = bias_variable([NUM_FEAT])
-        self.b_file = bias_variable([NUM_FEAT])
-        self.b_diag = bias_variable([NUM_FEAT])
+        self.b_grid = bias_variable([hp['NUM_FEAT']])
+        self.b_rank = bias_variable([hp['NUM_FEAT']])
+        self.b_file = bias_variable([hp['NUM_FEAT']])
+        self.b_diag = bias_variable([hp['NUM_FEAT']])
 
         # fully connected layer 1, weights + biases
-        self.W_fc_1 = weight_variable([90 * NUM_FEAT, NUM_HIDDEN])
-        self.b_fc_1 = bias_variable([NUM_HIDDEN])
+        self.W_fc_1 = weight_variable([90 * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
+        self.b_fc_1 = bias_variable([hp['NUM_HIDDEN']])
 
         # fully connected layer 2, weights + biases
-        self.W_fc_2 = weight_variable([NUM_HIDDEN, NUM_HIDDEN])
-        self.b_fc_2 = bias_variable([NUM_HIDDEN])
+        self.W_fc_2 = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+        self.b_fc_2 = bias_variable([hp['NUM_HIDDEN']])
 
         # Output layer
-        self.W_final = weight_variable([NUM_HIDDEN, 1])
+        self.W_final = weight_variable([hp['NUM_HIDDEN'], 1])
         self.b_final = bias_variable([1])
 
     def get_training_vars(self):
@@ -264,7 +270,8 @@ class NeuralNet:
         else:
             filename = self.train_saver.save(self.sess, path)
 
-        print "Saved training vars to %s" % filename
+        if self.verbose:
+            print "Saved training vars to %s" % filename
         return filename
 
     def load_training_vars(self, filename):
@@ -279,7 +286,8 @@ class NeuralNet:
         else:
             self.train_saver.restore(self.sess, filename)
 
-        print "Loaded training vars from %s " % filename
+        if self.verbose:
+            print "Loaded training vars from %s " % filename
 
     def load_weight_values(self, _filename='weight_values.p'):
         """
@@ -290,7 +298,8 @@ class NeuralNet:
         """
 
         pickle_path = self.dir_path + '/../pickles/' + _filename
-        print "Loading weights values from %s" % pickle_path
+        if self.verbose:
+            print "Loading weights values from %s" % pickle_path
         weight_values = pickle.load(open(pickle_path, 'rb'))
 
         weight_values = [weight_values['W_grid'], weight_values['W_rank'],
@@ -314,7 +323,8 @@ class NeuralNet:
 
         pickle_path = self.dir_path + '/../pickles/' + _filename
         pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
-        print "Weights saved to %s" % _filename
+        if self.verbose:
+            print "Weights saved to %s" % _filename
 
     def get_weight_values(self):
         """ 
@@ -348,10 +358,10 @@ class NeuralNet:
         o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
         o_diag = tf.nn.relu(conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
 
-        o_grid = tf.reshape(o_grid, [batch_size, 64 * NUM_FEAT])
-        o_rank = tf.reshape(o_rank, [batch_size, 8 * NUM_FEAT])
-        o_file = tf.reshape(o_file, [batch_size, 8 * NUM_FEAT])
-        o_diag = tf.reshape(o_diag, [batch_size, 10 * NUM_FEAT])
+        o_grid = tf.reshape(o_grid, [batch_size, 64 * hp['NUM_FEAT']])
+        o_rank = tf.reshape(o_rank, [batch_size, 8 * hp['NUM_FEAT']])
+        o_file = tf.reshape(o_file, [batch_size, 8 * hp['NUM_FEAT']])
+        o_diag = tf.reshape(o_diag, [batch_size, 10 * hp['NUM_FEAT']])
 
         # output of convolutional layer
         o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])

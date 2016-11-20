@@ -6,21 +6,23 @@ Hyper parameters, constants and definitions.
 # NOTE: VALIDATION SIZE must be a multiple of BATCH SIZE
 # NOTE: VALIDATION SIZE + BATCH SIZE < Number of fens provided
 
-NUM_FEAT = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
-NUM_EPOCHS = 1000 #50
-BATCH_SIZE = 500 #5000
-NUM_HIDDEN = 1024
-LEARNING_RATE = 0.0005 #0.0005
-VALIDATION_SIZE = 500 #50k
-TRAIN_CHECK_SIZE = 500 #50k
-LOSS_THRESHOLD = 0.00001
-DECAY_RATE = 0.95 # Only used if the training mode is AdaDelta
+hp = {}
 
-NUM_CHANNELS = 6 * 2
+hp['NUM_FEAT'] = 10  # TODO S: Rename to "filters" or something else. Currently confusing.
+hp['NUM_EPOCHS'] = 1000 #50
+hp['BATCH_SIZE'] = 500 #5000
+hp['NUM_HIDDEN'] = 1024
+hp['LEARNING_RATE'] = 0.0005 #0.0005
+hp['VALIDATION_SIZE'] = 500 #50k
+hp['TRAIN_CHECK_SIZE'] = 500 #50k
+hp['LOSS_THRESHOLD'] = 0.00001
+hp['DECAY_RATE'] = 0.95 # Only used if the training mode is AdaDelta
+
+hp['NUM_CHANNELS'] = 6 * 2
 
 # Hyper parameters for TD-Leaf Training Algorithm
-TD_LRN_RATE = 0.00001  # Learning rate
-TD_DISCOUNT = 0.7  # Discount rate
+hp['TD_LRN_RATE'] = 0.00001  # Learning rate
+hp['TD_DISCOUNT'] = 0.7  # Discount rate
 
 # TODO: I don't think this should be here.
 piece_indices = {

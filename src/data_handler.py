@@ -88,7 +88,7 @@ def fen_to_channels(fen):
     # castling = fen[2]
     # en_passant = fen[3]
 
-    channels = np.zeros((8, 8, NUM_CHANNELS))
+    channels = np.zeros((8, 8, hp['NUM_CHANNELS']))
 
     c_file = 0
     c_rank = 7
@@ -127,8 +127,8 @@ def get_diagonals(channels):
                 Each piece array has 10 diagonals with max size of 8 (shorter diagonals are 0 padded at the end)
                 Diagonal ordering is a3 up, a6 down, a2 up, a7 down, a1 up, a8 down, b1 up, b8 down, c1 up, c8 down
     """
-    diagonals = np.zeros((10, 8, NUM_CHANNELS))
-    for i in xrange(NUM_CHANNELS):
+    diagonals = np.zeros((10, 8, hp['NUM_CHANNELS']))
+    for i in xrange(hp['NUM_CHANNELS']):
         index = 0
         for o in xrange(-2,3):
             diag_up = np.diagonal(channels[:, :, i], offset=o)

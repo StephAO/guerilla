@@ -13,6 +13,8 @@ Project uses python 2.7
 - pygame (for gui):
   - `sudo apt-get build-dep python-pygame`
   - `sudo apt-get install python-pygame`
+- guppy (only for testing):
+  - 'pip install guppy'
 
 ### Optional Packages
 
@@ -23,11 +25,11 @@ Project uses python 2.7
 ### How to Run
 
 1. Get fens:
-  - `python chess_game_parser.py <num_games_to_look_at> <maximum_num_of_fens>`  
+  - `python chess_game_parser.py  
 1. Get stockfish values:
   - `python stockfish_eval.py`
 1. Train by running:
-  - `python teacher.py`
+  - `python teacher.py` <number hours (optional)> <number minutes (optional)> <number seconds (optional)>
 1. Run game by running:
   - `python game.py` TODO add input options
 

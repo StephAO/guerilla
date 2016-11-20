@@ -666,7 +666,6 @@ class Teacher:
 
             self.td_fen_index += 1
 
-            # TODO: why isn't this just outside the for loop?
             if self.td_fen_index == self.td_batch_size:
                 self.td_update_weights()
                 self.td_fen_index = 0
@@ -944,13 +943,13 @@ def main():
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=10000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=50000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
-        t.run(['train_bootstrap'], training_time=10800)
+        t.run(['train_bootstrap'], training_time=7200)
         # t.run(['load_and_resume'], training_time=28000)
 
 

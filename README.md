@@ -14,7 +14,7 @@ Project uses python 2.7
   - `sudo apt-get build-dep python-pygame`
   - `sudo apt-get install python-pygame`
 - guppy (only for testing):
-  - 'pip install guppy'
+  - `pip install guppy`
 
 ### Optional Packages
 

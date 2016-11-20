@@ -9,6 +9,7 @@ import chess
 import time
 import matplotlib.pyplot as plt
 import pickle
+import copy
 from players import Player, Guerilla
 from operator import add
 
@@ -50,11 +51,15 @@ class Teacher:
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
         self.td_end_length = 12  # How many moves are included in endgame training
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
-        self.td_fudge_factor = 1e-6  # TODO S: Comments to explain these
-        self.td_w_update = None  # TODO S: It should be easy to turn off Adagrad, add that functionality.
+        self.td_w_update = None 
         self.td_fen_index = 0
         self.td_batch_size = 50
-        self.td_adagrad_acc = None
+
+        if self.nn.training_mode == 'adagrad':
+            self.td_adagrad_acc = None
+            self.td_adagrad_acc_zero = []
+            for weight in self.nn.all_weights:
+                self.td_adagrad_acc_zero.append(np.zeros(self.nn.sess.run(tf.shape(weight))))
 
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
@@ -155,11 +160,12 @@ class Teacher:
                                   'end_length': self.td_end_length,
                                   'full_length': self.td_full_length,
                                   'batch_size': self.td_batch_size,
-                                  'fudge_factor': self.td_fudge_factor
                                   }
-        state['adagrad'] = {'w_update': self.td_w_update,
-                            'fen_index': self.td_fen_index,
-                            'adagrad_acc': self.td_adagrad_acc}
+        if self.nn.training_mode == 'adagrad':
+            state['adagrad'] = {'w_update': self.td_w_update,
+                                'fen_index': self.td_fen_index,
+                                'adagrad_acc': self.td_adagrad_acc}
+
         state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
 
         # Save STS evaluation parameters
@@ -201,9 +207,10 @@ class Teacher:
         self.set_sp_params(**state.pop('sp_param'))
 
         # Load adagrad params
-        self.td_w_update = state['adagrad']['w_update']
-        self.td_fen_index = state['adagrad']['fen_index']
-        self.td_adagrad_acc = state['adagrad']['adagrad_acc']
+        if self.nn.training_mode == 'adagrad':
+            self.td_w_update = state['adagrad']['w_update']
+            self.td_fen_index = state['adagrad']['fen_index']
+            self.td_adagrad_acc = state['adagrad']['adagrad_acc']
 
         # Load STS evaluation parameters
         self.sts_on = state['sts_on']
@@ -217,7 +224,6 @@ class Teacher:
 
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
-        # TODO this will called shortly after already loading weight values, can we remove the unecessary work
         self.nn.load_weight_values(_filename='in_training_weight_values.p')
 
         return state
@@ -265,7 +271,7 @@ class Teacher:
             state['train_loss'].append(self.evaluate_bootstrap(train_check_fens, train_check_values))
             curr_loss = state['loss'][-2] - state['loss'][-1]
             base_loss = state['loss'][0] - state['loss'][1]
-            if abs(curr_loss / base_loss) < LOSS_THRESHOLD:
+            if false: # TODO pick better convergence threshold
                 self.nn.save_weight_values()
                 plt.plot(range(state['epoch_num']), state['loss'])
                 plt.show()
@@ -368,7 +374,7 @@ class Teacher:
             if len(loss) > 2:
                 base_loss = loss[0] - loss[1]
                 curr_loss = loss[-2] - loss[-1]
-                if abs(curr_loss / base_loss) < LOSS_THRESHOLD:
+                if false: # TODO pick better convergence threshold
                     print "Training complete: Reached convergence threshold"
                     break
         else:
@@ -434,7 +440,7 @@ class Teacher:
             diagonals[i] = dh.get_diagonals(boards[i])
 
         # Get loss
-        error = self.nn.sess.run(self.nn.cost, feed_dict={
+        error = self.nn.sess.run(self.nn.MAE, feed_dict={
             self.nn.data: boards,
             self.nn.data_diags: diagonals,
             self.nn.true_value: true_values
@@ -447,7 +453,7 @@ class Teacher:
     # TODO: Handle complete fens format
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
-                      end_length=None, full_length=None, batch_size=None, fudge_factor=None):
+                      end_length=None, full_length=None, batch_size=None):
         """
         Set the parameters for TD-Leaf.
             Inputs:
@@ -479,8 +485,6 @@ class Teacher:
             self.td_full_length = full_length
         if batch_size:
             self.td_batch_size = batch_size
-        if fudge_factor:
-            self.td_fudge_factor = fudge_factor
 
     def train_td(self, endgame, game_indices=None, start_idx=0, sts_scores=None):
         """
@@ -517,22 +521,8 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
-        # TODO: This shouldn't be constants. These should be loaded from the neural_net file.
-        #       Otherwise this won't work for other neural net structures.
-        self.td_adagrad_acc = [np.zeros([5, 5, 12, 10]),
-                               np.zeros([1, 8, 12, 10]),
-                               np.zeros([8, 1, 12, 10]),
-                               np.zeros([1, 8, 12, 10]),
-                               np.zeros([900, 1024]),
-                               np.zeros([1024, 1024]),
-                               np.zeros([1024, 1]),
-                               np.zeros([10]),
-                               np.zeros([10]),
-                               np.zeros([10]),
-                               np.zeros([10]),
-                               np.zeros([1024]),
-                               np.zeros([1024]),
-                               np.zeros([1])]
+        if self.nn.training_mode == 'adagrad':
+            self.td_adagrad_acc = copy.deepcopy(self.td_adagrad_acc_zero)
 
         for i in xrange(start_idx, len(game_indices)):
 
@@ -603,7 +593,6 @@ class Teacher:
 
         return
 
-    # TODO: Function name is confusing, because it does way more than that. It should do a simple update it Adagrad is off.
     def td_update_weights(self):
         """
         From batch of weight updates (gradients * discout values), find average. Updates adagrad accumulator.
@@ -612,7 +601,15 @@ class Teacher:
         """
         avg_gradients = [grad / self.td_batch_size for grad in self.td_w_update]
         self.td_adagrad_acc = map(add, self.td_adagrad_acc, [grad ** 2 for grad in avg_gradients])
-        learning_rates = [TD_LRN_RATE / (self.td_fudge_factor + np.sqrt(grad)) for grad in self.td_adagrad_acc]
+        if self.nn.training_mode == 'adagrad':
+            learning_rates = [TD_LRN_RATE / (np.sqrt(grad)) for grad in self.td_adagrad_acc]
+        elif self.nn.training_mode == 'adadelta':
+            raise NotImplementedError("TD leaf adadelta training has not yet been implemented")
+        elif self.nn.training_mode == 'gradient_descent':
+            learning_rates = [TD_LRN_RATE] * self.avg_gradients.size()
+        else:
+            raise NotImplementedError("Unrecognized training type")
+
         self.nn.add_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
 
     def td_leaf(self, game):
@@ -667,7 +664,6 @@ class Teacher:
 
             self.td_fen_index += 1
 
-            # TODO: why isn't this just outside the for loop?
             if self.td_fen_index == self.td_batch_size:
                 self.td_update_weights()
                 self.td_fen_index = 0
@@ -708,22 +704,8 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
-        # TODO: Same as above, this causes issues for flexibility.
-        # TODO: This doesn't get used here either. Also you should change the variable name if you're using it in both TD and SP.
-        self.td_adagrad_acc = [np.zeros([5, 5, 12, 10]),
-                               np.zeros([1, 8, 12, 10]),
-                               np.zeros([8, 1, 12, 10]),
-                               np.zeros([1, 8, 12, 10]),
-                               np.zeros([900, 1024]),
-                               np.zeros([1024, 1024]),
-                               np.zeros([1024, 1]),
-                               np.zeros([10]),
-                               np.zeros([10]),
-                               np.zeros([10]),
-                               np.zeros([10]),
-                               np.zeros([1024]),
-                               np.zeros([1024]),
-                               np.zeros([1])]
+        if self.nn.training_mode == 'adagrad':
+            self.td_adagrad_acc = copy.deepcopy(td_adagrad_acc_zero)
 
         for i in xrange(start_idx, len(game_indices)):
 

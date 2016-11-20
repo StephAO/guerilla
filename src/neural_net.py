@@ -151,8 +151,11 @@ class NeuralNet:
         # Define training operators and variables
         # Using MAE since value difference will always be 0 <= x <= 1, don't want the sublinear error when using MSE
         #   Note: Ensures that both inputs are the same shape
-        self.cost = tf.reduce_sum(tf.abs(tf.sub(
+        self.MAE = tf.reduce_sum(tf.abs(tf.sub(
             tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value)))
+
+        self.MSE = tf.reduce_sum(tf.pow(tf.sub(
+            tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value), 2))
 
         if self.training_mode == 'adagrad':
             self.train_optimizer = tf.train.AdagradOptimizer(LEARNING_RATE)
@@ -160,7 +163,7 @@ class NeuralNet:
             self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=LEARNING_RATE, rho = DECAY_RATE)
         elif self.training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE)
-        self.train_step = self.train_optimizer.minimize(self.cost)
+        self.train_step = self.train_optimizer.minimize(self.MSE)
         self.train_saver = tf.train.Saver(
             var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 

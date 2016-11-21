@@ -385,7 +385,7 @@ def training_test(verbose=False):
 
 def main():
     print "-------- Input Tests --------"
-    input_tests = {#'Stockfish handling': stockfish_test,
+    input_tests = {'Stockfish handling': stockfish_test,
                    'Board to channels': channel_input_test,
                    'Channels to diagonals': diag_input_test,
                    'NSV alignment': nsv_test,

@@ -49,11 +49,11 @@ def stockfish_test():
     for i, fen in enumerate(fens):
         score = sf.get_stockfish_score(fen, seconds=seconds, num_attempt=max_attempts)
         if score < prev_score:
-            print "Failure: Fen (%s) scored %d while fen (%s) scored %d. The former should have a lower score." \
+            print "Failure: Fen (%s) scored %f while fen (%s) scored %f. The former should have a lower score." \
                   % (fens[i - 1], prev_score, fens[i], score)
             return False
         if sf.sigmoid_array(score) < sf.sigmoid_array(prev_score):
-            print "Failure: Fen (%s) scored %d while fen (%s) scored %d. The former should have a lower score." \
+            print "Failure: Fen (%s) scored %f while fen (%s) scored %f. The former should have a lower score." \
                   % (fens[i - 1], sf.sigmoid_array(prev_score), fens[i], sf.sigmoid_array(score))
             return False
         prev_score = score
@@ -63,11 +63,11 @@ def stockfish_test():
     for i, fen in enumerate(fens):
         score = sf.get_stockfish_score(fen, seconds=seconds, num_attempt=max_attempts)
         if score < prev_score:
-            print "Failure: Fen (%s) scored %d while fen (%s) scored %d. The former should have a lower score." \
+            print "Failure: Fen (%s) scored %f while fen (%s) scored %f. The former should have a lower score." \
                   % (dh.flip_board(fens[i - 1]), prev_score, dh.flip_board(fens[i]), score)
             return False
         if sf.sigmoid_array(score) < sf.sigmoid_array(prev_score):
-            print "Failure: Fen (%s) scored %d while fen (%s) scored %d. The former should have a lower score." \
+            print "Failure: Fen (%s) scored %f while fen (%s) scored %f. The former should have a lower score." \
                   % (dh.flip_board(fens[i - 1]), sf.sigmoid_array(prev_score), dh.flip_board(fens[i]),
                      sf.sigmoid_array(score))
             return False
@@ -385,7 +385,7 @@ def training_test(verbose=False):
 
 def main():
     print "-------- Input Tests --------"
-    input_tests = {'Stockfish handling': stockfish_test,
+    input_tests = {#'Stockfish handling': stockfish_test,
                    'Board to channels': channel_input_test,
                    'Channels to diagonals': diag_input_test,
                    'NSV alignment': nsv_test,

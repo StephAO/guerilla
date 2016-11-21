@@ -28,7 +28,7 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, load_file=None, training_mode=None, verbose=True):
+    def __init__(self, use_conv=True, load_file=None, training_mode=None, verbose=True):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -39,6 +39,7 @@ class NeuralNet:
                 training_mode [String]
                     Training mode to be used. Defaults to Adagrad.
         """
+        self.use_conv = use_conv
         self.dir_path = os.path.dirname(__file__)
 
         self.load_file = load_file
@@ -55,20 +56,17 @@ class NeuralNet:
 
         # declare layer variables
         self.sess = None
-        self.W_grid = None
-        self.W_rank = None
-        self.W_file = None
-        self.W_diag = None
-        self.b_grid = None
-        self.b_rank = None
-        self.b_file = None
-        self.b_diag = None
-        self.W_fc_1 = None
-        self.b_fc_1 = None
-        self.W_fc_2 = None
-        self.b_fc_2 = None
-        self.W_fc_3 = None
-        self.b_fc_3 = None
+        if self.use_conv:
+            self.W_grid = None
+            self.W_rank = None
+            self.W_file = None
+            self.W_diag = None
+            self.b_grid = None
+            self.b_rank = None
+            self.b_file = None
+            self.b_diag = None
+        self.W_fc = [None] * hp['NUM_FC_LAYERS']
+        self.b_fc = [None] * hp['NUM_FC_LAYERS']
         self.W_final = None
         self.b_final = None
 
@@ -78,17 +76,29 @@ class NeuralNet:
         # tf session and variables
         self.sess = None
 
+        self.conv_layer_size = 64 + 8 + 8 + 10 # 90
+
         # define all variables
         self.define_tf_variables()
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
-        self.all_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_fc_3, self.W_final,
-                            self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_fc_3,self.b_final]
+        self.all_weights = []
 
-        # subsets of weights and biases
-        self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
-        self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
+        if self.use_conv:
+            self.all_weights.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
+        self.all_weights.extend(self.W_fc)
+        self.all_weights.append(self.W_final)
+
+        if self.use_conv:
+            self.all_weights.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
+        self.all_weights.extend(self.b_fc)
+        self.all_weights.append(self.b_final)
+
+        if self.use_conv:
+            # subsets of weights and biases
+            self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
+            self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
 
         # input placeholders
         self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, hp['NUM_CHANNELS']])
@@ -96,60 +106,77 @@ class NeuralNet:
         self.true_value = tf.placeholder(tf.float32, shape=[None])
 
         # assignment placeholders
-        self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-        self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-        self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-        self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+        if self.use_conv:
+            self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
 
-        self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
-        self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
-        self.b_file_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
-        self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+            self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+            self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+            self.b_file_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
+            self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
 
-        self.W_fc1_placeholder = tf.placeholder(tf.float32, shape=[90 * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
-        self.b_fc1_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
-        self.W_fc2_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
-        self.b_fc2_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
-        self.W_fc3_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
-        self.b_fc3_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
+        self.W_fc_placeholders = [None] * hp['NUM_FC_LAYERS']
+        self.b_fc_placeholders = [None] * hp['NUM_FC_LAYERS'] 
+        if self.use_conv:
+            self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[self.conv_layer_size * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
+        else:
+            self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
+        self.b_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
+
+        for i in xrange(1, hp['NUM_FC_LAYERS']):
+            self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+            self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
 
         self.W_final_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], 1])
         self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
 
         # same order as all weights
-        self.all_placeholders = \
-            [self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder,
-             self.W_fc1_placeholder, self.W_fc2_placeholder, self.W_fc3_placeholder, self.W_final_placeholder,
-             self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder,
-             self.b_fc1_placeholder, self.b_fc2_placeholder, self.b_fc3_placeholder, self.b_final_placeholder]
+        self.all_placeholders = []
+        if self.use_conv:
+            self.all_placeholders.extend([self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder])
+        self.all_placeholders.extend(self.W_fc_placeholders)
+        self.all_placeholders.append(self.W_final_placeholder)
+
+        if self.use_conv:
+            self.all_placeholders.extend([self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder])
+        self.all_placeholders.extend(self.b_fc_placeholders)
+        self.all_placeholders.append(self.b_final_placeholder)
 
         # create assignment operators
-        self.W_grid_assignment = self.W_grid.assign(self.W_grid_placeholder)
-        self.W_rank_assignment = self.W_rank.assign(self.W_rank_placeholder)
-        self.W_file_assignment = self.W_file.assign(self.W_file_placeholder)
-        self.W_diag_assignment = self.W_diag.assign(self.W_diag_placeholder)
+        if self.use_conv:
+            self.W_grid_assignment = self.W_grid.assign(self.W_grid_placeholder)
+            self.W_rank_assignment = self.W_rank.assign(self.W_rank_placeholder)
+            self.W_file_assignment = self.W_file.assign(self.W_file_placeholder)
+            self.W_diag_assignment = self.W_diag.assign(self.W_diag_placeholder)
 
-        self.b_grid_assignment = self.b_grid.assign(self.b_grid_placeholder)
-        self.b_rank_assignment = self.b_rank.assign(self.b_rank_placeholder)
-        self.b_file_assignment = self.b_file.assign(self.b_file_placeholder)
-        self.b_diag_assignment = self.b_diag.assign(self.b_diag_placeholder)
+            self.b_grid_assignment = self.b_grid.assign(self.b_grid_placeholder)
+            self.b_rank_assignment = self.b_rank.assign(self.b_rank_placeholder)
+            self.b_file_assignment = self.b_file.assign(self.b_file_placeholder)
+            self.b_diag_assignment = self.b_diag.assign(self.b_diag_placeholder)
 
-        self.W_fc1_assignment = self.W_fc_1.assign(self.W_fc1_placeholder)
-        self.b_fc1_assignment = self.b_fc_1.assign(self.b_fc1_placeholder)
-        self.W_fc2_assignment = self.W_fc_2.assign(self.W_fc2_placeholder)
-        self.b_fc2_assignment = self.b_fc_2.assign(self.b_fc2_placeholder)
-        self.W_fc3_assignment = self.W_fc_3.assign(self.W_fc3_placeholder)
-        self.b_fc3_assignment = self.b_fc_3.assign(self.b_fc3_placeholder)
+        self.W_fc_assignments = [None] * hp['NUM_FC_LAYERS']
+        self.b_fc_assignments = [None] * hp['NUM_FC_LAYERS']
+        for i in xrange(hp['NUM_FC_LAYERS']):
+            self.W_fc_assignments[i] = (self.W_fc[i].assign(self.W_fc_placeholders[i]))
+            self.b_fc_assignments[i] = (self.b_fc[i].assign(self.b_fc_placeholders[i]))
 
         self.W_final_assignment = self.W_final.assign(self.W_final_placeholder)
         self.b_final_assignment = self.b_final.assign(self.b_final_placeholder)
 
         # same order as all weights and all placeholders
-        self.all_assignments = \
-            [self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment,
-             self.W_fc1_assignment, self.W_fc2_assignment, self.W_fc3_assignment, self.W_final_assignment,
-             self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment,
-             self.b_fc1_assignment, self.b_fc2_assignment,  self.b_fc3_assignment, self.b_final_assignment]
+        self.all_assignments = []
+
+        if self.use_conv:
+            self.all_assignments.extend([self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment])
+        self.all_assignments.extend(self.W_fc_assignments)
+        self.all_assignments.append(self.W_final_assignment)
+
+        if self.use_conv:
+            self.all_assignments.extend([self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment])
+        self.all_assignments.extend(self.b_fc_assignments)
+        self.all_assignments.append(self.b_final_assignment)
 
         # create neural net graph
         self.neural_net()
@@ -213,29 +240,30 @@ class NeuralNet:
             Initializes all weight variables to normal distribution, and all
             bias variables to a constant.
         """
+        if self.use_conv:
+            # conv weights
+            self.W_grid = weight_variable([5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_rank = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_file = weight_variable([8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_diag = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
 
-        self.W_grid = weight_variable([5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-        self.W_rank = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-        self.W_file = weight_variable([8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-        self.W_diag = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-
-        # biases
-        self.b_grid = bias_variable([hp['NUM_FEAT']])
-        self.b_rank = bias_variable([hp['NUM_FEAT']])
-        self.b_file = bias_variable([hp['NUM_FEAT']])
-        self.b_diag = bias_variable([hp['NUM_FEAT']])
+            # conv biases
+            self.b_grid = bias_variable([hp['NUM_FEAT']])
+            self.b_rank = bias_variable([hp['NUM_FEAT']])
+            self.b_file = bias_variable([hp['NUM_FEAT']])
+            self.b_diag = bias_variable([hp['NUM_FEAT']])
 
         # fully connected layer 1, weights + biases
-        self.W_fc_1 = weight_variable([90 * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
-        self.b_fc_1 = bias_variable([hp['NUM_HIDDEN']])
+        if self.use_conv:
+            self.W_fc[0] = weight_variable([self.conv_layer_size * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
+        else:
+            self.W_fc[0] = weight_variable([8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
+        self.b_fc[0] = bias_variable([hp['NUM_HIDDEN']])
 
-        # fully connected layer 2, weights + biases
-        self.W_fc_2 = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
-        self.b_fc_2 = bias_variable([hp['NUM_HIDDEN']])
-
-        # fully connected layer 3, weights + biases
-        self.W_fc_3 = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
-        self.b_fc_3 = bias_variable([hp['NUM_HIDDEN']])
+        for i in xrange(1, hp['NUM_FC_LAYERS']):
+            # fully connected layer n, weights + biases
+            self.W_fc[i] = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+            self.b_fc[i] = bias_variable([hp['NUM_HIDDEN']])
 
         # Output layer
         self.W_final = weight_variable([hp['NUM_HIDDEN'], 1])
@@ -310,18 +338,20 @@ class NeuralNet:
         pickle_path = self.dir_path + '/../pickles/' + _filename
         if self.verbose:
             print "Loading weights values from %s" % pickle_path
-        weight_values = pickle.load(open(pickle_path, 'rb'))
+        values_dict = pickle.load(open(pickle_path, 'rb'))
 
-        weight_values = [weight_values['W_grid'], weight_values['W_rank'],
-                         weight_values['W_file'], weight_values['W_diag'],
-                         weight_values['W_fc_1'], weight_values['W_fc_2'],
-                         weight_values['W_fc_3'],
-                         weight_values['W_final'],
-                         weight_values['b_grid'], weight_values['b_rank'],
-                         weight_values['b_file'], weight_values['b_diag'],
-                         weight_values['b_fc_1'], weight_values['b_fc_2'],
-                         weight_values['b_fc_3'],
-                         weight_values['b_final']]
+        weight_values = []
+        if self.use_conv:
+            weight_values.extend([values_dict['W_grid'], values_dict['W_rank'],
+                                  values_dict['W_file'], values_dict['W_diag']])
+        weight_values.extend(values_dict['W_fc'])
+        weight_values.append(values_dict['W_final'])
+
+        if self.use_conv:
+            weight_values.extend([values_dict['b_grid'], values_dict['b_rank'],
+                                  values_dict['b_file'], values_dict['b_diag']])
+        weight_values.extend(values_dict['b_fc'])
+        weight_values.append(values_dict['b_final'])
 
         self.set_all_weights(weight_values)
 
@@ -344,12 +374,15 @@ class NeuralNet:
         """
         weight_values = dict()
 
-        weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], weight_values['W_diag'], \
-            weight_values['W_fc_1'], weight_values['W_fc_2'], weight_values['W_final'], \
-            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], weight_values['b_diag'], \
-            weight_values['b_fc_1'], weight_values['b_fc_2'], weight_values['b_final'] = \
-            self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_fc_1, self.W_fc_2, self.W_final,
-                           self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_fc_1, self.b_fc_2, self.b_final])
+        weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], \
+            weight_values['W_diag'], weight_values['W_final'], \
+            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], \
+            weight_values['b_diag'], weight_values['b_final'] = \
+            self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag, self.W_final,
+                           self.b_grid, self.b_rank, self.b_file, self.b_diag, self.b_final])
+
+        weight_values['W_fc'] = self.sess.run(self.W_fc)
+        weight_values['b_fc'] = self.sess.run(self.b_fc)
 
         return weight_values
 
@@ -361,34 +394,36 @@ class NeuralNet:
         """
         batch_size = tf.shape(self.data)[0]
 
-        # outputs to convolutional layer
-        a = conv5x5_grid(self.data, self.W_grid)
-        # print tf.shape(self.b_grid).eval()
-        b = tf.nn.relu(a + self.b_grid)
-        o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
-        o_rank = tf.nn.relu(conv8x1_line(self.data, self.W_rank) + self.b_rank)
-        o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
-        o_diag = tf.nn.relu(conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
+        o_fc = [None] * hp['NUM_FC_LAYERS']
 
-        o_grid = tf.reshape(o_grid, [batch_size, 64 * hp['NUM_FEAT']])
-        o_rank = tf.reshape(o_rank, [batch_size, 8 * hp['NUM_FEAT']])
-        o_file = tf.reshape(o_file, [batch_size, 8 * hp['NUM_FEAT']])
-        o_diag = tf.reshape(o_diag, [batch_size, 10 * hp['NUM_FEAT']])
+        if self.use_conv:
+            o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
+            o_rank = tf.nn.relu(conv8x1_line(self.data, self.W_rank) + self.b_rank)
+            o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
+            o_diag = tf.nn.relu(conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
 
-        # output of convolutional layer
-        o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])
+            o_grid = tf.reshape(o_grid, [batch_size, 64 * hp['NUM_FEAT']])
+            o_rank = tf.reshape(o_rank, [batch_size, 8 * hp['NUM_FEAT']])
+            o_file = tf.reshape(o_file, [batch_size, 8 * hp['NUM_FEAT']])
+            o_diag = tf.reshape(o_diag, [batch_size, 10 * hp['NUM_FEAT']])
 
-        # output of fully connected layer 1
-        o_fc_1 = tf.nn.relu(tf.matmul(o_conn, self.W_fc_1) + self.b_fc_1)
+            # output of convolutional layer
+            o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])
 
-        # output of fully connected layer 2
-        o_fc_2 = tf.nn.relu(tf.matmul(o_fc_1, self.W_fc_2) + self.b_fc_2)
+            # output of fully connected layer 1
+            o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
 
-        # output of fully connected layer 3
-        o_fc_3 = tf.nn.relu(tf.matmul(o_fc_2, self.W_fc_3) + self.b_fc_3)
+        else:
+            data = tf.reshape(self.data, [batch_size, 64 * hp['NUM_CHANNELS']])
+            # output of fully connected layer 1
+            o_fc[0] = tf.nn.relu(tf.matmul(data, self.W_fc[0]) + self.b_fc[0]) 
+
+        for i in xrange(1, hp['NUM_FC_LAYERS']):
+            # output of fully connected layer n
+            o_fc[i] = tf.nn.relu(tf.matmul(o_fc[i-1], self.W_fc[i]) + self.b_fc[i])
 
         # final_output
-        self.pred_value = tf.sigmoid(tf.matmul(o_fc_3, self.W_final) + self.b_final)
+        self.pred_value = tf.sigmoid(tf.matmul(o_fc[-1], self.W_final) + self.b_final)
 
     def get_weights(self, weight_vars):
         """
@@ -420,7 +455,7 @@ class NeuralNet:
         # Run assignment/update
         self.sess.run(self.all_assignments, feed_dict=placeholder_dict)
 
-    def add_all_weights(self, weight_vals):
+    def add_all_weights(self, weight_vals): # TODO rename to add_to_all_weights
         """
         Increments all the weight values by the input amount.
             Input:

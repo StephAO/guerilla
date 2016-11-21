@@ -12,6 +12,7 @@ hp['NUM_FEAT'] = 10  # TODO S: Rename to "filters" or something else. Currently 
 hp['NUM_EPOCHS'] = 1000 #50
 hp['BATCH_SIZE'] = 500 #5000
 hp['NUM_HIDDEN'] = 1024
+hp['NUM_FC_LAYERS'] = 3
 hp['LEARNING_RATE'] = 0.0001 #0.0005
 hp['VALIDATION_SIZE'] = 5000 #50k
 hp['TRAIN_CHECK_SIZE'] = 5000 #50k

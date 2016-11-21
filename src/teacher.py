@@ -461,7 +461,7 @@ class Teacher:
             diagonals[i] = dh.get_diagonals(boards[i])
 
         # Get loss
-        error = self.nn.sess.run(self.nn.MAE, feed_dict={
+        error = self.nn.sess.run(self.nn.MSE, feed_dict={
             self.nn.data: boards,
             self.nn.data_diags: diagonals,
             self.nn.true_value: true_values

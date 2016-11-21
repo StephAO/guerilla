@@ -1,6 +1,7 @@
 import chess
 import data_handler as dh
-
+import Node
+import time
 
 class Search:
     """
@@ -10,7 +11,8 @@ class Search:
     def __init__(self, eval_fn, max_depth=2, search_mode="recipromax"):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
-        self.search_opts = {"recipromax": self.recipromax}
+        self.search_opts = {"recipromax": self.recipromax,
+                            "montecarlo": self.monte_carlo}
 
         if search_mode not in self.search_opts:
             raise NotImplementedError("Invalid Search option!")
@@ -21,8 +23,9 @@ class Search:
         self.win_value = 1
         self.lose_value = 0
         self.draw_value = 0.5
+        self.reci_prune = True
 
-    def run(self, board, reci_prune=True):
+    def run(self, board):
         """
         Runs search based on parameter.
         Inputs:
@@ -37,9 +40,23 @@ class Search:
                     FEN of the board of the leaf node which yielded the highest value.
         """
 
-        return self.search_opts[self.search_mode](board, reci_prune=reci_prune)
+        return self.search_opts[self.search_mode](board)
 
-    def recipromax(self, board, depth=0, a=1.0, reci_prune=True):
+    def monte_carlo(self, board, search_time):
+        start_time = time.clock()
+        while time.clock - start_time < search_time:
+            # On first expansion, generate all children - not sure if this is the right way to do this but i'm tired, double check later
+            if Node.root is None:
+                Node(None, board.fen(), 0)
+                Node.root.expand(-1)
+
+            node = Node.select()
+            new_nodes = node.expand()
+            for n in new_nodes:
+                n.simulate()
+                n.backpropagate()
+
+    def recipromax(self, board, depth=0, a=1.0):
         """ 
             Recursive function to search for best move using recipromax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -74,11 +91,6 @@ class Search:
                 fen = dh.flip_board(fen)
             return self.eval_function(fen), None, leaf_board
 
-        ##### If using search_test2() ######
-        # if type(board) is int:
-        #     return (-1)*board, None
-        ####################################
-
         else:
             for move in board.legal_moves:
                 # print "D%d: %s" % (depth, move)
@@ -99,23 +111,8 @@ class Search:
                 # a is the upper bound of what's useful to search
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
-                if reci_prune and best_score >= a:
+                if self.reci_prune and best_score >= a:
                     break
-
-                    ##### If using search_test2() ######
-                    # end = False
-                    # for sub in board:
-                    #     if end:
-                    #         print "cut out", sub
-                    #     else:
-                    #         score, next_move = self.recipromax(sub, depth+1, best_score)
-                    #         if score > best_score:
-                    #             best_score = score
-                    #             best_move = sub
-                    #         if best_score >= (-1)*a:
-                    #             print "D%d: %s, %s" % (depth, best_score, best_move)
-                    #             end = True
-                    ###################################
 
         # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
         return best_score, best_move, best_leaf
@@ -253,25 +250,6 @@ def search_test4():
 
     print "Test 4 passed."
     return True
-
-
-def search_test_old():
-    # DEPRECATED
-    """ Runs a basic minimax test on the search class. 
-        You need to toggle the comments in recipromax to test it
-        You can generate more tests at http://inst.eecs.berkeley.edu/~cs61b/fa14/ta-materials/apps/ab_tree_practice/
-        Ensure that the layer above the leaves are minimum layers"""
-    test = [[[-15, -15, 2], [4, 9, 4], [-16, 3, -15]], [[18, 7, -2], [10, -6, 15], [-2, -15, -13]],
-            [[12, 16, -19], [6, 14, -10], [2, -6, -7]]]
-    s = Search(None)
-    result = s.recipromax(test)
-    print result
-    if result == (-7, [[12, 16, -19], [6, 14, -10], [2, -6, -7]]):
-        print "Test passed."
-        return True
-    else:
-        print "Test failed. Expected (-7, [[12, 16, -19], [6, 14, -10], [2, -6, -7]]) got %s" % result
-
 
 if __name__ == '__main__':
     search_test1()

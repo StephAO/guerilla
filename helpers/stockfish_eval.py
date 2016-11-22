@@ -126,9 +126,9 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
         print "Warning: stockfish returned nothing. Command was:\n%s" % cmd
         return None
 
-    # If checkmate then only focus on mate
     if len(output) == 2:
-        output = [output[1]]
+        print "ERROR: Too long (len > 1) stockfish output. Command was:\n%s" % cmd
+        return None
 
     output = output[0].split(' ')
     if output[0] == 'mate':

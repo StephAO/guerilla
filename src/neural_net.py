@@ -382,8 +382,12 @@ class NeuralNet:
                 self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag,
                                self.b_grid, self.b_rank, self.b_file, self.b_diag])
 
-        weight_values['W_fc'], weight_values['W_final'], weight_values['b_fc'], weight_values['b_final'] = \
-            self.sess.run([self.W_fc, self.W_final, self.b_fc, self.b_final])
+
+        weight_values['W_fc'] = self.sess.run(self.W_fc)
+        weight_values['b_fc'] = self.sess.run(self.b_fc)
+
+        weight_values['W_final'], weight_values['b_final'] = \
+            self.sess.run([self.W_final, self.b_final])
 
         return weight_values
 

@@ -126,15 +126,16 @@ def diag_input_test():
             rand_channels[rank][file][channel] = 1
 
     # Convert to diagonals
-    rand_corr = np.zeros([10,8,12])
+    rand_corr = np.zeros([10, 8, 12])
     for channel in range(rand_channels.shape[2]):
         idx = 0
-        for i in range(-2,3):
-            unpad_up = np.diagonal(rand_channels[:,:,channel], offset=i)
+        for i in range(-2, 3):
+            unpad_up = np.diagonal(rand_channels[:, :, channel], offset=i)
             unpad_down = np.diagonal(np.flipud(rand_channels[:, :, channel]), offset=i)
-            rand_corr[2*idx,:,channel] = np.lib.pad(unpad_up, (0, 8 - len(unpad_down)), 'constant', constant_values=0)
-            rand_corr[2*idx + 1,:,channel] = np.lib.pad(unpad_down, (0, 8 - len(unpad_down)),
-                                                        'constant', constant_values=0)
+            rand_corr[2 * idx, :, channel] = np.lib.pad(unpad_up, (0, 8 - len(unpad_down)), 'constant',
+                                                        constant_values=0)
+            rand_corr[2 * idx + 1, :, channel] = np.lib.pad(unpad_down, (0, 8 - len(unpad_down)),
+                                                            'constant', constant_values=0)
             idx += 1
 
     fens.append(rand_fen)
@@ -250,7 +251,8 @@ def channel_input_test():
 
     return success
 
-def nsv_test(num_check=20, max_step=1000, tolerance=1e-2, allow_err=0.3, score_repeat=3):
+
+def nsv_test(num_check=40, max_step=5000, tolerance=1e-2, allow_err=0.3, score_repeat=3):
     """
     Tests that fens.nsv and sf_values.nsv file are properly aligned. Also checks that the FENS are "white plays next".
     NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
@@ -274,19 +276,19 @@ def nsv_test(num_check=20, max_step=1000, tolerance=1e-2, allow_err=0.3, score_r
     # Number of seconds spent on each stockfish score
     seconds = 1
     wrong = []
-    max_wrong = num_check*allow_err
+    max_wrong = num_check * allow_err
 
-    with open(dir_path +'/../helpers/extracted_data/fens.nsv') as fens_file, \
-            open(dir_path +'/../helpers/extracted_data/sf_values.nsv') as sf_file:
+    with open(dir_path + '/../helpers/extracted_data/fens.nsv') as fens_file, \
+            open(dir_path + '/../helpers/extracted_data/sf_values.nsv') as sf_file:
         fens_count = 0
         while fens_count < num_check and len(wrong) <= max_wrong:
-            for i in range(rnd.randint(0,max_step)):
+            for i in range(rnd.randint(0, max_step)):
                 fens_file.readline()
                 sf_file.readline()
 
             # Get median stockfish score
             fen = fens_file.readline().rstrip()
-            median_arr=[]
+            median_arr = []
             for i in range(score_repeat):
                 median_arr.append(sf.get_stockfish_score(fen, seconds=seconds))
 
@@ -310,6 +312,7 @@ def nsv_test(num_check=20, max_step=1000, tolerance=1e-2, allow_err=0.3, score_r
         return False
 
     return True
+
 
 ###############################################################################
 # SEARCH TESTS
@@ -454,6 +457,62 @@ def minimax_test_eval(fen):
     return 1 - score
 
 ###############################################################################
+# NEURAL NET TEST
+###############################################################################
+
+def save_load_weights_test(verbose = False):
+    """
+    Tests that neural net can properly save and load weights.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+
+    test_file = 'save_load_weights_test.p'
+
+    # Generate randomly initialized neural net
+    test_nn = nn.NeuralNet(verbose=verbose)
+    test_nn.start_session()
+    test_nn.init_graph()
+    weights = test_nn.get_weight_values()
+
+    # Save neural net weights to file
+    test_nn.save_weight_values(_filename=test_file)
+
+    # Close session
+    test_nn.close_session()
+
+    # Load neural net weights from file
+    test_nn = nn.NeuralNet(load_file=test_file, verbose=verbose)
+    test_nn.start_session()
+    test_nn.init_graph()
+    new_weights = test_nn.get_weight_values()
+    test_nn.close_session()
+
+    # Remove test file
+    os.remove(dir_path + '/../pickles/' + test_file)
+
+    # Compare saved and loaded weights
+    for weight in weights.iterkeys():
+        if isinstance(new_weights[weight], list) and isinstance(weights[weight], list):
+            success = all([np.array_equal(weights[weight][i], new_weights[weight][i])
+                           for i in range(len(weights[weight]))])
+        elif type(new_weights[weight]) == type(weights[weight]):
+            success = np.array_equal(np.array(weights[weight]), np.array(new_weights[weight]))
+        else:
+            success = False
+
+        if not success:
+            print "Save Load Weights Test Failed: Weight %s did not match. " % weight
+            print "Expected: "
+            print weights[weight]
+            print "Received: "
+            print new_weights[weight]
+            return False
+
+    return True
+
+###############################################################################
 # TRAINING TESTS
 ###############################################################################
 
@@ -461,8 +520,8 @@ def minimax_test_eval(fen):
 # TODO test pausing and resuming
 def training_test(verbose=False):
     """ 
-    Runs training in variety of fashions. 
-    Checks crasching, decrease in cost over epochs, consistent output, and memory usage. 
+    Runs training in variety of fashions.
+    Checks crashing, decrease in cost over epochs, consistent output, and memory usage.
     """
     success = True
     # Set hyper params for mini-test
@@ -473,12 +532,12 @@ def training_test(verbose=False):
     hp['TRAIN_CHECK_SIZE'] = 500
     hp['TD_LRN_RATE'] = 0.00001  # Learning rate
     hp['TD_DISCOUNT'] = 0.7  # Discount rate
-    
+
     for t_m in nn.NeuralNet.training_modes:
         if t_m == 'adagrad':
             hp['LEARNING_RATE'] = 0.00001
         elif t_m == 'adadelta':
-            continue # TODO remove when adadelta is fully implemented
+            continue  # TODO remove when adadelta is fully implemented
             hp['LEARNING_RATE'] = 0.00001
         elif t_m == 'bootstrap':
             hp['LEARNING_RATE'] = 0.00001
@@ -495,15 +554,15 @@ def training_test(verbose=False):
                 t.sts_interval = 100
 
                 pre_heap_size = hpy().heap().size
-                t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay',], training_time=60)
+                t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay', ], training_time=60)
                 post_heap_size = hpy().heap().size
 
             loss = pickle.load(open(dir_path + '/../pickles/loss_test.p', 'rb'))
             # Wrong number of losses
             if len(loss['train_loss']) != hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != hp['NUM_EPOCHS'] + 1:
                 error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
-                              "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d" % \
-                              (hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
+                             "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d" % \
+                             (hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
                 success = False
             # Training loss went up
             if loss['train_loss'][0] <= loss['train_loss'][-1]:
@@ -514,18 +573,19 @@ def training_test(verbose=False):
                 error_msg += "Bootstrap validation loss went up. Losses:\n%s" % (loss['loss'])
                 success = False
             # Memory usage increased significantly
-            if float(abs(post_heap_size - pre_heap_size))/float(pre_heap_size) > 0.01:
+            if float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size) > 0.01:
                 success = False
                 error_msg += "Memory increasing significantly when running training.\n" \
                              "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%" \
-                             % (pre_heap_size, post_heap_size, 100. * float(abs(post_heap_size - pre_heap_size))/float(pre_heap_size))
+                             % (pre_heap_size, post_heap_size,
+                                100. * float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size))
         # Training failed                    
-        except Exception as e:
+        except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             error_msg += "The following error occured during the training:" \
-                          "\n  type:\n    %s\n\n  Error msg:\n    %s\n\n  traceback:\n    %s\n" % \
+                         "\n  type:\n    %s\n\n  Error msg:\n    %s\n\n  traceback:\n    %s\n" % \
                          (str(exc_type).split('.')[1][:-2], exc_value, \
-                         '\n    '.join(''.join(traceback.format_tb(exc_traceback)).split('\n')))
+                          '\n    '.join(''.join(traceback.format_tb(exc_traceback)).split('\n')))
             success = False
 
         if not success:
@@ -533,17 +593,20 @@ def training_test(verbose=False):
 
     return success
 
+
 def main():
     all_tests = {}
-    all_tests["Input Tests"] = {'Stockfish handling': stockfish_test,
-                                # 'Board to channels': channel_input_test,
-                                # 'Channels to diagonals': diag_input_test,
-                                'NSV alignment': nsv_test}
+    all_tests["Input Tests"] = {'Stockfish Handling': stockfish_test,
+                                'Board to Channels': channel_input_test,
+                                'Channels to Diagonals': diag_input_test,
+                                'NSV Alignment': nsv_test}
 
     all_tests["Search Tests"] = {'White Search': white_search_test,
                                  'Black Search': black_search_test,
                                  'Checkmate Search': checkmate_search_test,
                                  'Minimax And Pruning': minimax_pruning_test}
+
+    all_tests["Neural net Tests"] = {'Weight Save and Load': save_load_weights_test}
 
     all_tests["Training Tests"] = {'Training Test': training_test}
 

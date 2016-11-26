@@ -76,7 +76,7 @@ class NeuralNet:
         # tf session and variables
         self.sess = None
 
-        self.conv_layer_size = 64 + 8 + 8 + 10 # 90
+        self.conv_layer_size = 64 + 8 + 8 + 10  # 90
 
         # define all variables
         self.define_tf_variables()
@@ -118,9 +118,10 @@ class NeuralNet:
             self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
 
         self.W_fc_placeholders = [None] * hp['NUM_FC_LAYERS']
-        self.b_fc_placeholders = [None] * hp['NUM_FC_LAYERS'] 
+        self.b_fc_placeholders = [None] * hp['NUM_FC_LAYERS']
         if self.use_conv:
-            self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[self.conv_layer_size * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
+            self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
+                                                       shape=[self.conv_layer_size * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
         else:
             self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
         self.b_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
@@ -135,12 +136,14 @@ class NeuralNet:
         # same order as all weights
         self.all_placeholders = []
         if self.use_conv:
-            self.all_placeholders.extend([self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder])
+            self.all_placeholders.extend(
+                [self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder])
         self.all_placeholders.extend(self.W_fc_placeholders)
         self.all_placeholders.append(self.W_final_placeholder)
 
         if self.use_conv:
-            self.all_placeholders.extend([self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder])
+            self.all_placeholders.extend(
+                [self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder])
         self.all_placeholders.extend(self.b_fc_placeholders)
         self.all_placeholders.append(self.b_final_placeholder)
 
@@ -169,12 +172,14 @@ class NeuralNet:
         self.all_assignments = []
 
         if self.use_conv:
-            self.all_assignments.extend([self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment])
+            self.all_assignments.extend(
+                [self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment])
         self.all_assignments.extend(self.W_fc_assignments)
         self.all_assignments.append(self.W_final_assignment)
 
         if self.use_conv:
-            self.all_assignments.extend([self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment])
+            self.all_assignments.extend(
+                [self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment])
         self.all_assignments.extend(self.b_fc_assignments)
         self.all_assignments.append(self.b_final_assignment)
 
@@ -188,15 +193,15 @@ class NeuralNet:
         # Using MAE since value difference will always be 0 <= x <= 1, don't want the sublinear error when using MSE
         #   Note: Ensures that both inputs are the same shape
         self.MAE = tf.reduce_sum(tf.abs(tf.sub(
-            tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value)))
+            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
 
         self.MSE = tf.reduce_sum(tf.pow(tf.sub(
-            tf.reshape(self.pred_value,shape=tf.shape(self.true_value)), self.true_value), 2))
+            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
 
         if self.training_mode == 'adagrad':
             self.train_optimizer = tf.train.AdagradOptimizer(hp['LEARNING_RATE'])
         elif self.training_mode == 'adadelta':
-            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=hp['LEARNING_RATE'], rho = hp['DECAY_RATE'])
+            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=hp['LEARNING_RATE'], rho=hp['DECAY_RATE'])
         elif self.training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(hp['LEARNING_RATE'])
         self.train_step = self.train_optimizer.minimize(self.MSE)
@@ -213,6 +218,8 @@ class NeuralNet:
         # initialize or load variables
         if self.load_file:
             self.load_weight_values(self.load_file)
+            # Initialize un-initialized variables (non-weight variables)
+            self.sess.run(tf.initialize_variables(set(tf.all_variables()) - set(self.all_weights)))
         else:
             if self.verbose:
                 print "Initializing variables from a normal distribution."
@@ -289,7 +296,6 @@ class NeuralNet:
                     if val:
                         var_dict[var.name] = val
             return var_dict
-
 
     def save_training_vars(self, path):
         """
@@ -376,18 +382,27 @@ class NeuralNet:
 
         if self.use_conv:
             weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], \
-                weight_values['W_diag'], \
-                weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], \
-                weight_values['b_diag'] = \
+            weight_values['W_diag'], \
+            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], \
+            weight_values['b_diag'] = \
                 self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag,
                                self.b_grid, self.b_rank, self.b_file, self.b_diag])
 
+        # Set up dict entries for fully-connected layers
+        weight_values['W_fc'] = [None] * len(self.W_fc)
+        weight_values['b_fc'] = [None] * len(self.b_fc)
 
-        weight_values['W_fc'] = self.sess.run(self.W_fc)
-        weight_values['b_fc'] = self.sess.run(self.b_fc)
+        # Get weight values
+        result = self.sess.run(self.W_fc + self.b_fc + [self.W_final, self.b_final])
 
-        weight_values['W_final'], weight_values['b_final'] = \
-            self.sess.run([self.W_final, self.b_final])
+        # Assign fully connected layers
+        for i in range(len(self.W_fc)):
+            weight_values['W_fc'][i] = result[i]
+            weight_values['b_fc'][i] = result[len(self.W_fc) + i]
+
+        # Assign final layer
+        weight_values['W_final'] = result[-2]
+        weight_values['b_final'] = result[-1]
 
         return weight_values
 
@@ -421,11 +436,11 @@ class NeuralNet:
         else:
             data = tf.reshape(self.data, [batch_size, 64 * hp['NUM_CHANNELS']])
             # output of fully connected layer 1
-            o_fc[0] = tf.nn.relu(tf.matmul(data, self.W_fc[0]) + self.b_fc[0]) 
+            o_fc[0] = tf.nn.relu(tf.matmul(data, self.W_fc[0]) + self.b_fc[0])
 
         for i in xrange(1, hp['NUM_FC_LAYERS']):
             # output of fully connected layer n
-            o_fc[i] = tf.nn.relu(tf.matmul(o_fc[i-1], self.W_fc[i]) + self.b_fc[i])
+            o_fc[i] = tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i])
 
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc[-1], self.W_final) + self.b_final)
@@ -448,7 +463,7 @@ class NeuralNet:
         Updates the neural net weights based on the input.
             Input:
                 weight_vals [List]
-                    List of values with which to update weights. Must be iin desired order.
+                    List of values with which to update weights. Must be in desired order.
         """
         assert len(weight_vals) == len(self.all_weights)
 
@@ -460,7 +475,7 @@ class NeuralNet:
         # Run assignment/update
         self.sess.run(self.all_assignments, feed_dict=placeholder_dict)
 
-    def add_all_weights(self, weight_vals): # TODO rename to add_to_all_weights
+    def add_all_weights(self, weight_vals):  # TODO rename to add_to_all_weights
         """
         Increments all the weight values by the input amount.
             Input:

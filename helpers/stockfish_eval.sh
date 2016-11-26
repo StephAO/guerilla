@@ -21,7 +21,4 @@ echo "setoption name threads value $threads" ;
 echo "position fen $fen $turn $castling $enpassant $half_move $full_move" ;
 echo "go infinite";
 sleep $seconds
-) | stockfish > analysis.txt
-cat analysis.txt | grep -ohE "score cp (-?[0-9]+)" | tail -1 | cut -d' ' -f2-3
-cat analysis.txt | grep -ohE "score mate (-?[0-9]+)" | tail -1 | cut -d' ' -f2-3
-rm -rf analysis.txt
+) | stockfish | grep -ohE "score cp (-?[0-9]+)|score mate (-?[0-9]+)" | tail -1 | cut -d' ' -f2-3

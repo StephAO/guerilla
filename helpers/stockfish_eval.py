@@ -19,11 +19,13 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
         Uses stockfishes engine to evaluate a score for each board.
         Then uses a sigmoid to map the scores to a winning probability between 
         0 and 1 (see sigmoid_array for how the sigmoid was chosen).
+
             Inputs:
                 boards[list of strings]:
                     list of board fens
                 num_attempt [Int]
                     The number of times to attempt to score a fen.
+
             Outputs:
                 values[list of floats]:
                     a list of values for each board ranging between 0 and 1
@@ -92,6 +94,7 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
             Amount of memory to use for stockfish
         num_attempt [Int]
             Number of attempts which should be made to get a stockfish score for the given fen.
+
     Output:
         score [Float]
             Stockfish score. Returns None if no score found.
@@ -123,9 +126,9 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
         print "Warning: stockfish returned nothing. Command was:\n%s" % cmd
         return None
 
-    # If checkmate then only focus on mate
     if len(output) == 2:
-        output = [output[1]]
+        print "ERROR: Too long (len > 1) stockfish output. Command was:\n%s" % cmd
+        return None
 
     output = output[0].split(' ')
     if output[0] == 'mate':

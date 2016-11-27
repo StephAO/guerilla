@@ -20,7 +20,7 @@ from hyper_parameters import *
 from players import Guerilla
 # To test memory usage
 from guppy import hpy
-
+import tensorflow as tf
 
 ###############################################################################
 # Input Tests
@@ -456,11 +456,12 @@ def minimax_test_eval(fen):
 
     return 1 - score
 
+
 ###############################################################################
 # NEURAL NET TEST
 ###############################################################################
 
-def save_load_weights_test(verbose = False):
+def save_load_weights_test(verbose=False):
     """
     Tests that neural net can properly save and load weights.
     Output:
@@ -493,31 +494,51 @@ def save_load_weights_test(verbose = False):
     os.remove(dir_path + '/../pickles/' + test_file)
 
     # Compare saved and loaded weights
-    for weight in weights.iterkeys():
-        if isinstance(new_weights[weight], list) and isinstance(weights[weight], list):
-            success = all([np.array_equal(weights[weight][i], new_weights[weight][i])
-                           for i in range(len(weights[weight]))])
-        elif type(new_weights[weight]) == type(weights[weight]):
-            success = np.array_equal(np.array(weights[weight]), np.array(new_weights[weight]))
+    result_msg = diff_dict_helper(weights, new_weights)
+    if result_msg:
+        print "Weight did not match."
+        print result_msg
+        return False
+
+    return True
+
+def diff_dict_helper(old_dict, new_dict):
+    """
+    Compares two dictionaries of numpy.arrays. Useful for comparing weights and training variables.
+    Input
+        old_dict [Dictionary of numpy.arrays]
+            One of the dictionary you'd like to compare.
+        new_dict [Dictionary of numpy.arrays]
+            The other dictionary you'd like to compare.
+    Output:
+        Result [None or String]
+            Returns None if identical, otherwise returns error message.
+    """
+
+    for weight in old_dict.iterkeys():
+        if isinstance(new_dict[weight], list) and isinstance(old_dict[weight], list):
+            success = all([np.array_equal(old_dict[weight][i], new_dict[weight][i])
+                           for i in range(len(old_dict[weight]))])
+            success = success and (len(old_dict[weight]) == len(new_dict[weight]))
+        elif type(new_dict[weight]) == type(old_dict[weight]):
+            success = np.array_equal(np.array(old_dict[weight]), np.array(new_dict[weight]))
         else:
             success = False
 
         if not success:
-            print "Save Load Weights Test Failed: Weight %s did not match. " % weight
-            print "Expected: "
-            print weights[weight]
-            print "Received: "
-            print new_weights[weight]
-            return False
+            return "Mismatching entries for '%s': Expected:\n %s \n Received:\n %s\n" % (weight,
+                                                                                           str(old_dict[weight]),
+                                                                                str(new_dict[weight]))
 
-    return True
+    if len(old_dict) != len(new_dict):
+        return "Different number of entries for '%s': Expected Length:\n %s \n Received Length:\n %s\n" % (weight,                                                                                                  len(old_dict),                                                                                                  len(new_dict))
+
+    return None
 
 ###############################################################################
 # TRAINING TESTS
 ###############################################################################
 
-
-# TODO test pausing and resuming
 def training_test(verbose=False):
     """ 
     Runs training in variety of fashions.
@@ -527,9 +548,9 @@ def training_test(verbose=False):
     # Set hyper params for mini-test
     hp['NUM_FEAT'] = 10
     hp['NUM_EPOCHS'] = 5
-    hp['BATCH_SIZE'] = 500
-    hp['VALIDATION_SIZE'] = 500
-    hp['TRAIN_CHECK_SIZE'] = 500
+    hp['BATCH_SIZE'] = 50
+    hp['VALIDATION_SIZE'] = 50
+    hp['TRAIN_CHECK_SIZE'] = 50
     hp['TD_LRN_RATE'] = 0.00001  # Learning rate
     hp['TD_DISCOUNT'] = 0.7  # Discount rate
 
@@ -547,7 +568,7 @@ def training_test(verbose=False):
             with Guerilla('Harambe', 'w', training_mode=t_m, verbose=False) as g:
                 g.search.max_depth = 1
                 t = teacher.Teacher(g, test=True, verbose=False)
-                t.set_bootstrap_params(num_bootstrap=1000)  # 488037
+                t.set_bootstrap_params(num_bootstrap=500)  # 488037
                 t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
                 t.set_sp_params(num_selfplay=1, max_length=3)
                 t.sts_on = False
@@ -593,6 +614,133 @@ def training_test(verbose=False):
 
     return success
 
+def load_and_resume_test(verbose=False):
+    """
+    Tests the load_and_resume functionality of teacher.
+    Things it checks for:
+        (1) Doesn't crash.
+        (2) Weights are properly loaded.
+        (3) Graph training variables are properly loaded.
+        (4) Correct action is loaded.
+        (5) Correct set of actions is loaded.
+        (6) Correct number of epochs.
+    Does not check (among other things):
+        (-) That all the necessary components of the training state are stored.
+        (-) That the correct sequence of training actions is taken.
+        (-) That training reduces the loss.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+
+    # Modify hyperparameters for a small training example.
+    success = True
+    hp['NUM_FEAT'] = 10
+    hp['NUM_EPOCHS'] = 5
+    hp['BATCH_SIZE'] = 5
+    hp['VALIDATION_SIZE'] = 5
+    hp['TRAIN_CHECK_SIZE'] = 5
+    hp['TD_LRN_RATE'] = 0.00001  # Learning rate
+    hp['TD_DISCOUNT'] = 0.7  # Discount rate
+    hp['LEARNING_RATE'] = 0.00001
+
+    # Pickle path
+    pickle_path = dir_path + '/../pickles/'
+
+    # Test for each training type & all training types together
+    train_actions = teacher.Teacher.actions_dict[:-1]
+    train_actions.append(teacher.Teacher.actions_dict[:-1])
+    for action in train_actions:
+        set_of_actions = action if isinstance(action, list) else [action]
+
+        # Error message:
+        error_msg = ''
+
+        # Reset graph
+        tf.reset_default_graph()
+
+        # Run action
+        with Guerilla('Harambe', 'w', verbose=verbose) as g:
+            g.search.max_depth = 1
+            t = teacher.Teacher(g, test=True, verbose=verbose)
+            t.set_bootstrap_params(num_bootstrap=50)  # 488037
+            t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
+            t.set_sp_params(num_selfplay=3, max_length=5)
+
+            # Run
+            t.run(set_of_actions, training_time= (0.5 if not isinstance(action, list) else 4))
+
+            # Save current action
+            pause_action = t.actions[t.curr_action_idx]
+
+            # Save Weights
+            weights = g.nn.get_weight_values()
+
+            # Save graph training variables
+            train_vars = g.nn.sess.run(g.nn.get_training_vars())
+
+        # Reset graph
+        tf.reset_default_graph()
+
+        # Run resume
+        with Guerilla('Harambe', 'w', verbose=verbose) as g:
+            g.search.max_depth = 1
+            t = teacher.Teacher(g, test=True, verbose=verbose)
+            t.set_bootstrap_params(num_bootstrap=500)  # 488037
+
+            # Run
+            t.run(['load_and_resume'])
+
+            # Save loaded current action
+            state = t.load_state() # resets weights and training vars to start of resume values
+            new_actions = state['actions']
+            new_action = new_actions[state['curr_action_idx']]
+
+            # Get new weights
+            new_weights = g.nn.get_weight_values()
+
+            # Save new training variables
+            new_train_vars = g.nn.sess.run(g.nn.get_training_vars())
+
+
+        # Compare weight values
+        result_msg = diff_dict_helper(weights, new_weights)
+        if result_msg:
+            error_msg += "Weight did not match.\n"
+            error_msg += result_msg
+            success = False
+
+        # Compare graph training variable values
+        result_msg = diff_dict_helper(train_vars, new_train_vars)
+        if result_msg:
+            error_msg += "Training variables did not match.\n"
+            error_msg += result_msg
+            success = False
+
+        # Compare the action
+        if pause_action != new_action:
+            error_msg += "Current action was not saved and loaded properly. \n"
+            error_msg += "Saved:\n %s \n Loaded:\n %s\n" % (pause_action, new_action)
+            success = False
+
+        # Compare the set of actions
+        if set_of_actions != new_actions:
+            error_msg += "Set of actions was not saved and loaded properly. \n"
+            error_msg += "Saved:\n %s \n Loaded:\n %s\n" % (str(set_of_actions), str(new_actions))
+            success = False
+
+        # Check that correct number of epochs is run
+        with open(pickle_path + 'loss_test.p', 'r') as f:
+            loss = pickle.load(f)
+            if hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
+                error_msg += "On action %s there was the wrong number of epochs. " % action
+                error_msg += "Expected %d epochs, but got %d epochs." % (hp['NUM_EPOCHS'], len(loss['loss']) - 1)
+                success = False
+
+        if not success:
+            print "Load and resume with action %s fails:\n%s" % (str(action), error_msg)
+
+    return success
 
 def main():
     all_tests = {}
@@ -608,7 +756,8 @@ def main():
 
     all_tests["Neural net Tests"] = {'Weight Save and Load': save_load_weights_test}
 
-    all_tests["Training Tests"] = {'Training Test': training_test}
+    all_tests["Training Tests"] = {'Training Test': training_test,
+                                   'Load and Resume': load_and_resume_test}
 
     success = True
     for group_name, group_dict in all_tests.iteritems():

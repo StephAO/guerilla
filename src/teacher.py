@@ -103,9 +103,18 @@ class Teacher:
             if self.curr_action_idx >= len(self.actions):
                 break
             elif self.out_of_time():
-                # Check if run out of time between actions, save if necessary
+                # Check if run out of time
+
                 if not self.saved:
+                    # Ran out of time between actions, save data
+                    if self.verbose:
+                        print "State saved between actions."
                     self.save_state(state={})
+                else:
+                    # Ran out of time during an action.
+                    # Don't save data, but note that still on previous action.
+                    if self.verbose:
+                        print "State saved during an action."
                 break
 
             # Else
@@ -138,7 +147,9 @@ class Teacher:
             else:
                 raise NotImplementedError("Error: %s is not a valid action." % action)
 
-            self.curr_action_idx += 1
+            if not self.saved:
+                # If not timed out
+                self.curr_action_idx += 1
 
     def save_state(self, state, filename="state.p"):
         """
@@ -190,8 +201,6 @@ class Teacher:
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
         self.saved = True
-        if self.verbose:
-            print "State saved."
 
     def load_state(self, filename='state.p'):
         """
@@ -286,7 +295,7 @@ class Teacher:
                 plt.show()
 
             # continue with rests of epochs
-            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'],
+            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
                                  loss=state['loss'], train_loss=state['train_loss'])
         elif action == 'train_td_endgames':
             if self.verbose:
@@ -304,7 +313,7 @@ class Teacher:
             self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
                                 sts_scores=state['sts_scores'])
         elif action == 'load_and_resume':
-            raise ValueError("Error: It's trying to resume on a resume call - This shouldn't happen.")
+            raise ValueError("Error: Trying to resume on a resume call - This shouldn't happen.")
         else:
             raise NotImplementedError("Error: %s is not a valid action." % action)
 
@@ -991,7 +1000,6 @@ def main():
         # t.sts_mode = Teacher.sts_strat_files[0]
         t.run(['train_bootstrap'], training_time=run_time)
         # t.run(['load_and_resume'], training_time=28000)
-
 
 if __name__ == '__main__':
     main()

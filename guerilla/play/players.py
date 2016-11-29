@@ -1,16 +1,13 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
-import neural_net
-import search
+from guerilla.play.neural_net import NeuralNet
+from guerilla.play.search import Search
 import chess
 import random
 import os
 import sys
 import chess.uci
-
-dir_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, dir_path + '/../engines/sunfish/')
-import sunfish
-import tools as sun_tools
+import other_engines.sunfish as sunfish
+import other_engines.sunfish.tools as sun_tools
 
 
 class Player:
@@ -64,8 +61,8 @@ class Player:
 class Guerilla(Player):
     def __init__(self, name, colour=None, use_conv=True, load_file=None, training_mode = None, verbose=True):
         super(Guerilla, self).__init__(name, colour)
-        self.nn = neural_net.NeuralNet(use_conv=use_conv, load_file=load_file, training_mode=training_mode, verbose=verbose)
-        self.search = search.Search(self.nn.evaluate)
+        self.nn = NeuralNet(use_conv=use_conv, load_file=load_file, training_mode=training_mode, verbose=verbose)
+        self.search = Search(self.nn.evaluate)
 
     def __enter__(self):
         self.nn.start_session()

@@ -9,10 +9,8 @@ import sys
 import os
 import time
 from os.path import isfile, join
-
-dir_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, dir_path + '/../src/')
-import data_handler as dh
+from pkg_resources import resource_filename
+import guerilla.play.data_handler as dh
 
 
 def read_pgn(filename):
@@ -49,8 +47,8 @@ def get_fens(generate_time):
             fens:
                 list of fen strings from games
     """
-    checkpoint_path = dir_path + '/extracted_data/game_num.txt'
-    games_path = dir_path + '/pgn_files/single_game_pgns'
+    checkpoint_path =  resource_filename('guerilla.train', '/extracted_data/game_num.txt')
+    games_path = resource_filename('guerilla.train', '/pgn_files/single_game_pgns')
 
     game_num = 0
     if os.path.isfile(checkpoint_path):
@@ -61,7 +59,7 @@ def get_fens(generate_time):
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
     
     start_time = time.clock()
-    with open(dir_path + '/extracted_data/fens.nsv', 'a') as fen_file:
+    with open(resource_filename('guerilla.train', '/extracted_data/fens.nsv'), 'a') as fen_file:
         print "Opened fens output file..."
         while (time.clock() - start_time) < generate_time:
             fens = read_pgn(games_path + '/' + files[game_num])
@@ -72,7 +70,7 @@ def get_fens(generate_time):
             game_num += 1
 
     # Write out next game to be processed
-    with open(dir_path + '/extracted_data/game_num.txt', 'w') as num_file:
+    with open(resource_filename('guerilla.train', '/extracted_data/game_num.txt'), 'w') as num_file:
         num_file.write(str(game_num))
 
 def load_fens(filename='fens.nsv', num_values=None):
@@ -87,7 +85,7 @@ def load_fens(filename='fens.nsv', num_values=None):
         Output:
             Loaded pickle.
     """
-    full_path = dir_path + "/extracted_data/" + filename
+    full_path = resource_filename('guerilla.train', '/extracted_data/' + filename) 
     fens = []
     count = 0
     with open(full_path, 'r') as fen_file:

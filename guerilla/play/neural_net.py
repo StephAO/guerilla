@@ -3,8 +3,9 @@ from tensorflow.python.framework import ops
 import numpy as np
 import pickle
 import os
-from hyper_parameters import *
-import data_handler as dh
+from pkg_resources import resource_filename
+from guerilla.hyper_parameters import *
+import guerilla.play.data_handler as dh
 
 
 def weight_variable(shape):
@@ -40,7 +41,6 @@ class NeuralNet:
                     Training mode to be used. Defaults to Adagrad.
         """
         self.use_conv = use_conv
-        self.dir_path = os.path.dirname(__file__)
 
         self.load_file = load_file
         self.verbose = verbose
@@ -341,7 +341,7 @@ class NeuralNet:
                     Name of the file to load weight values from
         """
 
-        pickle_path = self.dir_path + '/../pickles/' + _filename
+        pickle_path = resource_filename('guerilla', 'weights/' + _filename)
         if self.verbose:
             print "Loading weights values from %s" % pickle_path
         values_dict = pickle.load(open(pickle_path, 'rb'))
@@ -369,7 +369,7 @@ class NeuralNet:
                     Name of the file to save weight values to
         """
 
-        pickle_path = self.dir_path + '/../pickles/' + _filename
+        pickle_path = resource_filename('guerilla', 'weights/' + _filename)
         pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
         if self.verbose:
             print "Weights saved to %s" % _filename

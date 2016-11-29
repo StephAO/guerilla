@@ -1,14 +1,12 @@
 import chess.pgn
 import sys
 import os
-
-dir_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, dir_path + '/../src/GUI/')
-import ChessGUI
+from pkg_resources import resource_filename
+from guerilla.play.gui.chess_gui import ChessGUI
 
 def view_game(filename):
-    gui = ChessGUI.ChessGUI(view=True)
-    full_path = dir_path + "/../played_games/" + filename
+    gui = ChessGUI(view=True)
+    full_path = resource_filname('guerilla', 'played_games/' + filename)
     gui.print_msg("Use arrow keys or buttons to navigate")
     with open(full_path, 'r') as pgn_file:
         game = chess.pgn.read_game(pgn_file)

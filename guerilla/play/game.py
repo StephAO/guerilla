@@ -4,10 +4,8 @@ import chess.pgn
 from players import *
 import os
 import time
-
-dir_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, dir_path + '/GUI/')
-import ChessGUI
+from pkg_resources import resource_filename
+from guerilla.play.gui.chess_gui import ChessGUI
 
 
 class Game:
@@ -45,7 +43,7 @@ class Game:
         self.use_gui = use_gui
         # Initialize gui
         if use_gui:
-            self.gui = ChessGUI.ChessGUI()
+            self.gui = ChessGUI()
             if type(players[0]) is Human:
                 self.player1.gui = self.gui
             if type(players[1]) is Human:

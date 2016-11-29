@@ -1,14 +1,12 @@
 # usage: python loss_2_excel.py loss_20161121-054613.py
-
+from pkg_resources import resource_filename
 import pickle
 import sys
 import os
 
-dir_path = os.path.dirname(os.path.abspath(__file__))
-
 def main():
 
-	f_name = dir_path + '/../pickles/' + sys.argv[1]
+	f_name = resource_filname('guerilla.train', 'pickles/' + sys.argv[1])
 	loss = pickle.load(open(f_name, 'r'))
 	
 	for i in range(len(loss['loss'])):

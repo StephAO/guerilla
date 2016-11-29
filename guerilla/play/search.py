@@ -1,6 +1,6 @@
 import chess
-import data_handler as dh
-import Node
+import guerilla.play.data_handler as dh
+import guerilla.play.node as mc_node
 import time
 
 class Search:
@@ -46,11 +46,11 @@ class Search:
         start_time = time.clock()
         while time.clock - start_time < search_time:
             # On first expansion, generate all children - not sure if this is the right way to do this but i'm tired, double check later
-            if Node.root is None:
-                Node(None, board.fen(), 0)
-                Node.root.expand(-1)
+            if mc_node.root is None:
+                mc_node(None, board.fen(), 0)
+                mc_node.root.expand(-1)
 
-            node = Node.select()
+            node = mc_node.select()
             new_nodes = node.expand()
             for n in new_nodes:
                 n.simulate()

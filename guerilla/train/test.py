@@ -1,26 +1,24 @@
 # Unit tests
+from guerilla.hyper_parameters import *
+from guerilla.play.search import Search
+from guerilla.play.players import Guerilla
+from guerilla.train.teacher import Teacher
+import guerilla.play.data_handler as dh
+import guerilla.play.neural_net as nn
+import guerilla.train.stockfish_eval as sf
 
+from pkg_resources import resource_filename
 import sys
 import os
-
-dir_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, dir_path + '/../helpers/')
-
-import numpy as np
-import random as rnd
-import data_handler as dh
-import stockfish_eval as sf
-import neural_net as nn
-from search import Search
 import chess
-import teacher
 import pickle
 import traceback
-from hyper_parameters import *
-from players import Guerilla
+import tensorflow as tf
+import numpy as np
+import random as rnd
 # To test memory usage
 from guppy import hpy
-import tensorflow as tf
+
 
 ###############################################################################
 # Input Tests
@@ -278,8 +276,8 @@ def nsv_test(num_check=40, max_step=5000, tolerance=1e-2, allow_err=0.3, score_r
     wrong = []
     max_wrong = num_check * allow_err
 
-    with open(dir_path + '/../helpers/extracted_data/fens.nsv') as fens_file, \
-            open(dir_path + '/../helpers/extracted_data/sf_values.nsv') as sf_file:
+    with open(resource_filename('guerilla.train', 'extracted_data/fens.nsv'), 'r') as fens_file, \
+            open(resource_filename('guerilla.train', 'extracted_data/sf_values.nsv'), 'r') as sf_file:
         fens_count = 0
         while fens_count < num_check and len(wrong) <= max_wrong:
             for i in range(rnd.randint(0, max_step)):
@@ -491,7 +489,7 @@ def save_load_weights_test(verbose=False):
     test_nn.close_session()
 
     # Remove test file
-    os.remove(dir_path + '/../pickles/' + test_file)
+    os.remove(resource_filename('guerilla', 'weights/' + test_file))
 
     # Compare saved and loaded weights
     result_msg = diff_dict_helper(weights, new_weights)
@@ -567,7 +565,7 @@ def training_test(verbose=False):
         try:
             with Guerilla('Harambe', 'w', training_mode=t_m, verbose=False) as g:
                 g.search.max_depth = 1
-                t = teacher.Teacher(g, test=True, verbose=False)
+                t = Teacher(g, test=True, verbose=False)
                 t.set_bootstrap_params(num_bootstrap=500)  # 488037
                 t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
                 t.set_sp_params(num_selfplay=1, max_length=3)
@@ -578,7 +576,7 @@ def training_test(verbose=False):
                 t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay', ], training_time=60)
                 post_heap_size = hpy().heap().size
 
-            loss = pickle.load(open(dir_path + '/../pickles/loss_test.p', 'rb'))
+            loss = pickle.load(open(resource_filename('guerilla.train', 'pickles/loss_test.p'), 'rb'))
             # Wrong number of losses
             if len(loss['train_loss']) != hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != hp['NUM_EPOCHS'] + 1:
                 error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
@@ -645,11 +643,11 @@ def load_and_resume_test(verbose=False):
     hp['LEARNING_RATE'] = 0.00001
 
     # Pickle path
-    pickle_path = dir_path + '/../pickles/'
+    pickle_path = resource_filename('guerilla.train', 'pickles/')
 
     # Test for each training type & all training types together
-    train_actions = teacher.Teacher.actions_dict[:-1]
-    train_actions.append(teacher.Teacher.actions_dict[:-1])
+    train_actions = Teacher.actions[:-1]
+    train_actions.append(Teacher.actions[:-1])
     for action in train_actions:
         set_of_actions = action if isinstance(action, list) else [action]
 
@@ -662,7 +660,7 @@ def load_and_resume_test(verbose=False):
         # Run action
         with Guerilla('Harambe', 'w', verbose=verbose) as g:
             g.search.max_depth = 1
-            t = teacher.Teacher(g, test=True, verbose=verbose)
+            t = Teacher(g, test=True, verbose=verbose)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
             t.set_sp_params(num_selfplay=3, max_length=5)
@@ -685,7 +683,7 @@ def load_and_resume_test(verbose=False):
         # Run resume
         with Guerilla('Harambe', 'w', verbose=verbose) as g:
             g.search.max_depth = 1
-            t = teacher.Teacher(g, test=True, verbose=verbose)
+            t = Teacher(g, test=True, verbose=verbose)
             t.set_bootstrap_params(num_bootstrap=500)  # 488037
 
             # Run

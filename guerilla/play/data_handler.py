@@ -1,18 +1,10 @@
+# TODO: double check that there aren't unecessary imports
 import sys
 import os
 import time
-
-# TODO: Remove this and replace with proper access.
-dir_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, dir_path + '/../helpers/')
-
-# TODO: double check that there aren't unecessary imports
-
 import chess
 import numpy as np
-import stockfish_eval as sf
-import chess_game_parser as cgp
-from hyper_parameters import *
+from guerilla.hyper_parameters import *
 
 
 def flip_board(fen):
@@ -140,32 +132,6 @@ def get_diagonals(channels):
             index += 1
 
     return diagonals
-
-
-
-def get_stockfish_values(boards):
-    """
-        Uses stockfishes evaluation to get a score for each board, then uses a sigmoid to map
-        the scores to a winning probability between 0 and 1 (see sigmoid_array for how the sigmoid was chosen)
-
-        Inputs:
-            boards[list of strings]:
-                list of board fens
-
-        Outputs:
-            values[list of floats]:
-                a list of values for each board ranging between 0 and 1
-    """
-    cps = []
-    for b in boards:
-        # cp = centipawns advantage
-        cp = sf.stockfish_scores(b, seconds=2)
-        print cp
-        if cp is not None:
-            cps.append(cp)
-    cps = np.array(cps)
-    print np.shape(cps)
-    return sigmoid_array(cps)
 
 
 def sigmoid_array(values):

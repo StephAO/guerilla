@@ -22,7 +22,8 @@ import chess
 import os
 import sys
 from pygame.locals import *
-from ScrollingTextBox import ScrollingTextBox
+from guerilla.play.gui.scrolling_text_box import ScrollingTextBox
+from pkg_resources import resource_filename
 
 class ChessGUI:
 
@@ -54,7 +55,7 @@ class ChessGUI:
         """
             Load images used to represent chess pieces.
         """
-        dir_path = os.path.dirname(os.path.abspath(__file__))
+        dir_path = resource_filename('guerilla.play.gui', '.')
         self.square_size = 50
         self.white_square = pygame.image.load(os.path.join(dir_path,"images","white_square.png")).convert()
         self.brown_square = pygame.image.load(os.path.join(dir_path,"images","brown_square.png")).convert()

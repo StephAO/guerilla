@@ -6,7 +6,7 @@ from guerilla.play.gui.chess_gui import ChessGUI
 
 def view_game(filename):
     gui = ChessGUI(view=True)
-    full_path = resource_filname('guerilla', 'played_games/' + filename)
+    full_path = resource_filename('guerilla', 'data/played_games/' + filename)
     gui.print_msg("Use arrow keys or buttons to navigate")
     with open(full_path, 'r') as pgn_file:
         game = chess.pgn.read_game(pgn_file)
@@ -35,7 +35,7 @@ def view_game(filename):
 
 def main():
     if len(sys.argv) < 2:
-        print "Usage: python view_pgn.py <filename>. File must be located in guerilla/games_played"
+        print "Usage: python view_pgn.py <filename>. File must be located in guerilla/data/played_games"
         sys.exit(0)
     view_game(sys.argv[1])
 

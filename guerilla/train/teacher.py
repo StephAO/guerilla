@@ -1,23 +1,23 @@
+import math
 import os
-import sys
+import pickle
 import random
+import sys
+import time
+from operator import add
+
+import chess
+import chess.pgn
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import math
-import chess.pgn
-import chess
-import time
-import matplotlib.pyplot as plt
-import pickle
-import copy
-from operator import add
 from pkg_resources import resource_filename
 
-from guerilla.play.players import Player, Guerilla
-import guerilla.play.data_handler as dh
-import guerilla.train.stockfish_eval as sf
+import guerilla.data_handler as dh
 import guerilla.train.chess_game_parser as cgp
+import guerilla.train.stockfish_eval as sf
 from guerilla.hyper_parameters import *
+from guerilla.play.players import Player, Guerilla
 
 
 class Teacher:
@@ -48,7 +48,7 @@ class Teacher:
         self.num_bootstrap = -1
 
         # TD-Leaf parameters
-        self.td_pgn_folder = resource_filename('guerilla.train', 'pgn_files/single_game_pgns')
+        self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
         self.td_rand_file = False  # If true then TD-Leaf randomizes across the files in the folder.
         self.td_num_endgame = -1  # The number of endgames to train on using TD-Leaf (-1 = All)
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
@@ -192,12 +192,12 @@ class Teacher:
         state['sts_depth'] = self.sts_depth
 
         # Save training variables
-        train_var_path = resource_filename('guerilla.train', 'pickles/train_vars/in_training_vars.vars')
+        train_var_path = resource_filename('guerilla', 'data/train_checkpoint/in_training_vars.vars')
         train_var_file = self.nn.save_training_vars(train_var_path)
         if train_var_file:
             state['train_var_file'] = train_var_file
 
-        pickle_path = resource_filename('guerilla.train', 'pickles/' + filename)
+        pickle_path = resource_filename('guerilla', 'data/train_checkpoint/' + filename)
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
         self.saved = True
@@ -215,7 +215,7 @@ class Teacher:
                     remaining_boards[list of ints]
                     loss[list of floats]
         """
-        pickle_path = resource_filename('guerilla.train', 'pickles/' + filename)
+        pickle_path = resource_filename('guerilla', 'data/train_checkpoint/' + filename)
         state = pickle.load(open(pickle_path, 'rb'))
 
         # Load training parameters
@@ -406,9 +406,9 @@ class Teacher:
                 print "Training complete: Reached max epoch, no convergence yet"
 
         if self.test:
-            filename = resource_filename('guerilla.train', 'pickles/loss_test.p')
+            filename = resource_filename('guerilla', 'data/loss/loss_test.p')
         else:
-            filename = resource_filename('guerilla.train', 'pickles/loss_' + time.strftime('%Y%m%d-%H%M%S') + '.p')
+            filename = resource_filename('guerilla', 'data/loss/loss_' + time.strftime('%Y%m%d-%H%M%S') + '.p')
 
             # save loss
         pickle.dump({"loss": loss, "train_loss": train_loss},
@@ -856,14 +856,14 @@ class Teacher:
             epds = []
             if test == 'strategy':
                 for filename in Teacher.sts_strat_files:
-                    epds += Teacher.get_epds(resource_filename('guerilla.train', 'STS/' + filename + '.epd'))
+                    epds += Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + filename + '.epd'))
             elif test == 'sts_piece_files':
                 for filename in Teacher.sts_piece_files:
-                    epds += Teacher.get_epds(resource_filename('guerilla.train', 'STS/' + filename + '.epd'))
+                    epds += Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + filename + '.epd'))
             else:
                 # Specific file
                 try:
-                    epds += Teacher.get_epds(resource_filename('guerilla.train', test + '.epd'))
+                    epds += Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + test + '.epd'))
                 except IOError:
                     raise ValueError("Error %s is an invalid test mode." % test)
 

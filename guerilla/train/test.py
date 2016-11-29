@@ -1,23 +1,23 @@
 # Unit tests
-from guerilla.hyper_parameters import *
-from guerilla.play.search import Search
-from guerilla.play.players import Guerilla
-from guerilla.train.teacher import Teacher
-import guerilla.play.data_handler as dh
+import os
+import pickle
+import random as rnd
+import sys
+import traceback
+
+import chess
+import numpy as np
+import tensorflow as tf
+from guppy import hpy
+from pkg_resources import resource_filename
+
+import guerilla.data_handler as dh
 import guerilla.play.neural_net as nn
 import guerilla.train.stockfish_eval as sf
-
-from pkg_resources import resource_filename
-import sys
-import os
-import chess
-import pickle
-import traceback
-import tensorflow as tf
-import numpy as np
-import random as rnd
-# To test memory usage
-from guppy import hpy
+from guerilla.hyper_parameters import *
+from guerilla.play.players import Guerilla
+from guerilla.play.search import Search
+from guerilla.train.teacher import Teacher
 
 
 ###############################################################################
@@ -276,8 +276,8 @@ def nsv_test(num_check=40, max_step=5000, tolerance=1e-2, allow_err=0.3, score_r
     wrong = []
     max_wrong = num_check * allow_err
 
-    with open(resource_filename('guerilla.train', 'extracted_data/fens.nsv'), 'r') as fens_file, \
-            open(resource_filename('guerilla.train', 'extracted_data/sf_values.nsv'), 'r') as sf_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fens_file, \
+            open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as sf_file:
         fens_count = 0
         while fens_count < num_check and len(wrong) <= max_wrong:
             for i in range(rnd.randint(0, max_step)):
@@ -489,7 +489,7 @@ def save_load_weights_test(verbose=False):
     test_nn.close_session()
 
     # Remove test file
-    os.remove(resource_filename('guerilla', 'weights/' + test_file))
+    os.remove(resource_filename('guerilla', 'data/weights/' + test_file))
 
     # Compare saved and loaded weights
     result_msg = diff_dict_helper(weights, new_weights)
@@ -576,7 +576,7 @@ def training_test(verbose=False):
                 t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay', ], training_time=60)
                 post_heap_size = hpy().heap().size
 
-            loss = pickle.load(open(resource_filename('guerilla.train', 'pickles/loss_test.p'), 'rb'))
+            loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
             # Wrong number of losses
             if len(loss['train_loss']) != hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != hp['NUM_EPOCHS'] + 1:
                 error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
@@ -643,7 +643,7 @@ def load_and_resume_test(verbose=False):
     hp['LEARNING_RATE'] = 0.00001
 
     # Pickle path
-    pickle_path = resource_filename('guerilla.train', 'pickles/')
+    loss_path = resource_filename('guerilla', 'data/loss/')
 
     # Test for each training type & all training types together
     train_actions = Teacher.actions[:-1]
@@ -728,7 +728,7 @@ def load_and_resume_test(verbose=False):
             success = False
 
         # Check that correct number of epochs is run
-        with open(pickle_path + 'loss_test.p', 'r') as f:
+        with open(loss_path + 'loss_test.p', 'r') as f:
             loss = pickle.load(f)
             if hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
                 error_msg += "On action %s there was the wrong number of epochs. " % action
@@ -752,7 +752,7 @@ def main():
                                  'Checkmate Search': checkmate_search_test,
                                  'Minimax And Pruning': minimax_pruning_test}
 
-    all_tests["Neural net Tests"] = {'Weight Save and Load': save_load_weights_test}
+    all_tests["Neural Net Tests"] = {'Weight Save and Load': save_load_weights_test}
 
     all_tests["Training Tests"] = {'Training Test': training_test,
                                    'Load and Resume': load_and_resume_test}

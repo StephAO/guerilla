@@ -1,7 +1,8 @@
-import chess
-import guerilla.play.data_handler as dh
-import guerilla.play.node as mc_node
 import time
+
+import guerilla.data_handler as dh
+import guerilla.play.node as mc_node
+
 
 class Search:
     """

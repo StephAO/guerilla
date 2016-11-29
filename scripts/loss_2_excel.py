@@ -6,7 +6,7 @@ import os
 
 def main():
 
-	f_name = resource_filname('guerilla.train', 'pickles/' + sys.argv[1])
+	f_name = resource_filename('guerilla', 'data/loss/' + sys.argv[1])
 	loss = pickle.load(open(f_name, 'r'))
 	
 	for i in range(len(loss['loss'])):

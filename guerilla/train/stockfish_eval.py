@@ -33,15 +33,15 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
     """
 
     sf_num = 0
-    if os.path.isfile(resource_filename('guerilla.train', '/extracted_data/sf_num.txt')):
-        with open(resource_filename('guerilla.train', '/extracted_data/sf_num.txt'), 'r') as f:
+    if os.path.isfile(resource_filename('guerilla', 'data/extracted_data/sf_num.txt')):
+        with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'r') as f:
             l = f.readline()
             sf_num = int(l)
 
     batch_size = 5
 
-    with open(resource_filename('guerilla.train', '/extracted_data/fens.nsv'), 'r') as fen_file:
-        with open(resource_filename('guerilla.train', '/extracted_data/sf_values.nsv'), 'a') as sf_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fen_file:
+        with open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'a') as sf_file:
 
             for i in xrange(sf_num):
                 fen_file.readline()
@@ -71,7 +71,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                         sf_file.write(str(score) + '\n')
                     scores = []
 
-                    with open(resource_filename('guerilla.train', '/extracted_data/sf_num.txt'), 'w') as num_file:
+                    with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
                         num_file.write(str(sf_num))
 
             mapped_scores = sigmoid_array(np.array(scores))
@@ -79,7 +79,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                 sf_file.write(str(score) + '\n')
 
     # Write out the index of the next fen to score
-    with open(resource_filename('guerilla.train', '/extracted_data/sf_num.txt'), 'w') as num_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
         num_file.write(str(sf_num))
 
 def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
@@ -169,7 +169,7 @@ def load_stockfish_values(filename='sf_values.nsv', num_values=None):
     """
     stockfish_values = []
     count = 0
-    with open(resource_filename('guerilla.train', '/extracted_data/' + filename), 'r') as sf_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/' + filename), 'r') as sf_file:
         for line in sf_file:
             stockfish_values.append(float(line.strip()))
             count += 1

@@ -1,11 +1,11 @@
-import tensorflow as tf
-from tensorflow.python.framework import ops
-import numpy as np
 import pickle
-import os
+
+import numpy as np
+import tensorflow as tf
 from pkg_resources import resource_filename
+
+import guerilla.data_handler as dh
 from guerilla.hyper_parameters import *
-import guerilla.play.data_handler as dh
 
 
 def weight_variable(shape):
@@ -341,7 +341,7 @@ class NeuralNet:
                     Name of the file to load weight values from
         """
 
-        pickle_path = resource_filename('guerilla', 'weights/' + _filename)
+        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
         if self.verbose:
             print "Loading weights values from %s" % pickle_path
         values_dict = pickle.load(open(pickle_path, 'rb'))
@@ -369,7 +369,7 @@ class NeuralNet:
                     Name of the file to save weight values to
         """
 
-        pickle_path = resource_filename('guerilla', 'weights/' + _filename)
+        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
         pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
         if self.verbose:
             print "Weights saved to %s" % _filename

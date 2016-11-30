@@ -15,9 +15,11 @@ import guerilla.data_handler as dh
 import guerilla.play.neural_net as nn
 import guerilla.train.stockfish_eval as sf
 from guerilla.hyper_parameters import *
-from guerilla.play.players import Guerilla
+from guerilla.players import Guerilla
 from guerilla.play.search import Search
 from guerilla.train.teacher import Teacher
+
+# TODO: split it up between play and train
 
 
 ###############################################################################

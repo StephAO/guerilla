@@ -17,7 +17,7 @@ import guerilla.data_handler as dh
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
 from guerilla.hyper_parameters import *
-from guerilla.play.players import Player, Guerilla
+from guerilla.players import Player, Guerilla
 
 
 class Teacher:

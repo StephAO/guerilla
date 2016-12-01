@@ -56,7 +56,7 @@ r6k/1p2rR1P/2p3p1/4p1q1/8/pP6/P1P5/1K2Q2R w - - bm Qa5; c0 "Qa5=10, Rf2=6, Rf3=6
 r3r1k1/2q3p1/p2p1p2/3P2p1/n2B2P1/8/P1PQ3P/K2R1R2 b - - bm Qc4; c0 "Qc4=10, Qc8=2, Rac8=6, Re4=6"; id "STS(v4.0) Square Vacancy.051";
 3r2k1/2p2pp1/p6p/1p5q/1PbB4/P1Q3P1/5P1P/4R1K1 b - - bm Qg4; c0 "Qg4=10, Rd6=2, a5=2, f6=2"; id "STS(v4.0) Square Vacancy.052";
 r5k1/1q4b1/6n1/3pp1Nn/1N3p2/3P2Pp/2QBP2P/1R4K1 w - - bm Qc5; c0 "Qc5=10, Nxh3=4"; id "STS(v4.0) Square Vacancy.053";
-6r1/4pp1k/3p3p/2qP1P2/r3P1PK/1R6/4Q3/1R6 b - - bm Qd4; c0 "Qd4=10, Ra3=1, Rg5=1, Rga8=2, d5d4=1"; id "STS(v4.0) Square Vacancy.054";
+6r1/4pp1k/3p3p/2qP1P2/r3P1PK/1R6/4Q3/1R6 b - - bm Qd4; c0 "Qd4=10, Ra3=1, Rg5=1, Rga8=2"; id "STS(v4.0) Square Vacancy.054";
 8/p3b1k1/2p5/3qp2p/P2p3P/1P1Q1PP1/3NP1K1/8 w - - bm Qf5; c0 "Qf5=10, Nc4=7, Qa6=6, Qb1=5, Qc2=5"; id "STS(v4.0) Square Vacancy.055";
 1rb2rk1/2p3pp/p1p1p3/2N5/8/1PQ2PPq/P3P3/R2R2K1 w - - bm Qe5; c0 "Qe5=10, Kf2=4, Ne4=6"; id "STS(v4.0) Square Vacancy.056";
 2rqrbk1/1b1n1p2/p2p1npp/1p6/4P2B/1B3NNP/PP1Q1PP1/3RR1K1 w - - bm Qf4; c0 "Qf4=10, Re2=3, a3=1, a4=2"; id "STS(v4.0) Square Vacancy.057";

@@ -614,6 +614,97 @@ def training_test(verbose=False):
 
     return success
 
+def learn_sts_test(mode = 'queen', thresh=0.9):
+    """
+    Tests that Guerilla can learn the best moves in the Strategic Test Suite (STS).
+    Fetches all the STS epds. Takes the top moves and gives them high probability of winning.
+    Then randomly generates the same number of bad moves and gives them a low probability of winning.
+    Trains the guerilla on this set of data. Runs STS on the guerilla trained on this set of data.
+    Should yield a high STS score, the test is succesful if the STS score is sufficiently high.
+    Note:
+        Conversion to probability is winning done by the function P(x) = 0.6 + x^2*(0.003) where x in [0, 10].
+    Input:
+        mode [String]
+            STS mode(s) to train and test on. See Guerilla.Teacher.eval_sts()  documentation for options.
+        thresh [Float]
+            Minimum STS score (as a percent of the maximum score) necessary for the test to be considered a success.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+
+    # Get EPDS and Scores
+    if type(mode) is not list:
+        mode = [mode]
+
+    # vars
+    board = chess.Board()
+
+    # Run tests
+    epds = []
+    for test in mode:
+        epds += Teacher.get_epds_by_mode(test)
+
+    # Convert scores to probability of winning and build data
+    fens = []
+    values = []
+    for i, epd in enumerate(epds):
+
+        board, move_scores = Teacher.parse_epd(epd)
+
+        for move, score in move_scores.iteritems():
+
+            # Add good moves
+            board.push(move) # apply move
+            fen = board.fen()
+            fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
+            values.append(1)#0.6 + (score**2)*0.003)
+            board.pop() # undo move
+
+        # # Add random bad move
+        # move = rnd.choice(list(set(board.legal_moves) - set(move_scores.iterkeys())))
+        # board.push(move)  # apply move
+        # fen = board.fen()
+        # fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
+        # values.append(0.25)
+        # board.pop() # undo move
+
+    print len(fens)
+
+    # Set hyper parameters
+    hp['NUM_EPOCHS'] = 50
+    hp['BATCH_SIZE'] = 50
+    hp['VALIDATION_SIZE'] = 50
+    hp['TRAIN_CHECK_SIZE'] = 5
+    hp['LEARNING_RATE'] = 0.0001
+    hp['LOSS_THRESHOLD'] = -100 # Make it so it never stops by convergence since VALIDATION_SIZE = 0
+
+    # Add extra evaluation boards
+    fens += fens[-hp['VALIDATION_SIZE']:]
+    values += values[-hp['VALIDATION_SIZE']:]
+
+    # set to multiple of batch size
+    if (len(fens) % hp['BATCH_SIZE']) != 0:
+        fens = fens[:(-1) * (len(fens) % hp['BATCH_SIZE'])]
+    values = values[:len(fens)]
+
+    # Train and Test Guerilla
+    with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
+        # Train
+        g.search.max_depth = 1
+        t = Teacher(g)
+        t.train_bootstrap(fens, values)
+
+        # Run STS Test
+        result = Teacher.eval_sts(g, mode=mode)
+
+    if float(result[0][0])/result[1][0] <= thresh:
+        print "STS Scores was too low, got a score of %d/%d" % (result[0][0], result[1][0])
+        return False
+
+    return True
+
+
 def load_and_resume_test(verbose=False):
     """
     Tests the load_and_resume functionality of teacher.
@@ -756,8 +847,9 @@ def main():
 
     all_tests["Neural Net Tests"] = {'Weight Save and Load': save_load_weights_test}
 
-    all_tests["Training Tests"] = {'Training Test': training_test,
-                                   'Load and Resume': load_and_resume_test}
+    all_tests["Training Tests"] = {'Training': training_test,
+                                   'Load and Resume': load_and_resume_test,
+                                   'Learn STS':learn_sts_test}
 
     success = True
     for group_name, group_dict in all_tests.iteritems():

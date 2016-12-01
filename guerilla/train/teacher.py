@@ -23,7 +23,7 @@ from guerilla.players import Player, Guerilla
 class Teacher:
     actions = [
         'train_bootstrap',
-        'train_td_endgames',
+        'train_td_end',
         'train_td_full',
         'train_selfplay',
         'load_and_resume'
@@ -74,6 +74,10 @@ class Teacher:
         self.sts_mode = "strategy"  # STS mode for evaluation
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
+        # Build unique file modifier which demarks final output files from this session
+        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"),'_conv' if self.guerilla.nn.use_conv else '',
+                            '_' + str(hp['NUM_FC_LAYERS']))
+
     # ---------- RUNNING AND RESUMING METHODS
 
     def run(self, actions, training_time=None):
@@ -95,8 +99,7 @@ class Teacher:
         while True:
             # Save new weight values if necessary
             if not self.saved and self.curr_action_idx > 0 and not self.test:
-                weight_file = "weights_" + self.actions[self.curr_action_idx - 1] \
-                              + "_" + time.strftime("%Y%m%d-%H%M%S") + ".p"
+                weight_file = "w_" + self.actions[self.curr_action_idx - 1] + self.file_modifier
                 self.nn.save_weight_values(_filename=weight_file)
 
             # Check if done
@@ -130,7 +133,7 @@ class Teacher:
                 true_values = sf.load_stockfish_values(num_values=len(fens))
 
                 self.train_bootstrap(fens, true_values)
-            elif action == 'train_td_endgames':
+            elif action == 'train_td_end':
                 if self.verbose:
                     print "Performing endgame TD-Leaf training!"
                 self.train_td(True)
@@ -297,7 +300,7 @@ class Teacher:
             # continue with rests of epochs
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
                                  loss=state['loss'], train_loss=state['train_loss'])
-        elif action == 'train_td_endgames':
+        elif action == 'train_td_end':
             if self.verbose:
                 print "Resuming endgame TD-Leaf training..."
             self.train_td(True, game_indices=state['game_indices'], start_idx=state['start_idx'],
@@ -408,7 +411,7 @@ class Teacher:
         if self.test:
             filename = resource_filename('guerilla', 'data/loss/loss_test.p')
         else:
-            filename = resource_filename('guerilla', 'data/loss/loss_' + time.strftime('%Y%m%d-%H%M%S') + '.p')
+            filename = resource_filename('guerilla', 'data/loss/loss' + self.file_modifier)
 
             # save loss
         pickle.dump({"loss": loss, "train_loss": train_loss},
@@ -464,9 +467,9 @@ class Teacher:
         """
 
         # Configure data
-        boards = np.zeros((hp['VALIDATION_SIZE'], 8, 8, hp['NUM_CHANNELS']))
-        diagonals = np.zeros((hp['VALIDATION_SIZE'], 10, 8, hp['NUM_CHANNELS']))
-        for i in xrange(hp['VALIDATION_SIZE']):
+        boards = np.zeros((len(fens), 8, 8, hp['NUM_CHANNELS']))
+        diagonals = np.zeros((len(fens), 10, 8, hp['NUM_CHANNELS']))
+        for i in xrange(len(fens)):
             boards[i] = dh.fen_to_channels(fens[i])
             diagonals[i] = dh.get_diagonals(boards[i])
 
@@ -826,7 +829,7 @@ class Teacher:
                 player [Player]
                     Player to be tested.
                 mode [List of Strings] or [String]
-                    Select the test mode(s), see below for options. By default runs "strategy".
+                    Selects the test mode(s), see below for options. By default runs "strategy".
                         "strategy": runs all strategic tests
                         "pieces" : runs all piece tests
                         other: specific EPD file
@@ -853,19 +856,7 @@ class Teacher:
         for test in mode:
             print "Running %s STS test." % test
             # load STS epds
-            epds = []
-            if test == 'strategy':
-                for filename in Teacher.sts_strat_files:
-                    epds += Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + filename + '.epd'))
-            elif test == 'sts_piece_files':
-                for filename in Teacher.sts_piece_files:
-                    epds += Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + filename + '.epd'))
-            else:
-                # Specific file
-                try:
-                    epds += Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + test + '.epd'))
-                except IOError:
-                    raise ValueError("Error %s is an invalid test mode." % test)
+            epds = Teacher.get_epds_by_mode(test)
 
             # Test epds
             score = 0
@@ -878,26 +869,13 @@ class Teacher:
                 if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
                     print "%d%% " % (i / (length / 100.0)),
 
-                # Set epd
-                ops = board.set_epd(epd)
-
-                # Parse move scores
-                move_scores = dict()
-                # print ops
-                if 'c0' in ops:
-                    for m, s in [x.rstrip(',').split('=') for x in ops['c0'].split(' ')]:
-                        try:
-                            move_scores[board.parse_san(m)] = int(s)
-                        except ValueError:
-                            move_scores[board.parse_uci(m)] = int(s)
-                else:
-                    move_scores[ops['bm'][0]] = 10
+                board, move_scores = Teacher.parse_epd(epd)
 
                 # Get move
                 move = player.get_move(board)
 
                 # score
-                max_score += move_scores[ops['bm'][0]]
+                max_score += 10
                 try:
                     score += move_scores[move]
                 except KeyError:
@@ -912,19 +890,82 @@ class Teacher:
         return scores, max_scores
 
     @staticmethod
-    def get_epds(filename):
+    def parse_epd(epd):
         """
-        Returns a list of epds from the given file.
+        Parses an EPD for use in STS. Returns the board and a move score dictionary.
         Input:
-            filename [String]
-                Filename of EPD file to open. Must include absolute path.
+            epd [String]
+                EPD describing the chess position.
+        Output:
+            fen, move_scores (Tuple)
+                board [chess.Board]: Board as described by the EPD.
+                move_scores [Dictionary]: Move score dictionary. Keys are Chess.Move objects.
+        """
+
+        board = chess.Board()
+
+        # Set epd
+        ops = board.set_epd(epd)
+
+        # Parse move scores
+        move_scores = dict()
+        # print ops
+        if 'c0' in ops:
+            for m, s in [x.rstrip(',').split('=') for x in ops['c0'].split(' ')]:
+                try:
+                    move_scores[board.parse_san(m)] = int(s)
+                except ValueError:
+                    move_scores[board.parse_uci(m)] = int(s)
+        else:
+            move_scores[ops['bm'][0]] = 10
+
+        return board, move_scores
+
+    @staticmethod
+    def get_epds_by_mode(mode):
+        """
+        Returns the epds given an STS mode.
+        Input:
+            mode [List of Strings] or [String]
+                Selects the test mode(s), see Teacher.eval_sts for options.
         Output:
             epds [List of Strings]
                 List of epds.
         """
-        f = open(filename)
-        epds = [line.rstrip() for line in f]
-        f.close()
+
+        if mode == 'strategy':
+            epds = Teacher.get_epds([resource_filename('guerilla', 'data/STS/' + f + '.epd')
+                                      for f in Teacher.sts_strat_files])
+        elif mode == 'pieces':
+            epds = Teacher.get_epds([resource_filename('guerilla', 'data/STS/' + f + '.epd')
+                                      for f in Teacher.sts_piece_files])
+        else:
+            # Specific file
+            try:
+                epds = Teacher.get_epds(resource_filename('guerilla', 'data/STS/' + mode + '.epd'))
+            except IOError:
+                raise ValueError("Error %s is an invalid test mode." % mode)
+
+        return epds
+
+    @staticmethod
+    def get_epds(filenames):
+        """
+        Returns a list of epds from the given file or list of files.
+        Input:
+            filename [String or List of Strings]
+                Filename(s) of EPD file to open. Must include absolute path.
+        Output:
+            epds [List of Strings]
+                List of epds.
+        """
+        if type(filenames) is not list:
+            filenames = [filenames]
+
+        epds =[]
+        for filename in filenames:
+            with open(filename,'r') as f:
+                epds += [line.rstrip() for line in f]
 
         return epds
 
@@ -972,7 +1013,6 @@ def direction_test():
 
 
 def main():
-
     run_time = 0
     if len(sys.argv) >= 2:
         hours = int(sys.argv[1])
@@ -992,8 +1032,8 @@ def main():
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=50000)  # 488037
-        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=10, full_length=12)
+        t.set_bootstrap_params(num_bootstrap=500)  # 488037
+        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100

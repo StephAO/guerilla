@@ -14,10 +14,13 @@ from pkg_resources import resource_filename
 import guerilla.data_handler as dh
 import guerilla.play.neural_net as nn
 import guerilla.train.stockfish_eval as sf
+import guerilla.train.sts as sts
+import guerilla.train.chess_game_parser as cgp
 from guerilla.hyper_parameters import *
-from guerilla.players import Guerilla
+from guerilla.players import Guerilla, Player
 from guerilla.play.search import Search
 from guerilla.train.teacher import Teacher
+
 
 # TODO: split it up between play and train
 
@@ -252,7 +255,7 @@ def channel_input_test():
     return success
 
 
-def nsv_test(num_check=40, max_step=5000, tolerance=1e-2, allow_err=0.3, score_repeat=3):
+def nsv_test(num_check=20, max_step=10000, tolerance=2e-2, allow_err=0.3, score_repeat=3):
     """
     Tests that fens.nsv and sf_values.nsv file are properly aligned. Also checks that the FENS are "white plays next".
     NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
@@ -281,10 +284,12 @@ def nsv_test(num_check=40, max_step=5000, tolerance=1e-2, allow_err=0.3, score_r
     with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fens_file, \
             open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as sf_file:
         fens_count = 0
+        line_count = 0
         while fens_count < num_check and len(wrong) <= max_wrong:
             for i in range(rnd.randint(0, max_step)):
                 fens_file.readline()
                 sf_file.readline()
+                line_count += 1
 
             # Get median stockfish score
             fen = fens_file.readline().rstrip()
@@ -297,13 +302,15 @@ def nsv_test(num_check=40, max_step=5000, tolerance=1e-2, allow_err=0.3, score_r
             actual = float(sf_file.readline().rstrip())
 
             if abs(expected - actual) > tolerance:
-                wrong.append("For FEN '%s' expected score of %f, got file score of %f." % (fen, expected, actual))
+                wrong.append("For FEN '%s' calculated score of %f, got file score of %f (line %d)." %
+                             (fen, expected, actual, line_count))
 
             if dh.black_is_next(fen):
                 print "White does not play next in this FEN: %s" % fen
                 return False
 
             fens_count += 1
+            line_count += 1
 
     if len(wrong) > max_wrong:
         for info in wrong:
@@ -547,12 +554,13 @@ def training_test(verbose=False):
     success = True
     # Set hyper params for mini-test
     hp['NUM_FEAT'] = 10
-    hp['NUM_EPOCHS'] = 5
+    hp['NUM_EPOCHS'] = 10
     hp['BATCH_SIZE'] = 50
     hp['VALIDATION_SIZE'] = 50
     hp['TRAIN_CHECK_SIZE'] = 50
     hp['TD_LRN_RATE'] = 0.00001  # Learning rate
     hp['TD_DISCOUNT'] = 0.7  # Discount rate
+    hp['LOSS_THRESHOLD'] = 0.000001
 
     for t_m in nn.NeuralNet.training_modes:
         if t_m == 'adagrad':
@@ -565,9 +573,9 @@ def training_test(verbose=False):
 
         error_msg = ""
         try:
-            with Guerilla('Harambe', 'w', training_mode=t_m, verbose=False) as g:
+            with Guerilla('Harambe', 'w', training_mode=t_m, verbose=verbose) as g:
                 g.search.max_depth = 1
-                t = Teacher(g, test=True, verbose=False)
+                t = Teacher(g, test=True, verbose=verbose)
                 t.set_bootstrap_params(num_bootstrap=500)  # 488037
                 t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
                 t.set_sp_params(num_selfplay=1, max_length=3)
@@ -575,7 +583,7 @@ def training_test(verbose=False):
                 t.sts_interval = 100
 
                 pre_heap_size = hpy().heap().size
-                t.run(['train_bootstrap', 'train_td_endgames', 'train_td_full', 'train_selfplay', ], training_time=60)
+                t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay', ], training_time=60)
                 post_heap_size = hpy().heap().size
 
             loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
@@ -614,7 +622,7 @@ def training_test(verbose=False):
 
     return success
 
-def learn_sts_test(mode = 'queen', thresh=0.9):
+def learn_sts_test(mode = 'strategy', thresh=0.9):
     """
     Tests that Guerilla can learn the best moves in the Strategic Test Suite (STS).
     Fetches all the STS epds. Takes the top moves and gives them high probability of winning.
@@ -643,14 +651,14 @@ def learn_sts_test(mode = 'queen', thresh=0.9):
     # Run tests
     epds = []
     for test in mode:
-        epds += Teacher.get_epds_by_mode(test)
+        epds += sts.get_epds_by_mode(test)
 
     # Convert scores to probability of winning and build data
     fens = []
     values = []
     for i, epd in enumerate(epds):
 
-        board, move_scores = Teacher.parse_epd(epd)
+        board, move_scores = sts.parse_epd(epd)
 
         for move, score in move_scores.iteritems():
 
@@ -658,7 +666,7 @@ def learn_sts_test(mode = 'queen', thresh=0.9):
             board.push(move) # apply move
             fen = board.fen()
             fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
-            values.append(1)#0.6 + (score**2)*0.003)
+            values.append(1 if score == 10 else 0)
             board.pop() # undo move
 
         # # Add random bad move
@@ -673,7 +681,7 @@ def learn_sts_test(mode = 'queen', thresh=0.9):
 
     # Set hyper parameters
     hp['NUM_EPOCHS'] = 50
-    hp['BATCH_SIZE'] = 50
+    hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 50
     hp['TRAIN_CHECK_SIZE'] = 5
     hp['LEARNING_RATE'] = 0.0001
@@ -696,7 +704,7 @@ def learn_sts_test(mode = 'queen', thresh=0.9):
         t.train_bootstrap(fens, values)
 
         # Run STS Test
-        result = Teacher.eval_sts(g, mode=mode)
+        result = sts.eval_sts(g, mode=mode)
 
     if float(result[0][0])/result[1][0] <= thresh:
         print "STS Scores was too low, got a score of %d/%d" % (result[0][0], result[1][0])
@@ -704,6 +712,116 @@ def learn_sts_test(mode = 'queen', thresh=0.9):
 
     return True
 
+
+def learn_moves_test(num_test = 3, num_attempt = 2, verbose = False):
+    """
+    Tests that Guerilla can learn the best moves of a few boards, thus demonstrating that the input Guerilla converge
+    to learning chess moves.
+    Details: For each board scores a given move highly (called the goal move) and the others poorly.
+    Trains the guerilla on this set of data. Then sees if Guerilla plays that move when given the board as an input.
+    Input:
+        mode [String] (Optiona)
+            Number of boards to learn moves on and try to play correctly. Higher makes it harder for the test to pass.
+        num_attempt [Int] (Optional)
+            The number of attempts to make in converging to the moves.
+            Sometimes the random weight initialization is unlucky.
+        verbose [Boolean]
+            Turn Verbose Mode on and off.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+
+    # Set hyper parameters
+    hp['NUM_EPOCHS'] = 30
+    hp['BATCH_SIZE'] = 10
+    hp['VALIDATION_SIZE'] = 30
+    hp['TRAIN_CHECK_SIZE'] = 5
+    hp['LEARNING_RATE'] = 0.00005
+    hp['LOSS_THRESHOLD'] = 0.001
+
+    # Probability value Constants (0 <= x <= 1)
+    high_value = 0.9
+    low_value = 0.1
+
+    # Load fens
+    fen_multipler = 20
+    spacing = 100
+    base_fens = cgp.load_fens(num_values=num_test*spacing)[::spacing] # So not all within the same game
+
+    # For each fen get all moves, score one move's board highly (goal move), the others poorly
+    goal_moves = [] # List of tuples
+    fens = []
+    values = []
+    val_fens = []
+    val_values = []
+    for fen in base_fens:
+        board = chess.Board(fen)
+        moves = board.legal_moves
+
+        # Store goal_move info for scoring
+        goal_move = np.random.choice(list(moves))
+        goal_moves.append((fen, goal_move))
+
+        # Score goal move highly
+        board.push(goal_move)
+        fens += [dh.flip_board(board.fen())]*fen_multipler # Flip board and give low value since NN input must be white next
+        values += [1 - high_value]*fen_multipler
+        board.pop()
+
+        # Build validation set
+        val_fens += [fens[-1]] * (hp['VALIDATION_SIZE']/num_test)
+        val_values += [1.0 - high_value] * (hp['VALIDATION_SIZE']/num_test)  # values[-hp['VALIDATION_SIZE']:]
+
+        # score other moves poorly
+        for move in (set(board.legal_moves) - {goal_move}):
+            board.push(move)
+            fens += [dh.flip_board(board.fen())] # Flip board and give high value since NN input must be white next
+            values += [1 - low_value]
+            board.pop()
+
+    # set to multiple of batch size
+    if (len(fens) % hp['BATCH_SIZE']) != 0:
+        fens = fens[:(-1) * (len(fens) % hp['BATCH_SIZE'])]
+    values = values[:len(fens)]
+
+    # Combine validation set
+    fens += val_fens
+    values += val_values
+
+    # Train and Test Guerilla
+    err_msg = ''
+    for i in range(num_attempt):
+        score = 0
+        with Guerilla('Harambe', 'w', training_mode='gradient_descent', verbose=verbose) as g:
+            # Train
+            g.search.max_depth = 1
+            t = Teacher(g, verbose=verbose)
+            t.train_bootstrap(fens, values)
+
+            # Evaluate
+            for fen, goal_move in goal_moves:
+                board = chess.Board(fen)
+                result_move = g.get_move(board)
+
+                if result_move == goal_move:
+                    score += 1
+                else:
+                    board.push(goal_move)
+                    goal_score = 1 - g.nn.evaluate(dh.flip_board(board.fen()))
+                    board.pop()
+                    board.push(result_move)
+                    result_score = 1 - g.nn.evaluate(dh.flip_board(board.fen()))
+                    err_msg += ('FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
+                                    (goal_move, result_move, goal_move, goal_score, result_move, result_score))
+
+        if score == num_test:
+            return True
+
+        err_msg += "Failed attempt #%s...\n" % i
+
+    print err_msg
+    return False
 
 def load_and_resume_test(verbose=False):
     """
@@ -849,7 +967,7 @@ def main():
 
     all_tests["Training Tests"] = {'Training': training_test,
                                    'Load and Resume': load_and_resume_test,
-                                   'Learn STS':learn_sts_test}
+                                    'Learn Moves': learn_moves_test}
 
     success = True
     for group_name, group_dict in all_tests.iteritems():

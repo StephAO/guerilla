@@ -6,7 +6,7 @@ import random
 import os
 import sys
 import chess.uci
-import other_engines.sunfish as sunfish
+import other_engines.sunfish.sunfish as sunfish
 import other_engines.sunfish.tools as sun_tools
 
 

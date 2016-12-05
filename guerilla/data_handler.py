@@ -1,6 +1,3 @@
-# TODO: double check that there aren't unecessary imports
-import sys
-import os
 import time
 import chess
 import numpy as np
@@ -168,6 +165,40 @@ def black_is_next(fen):
             True if fen is for black playing next.
     """
     return not white_is_next(fen)
+
+
+def diff_dict_helper(old_dict, new_dict):
+    """
+    Compares two dictionaries of numpy.arrays. Useful for comparing weights and training variables.
+    Input
+        old_dict [Dictionary of numpy.arrays]
+            One of the dictionary you'd like to compare.
+        new_dict [Dictionary of numpy.arrays]
+            The other dictionary you'd like to compare.
+    Output:
+        Result [None or String]
+            Returns None if identical, otherwise returns error message.
+    """
+
+    for weight in old_dict.iterkeys():
+        if isinstance(new_dict[weight], list) and isinstance(old_dict[weight], list):
+            success = all([np.array_equal(old_dict[weight][i], new_dict[weight][i])
+                           for i in range(len(old_dict[weight]))])
+            success = success and (len(old_dict[weight]) == len(new_dict[weight]))
+        elif type(new_dict[weight]) == type(old_dict[weight]):
+            success = np.array_equal(np.array(old_dict[weight]), np.array(new_dict[weight]))
+        else:
+            success = False
+
+        if not success:
+            return "Mismatching entries for '%s': Expected:\n %s \n Received:\n %s\n" % (weight,
+                                                                                           str(old_dict[weight]),
+                                                                                str(new_dict[weight]))
+
+    if len(old_dict) != len(new_dict):
+        return "Different number of entries for '%s': Expected Length:\n %s \n Received Length:\n %s\n" % (weight,                                                                                                  len(old_dict),                                                                                                  len(new_dict))
+
+    return None
 
 def main():
     test_channel = fen_to_channels(chess.STARTING_FEN)

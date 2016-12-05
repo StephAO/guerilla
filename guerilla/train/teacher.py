@@ -18,7 +18,7 @@ import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
 from guerilla.hyper_parameters import *
 from guerilla.players import Player, Guerilla
-from guerilla.train.sts import eval_sts
+from guerilla.train.sts import eval_sts, sts_strat_files
 
 
 class Teacher:

@@ -1,7 +1,7 @@
 import sys
 import chess
 import chess.pgn
-from players import *
+from guerilla.players import *
 import os
 import time
 from pkg_resources import resource_filename
@@ -152,7 +152,7 @@ class Game:
 
             game_pgn = game_pgn.root()
             game_pgn.headers["Result"] = result
-            with open(dir_path + "/../played_games/" + self.player1.name + '_' +
+            with open(resource_filename('guerilla', 'data/played_games/') + self.player1.name + '_' +
                         self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
                 pgn.write(str(game_pgn))
 
@@ -198,11 +198,11 @@ def main():
         # players[1] = Guerilla('Harambe (bootstrap)', _load_file='weights_train_bootstrap_20160930-193556.p')
         # players[0] = Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
 
-        players[0] = Sunfish("Sun")
-        players[1] = Stockfish("Stock")
+        players[1] = Sunfish("Sun", time_limit=1)
+        players[0] = Guerilla('Harambe', load_file='weights_train_bootstrap_20161130-095457.p')
 
         # players[1].search.max_depth = 3
-        # players[0].search.max_depth = 3
+        players[0].search.max_depth = 3
 
 
     elif choose_players == 'c':

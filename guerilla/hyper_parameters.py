@@ -27,10 +27,10 @@ hp['TD_DISCOUNT'] = 0.7  # Discount rate
 
 # TODO: I don't think this should be here.
 piece_indices = {
-    'p': 0,
+    'q': 0,
     'r': 1,
-    'n': 2,
-    'b': 3,
-    'q': 4,
+    'b': 2,
+    'n': 3,
+    'p': 4,
     'k': 5,
 }

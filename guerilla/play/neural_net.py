@@ -517,7 +517,7 @@ class NeuralNet:
         """
 
         fen = fen.split()[0]
-        board = dh.fen_to_channels(fen)
+        board = dh.fen_to_bitmap(fen)
         diagonal = dh.get_diagonals(board)
 
         board = np.array([board])

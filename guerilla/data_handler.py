@@ -51,7 +51,7 @@ def flip_board(fen):
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
 # TODO: deal with en passant and castling
-def fen_to_channels(fen):
+def fen_to_bitmap(fen):
     """
         Converts a fen string to channels for neural net.
         Always assumes that it's white's turn
@@ -103,6 +103,59 @@ def fen_to_channels(fen):
         if c_rank == 0 and c_file == 8:
             break
     return channels
+
+def fen_to_position_description(fen):
+
+    piece_desc_index = {
+        'q': 0,
+        'r': 1,
+        'b': 3,
+        'n': 5,
+        'p': 7,
+        'k': 15
+    }
+
+    ps = []
+    ps += [0] * 15
+    ps += [0, (0,0)] * 32
+    ps += [[[0,0]]*4]
+    ps += [[[0,0]]*2]*4
+    ps += [[[0,0]]*4]
+    ps += [[[0,0]]*2]*4
+    print len(ps)
+
+    fen = fen.split(' ')
+    board_str = fen[0]
+    turn = fen[1]
+    castling = fen[2]
+    # en_passant = fen[3]
+    
+    ps[0] = 1 if (turn == 'w') else 0
+    ps[1] = 1 if ('Q' == castling) else 0
+    ps[2] = 1 if ('K' == castling) else 0
+    ps[3] = 1 if ('q' == castling) else 0
+    ps[4] = 1 if ('k' == castling) else 0
+
+    ranks = board_str.split('/')
+    ranks.reverse()
+    for c_rank, rank in enumerate(ranks):
+        c_file = 0
+        for char in rank:
+            if char.isdigit():
+                c_file += int(char) - 1
+            else:    
+                white = char.isupper()
+                char = char.lower()
+                if char != 'k':
+                    ps[5 + (0 if white else 5) + piece_indices[char]] += 1
+                curr_index = 15 + (0 if white else 32) + piece_desc_index[char] * 2
+                # print "piece: %s, white: %d, index: %d" % (char, white, curr_index)
+                while ps[curr_index] == 1:
+                    curr_index += 2
+                ps[curr_index] = 1
+                ps[curr_index + 1] = (c_rank, c_file)
+            c_file += 1
+    return ps
 
 def get_diagonals(channels):
     """
@@ -201,11 +254,92 @@ def diff_dict_helper(old_dict, new_dict):
     return None
 
 def main():
-    test_channel = fen_to_channels(chess.STARTING_FEN)
-    start_time = time.clock()
-    for i in xrange(10000):
-        get_diagonals(test_channel)
-    print '10000 iterations of get_diagonals:', time.clock() - start_time
+    # White = 1, Black = 0
+    # True = 1, False = 0
+    random_fen = "3q3r/2QR1n2/1PR2p1b/1k2p3/1P6/3pN3/1PB1pKp1/3N4 w - - 0 1"
+    positions_description = fen_to_position_description(random_fen)
+    if len(positions_description) != 89:
+        print "Failure: Size of position description is incorrect"
+        return False
+    if positions_description[0] != 1: # White's turn
+        print "Failure: Turn description is incorrect"
+        return False
+    if positions_description[1] != 0 or positions_description[2] != 0 \
+        or positions_description[3] != 0 or positions_description[4] != 0: # Castling options
+        print "Failure: Castling description is incorrect"
+        return False
+    if positions_description[5] != 1 \
+        or positions_description[6] != 2 \
+        or positions_description[7] != 1 \
+        or positions_description[8] != 2 \
+        or positions_description[9] != 3: # White pieces count
+        print "Failure: White piece count is incorrect"
+        return False
+    if positions_description[10] != 1 \
+        or positions_description[11] != 1 \
+        or positions_description[12] != 1 \
+        or positions_description[13] != 1 \
+        or positions_description[14] != 5: # Black piece count
+        print "Failure: Black piece count is incorrect"
+        return False
+    if positions_description[15] != 1 or positions_description[16] != (6, 2) \
+        or positions_description[17] != 1 or positions_description[18] != (5, 2) \
+        or positions_description[19] != 1 or positions_description[20] != (6, 3) \
+        or positions_description[21] != 1 or positions_description[22] != (1, 2) \
+        or positions_description[23] != 0 or positions_description[24] != (0, 0) \
+        or positions_description[25] != 1 or positions_description[26] != (0, 3) \
+        or positions_description[27] != 1 or positions_description[28] != (2, 4) \
+        or positions_description[29] != 1 or positions_description[30] != (1, 1) \
+        or positions_description[31] != 1 or positions_description[32] != (3, 1) \
+        or positions_description[33] != 1 or positions_description[34] != (5, 1) \
+        or positions_description[35] != 0 or positions_description[36] != (0, 0) \
+        or positions_description[37] != 0 or positions_description[38] != (0, 0) \
+        or positions_description[39] != 0 or positions_description[40] != (0, 0) \
+        or positions_description[41] != 0 or positions_description[42] != (0, 0) \
+        or positions_description[43] != 0 or positions_description[44] != (0, 0) \
+        or positions_description[45] != 1 or positions_description[46] != (1, 5): # White piece position
+        print "Failure: White piece position is incorrect"
+        for idx, i in enumerate(positions_description):
+            print idx, i
+        return False
+    if positions_description[47] != 1 or positions_description[48] != (7, 3) \
+        or positions_description[49] != 1 or positions_description[50] != (7, 7) \
+        or positions_description[51] != 0 or positions_description[52] != (0, 0) \
+        or positions_description[53] != 1 or positions_description[54] != (5, 7) \
+        or positions_description[55] != 0 or positions_description[56] != (0, 0) \
+        or positions_description[57] != 1 or positions_description[58] != (6, 5) \
+        or positions_description[59] != 0 or positions_description[60] != (0, 0) \
+        or positions_description[61] != 1 or positions_description[62] != (1, 4) \
+        or positions_description[63] != 1 or positions_description[64] != (1, 6) \
+        or positions_description[65] != 1 or positions_description[66] != (2, 3) \
+        or positions_description[67] != 1 or positions_description[68] != (4, 4) \
+        or positions_description[67] != 1 or positions_description[70] != (5, 5) \
+        or positions_description[71] != 0 or positions_description[72] != (0, 0) \
+        or positions_description[73] != 0 or positions_description[74] != (0, 0) \
+        or positions_description[75] != 0 or positions_description[76] != (0, 0) \
+        or positions_description[77] != 1 or positions_description[78] != (4, 1): # Black piece position
+        print "Failure: Black piece position is incorrect"
+        return False
+    # Sliding order:
+    # Rank (left -ive, right +ive), File (down -ive, up +ive)
+    # Up diag (left down -ive, right up +ive), down diag (left up -ive, right down +ive)
+    # (For queens, rank/file before diagonals)
+    if positions_description[79] != [[-2, 0], [0, 1], [0, 0], [-1, 1]] \
+        or positions_description[80] != [[0, 2], [-3, 0]] \
+        or positions_description[81] != [[0, 1], [-3, 0]] \
+        or positions_description[82] != [[-1, 0], [-2, 0]] \
+        or positions_description[83] != [[0, 0], [0, 0]]: # White piece sliding
+        print "Failure: White piece sliding is incorrect"
+        return False
+    if positions_description[84] != [[-3,3], [0, 0], [0, 0], [0, 1]] \
+        or positions_description[85] != [[-3, 0], [0, 1]] \
+        or positions_description[86] != [[0, 0], [0, 0]] \
+        or positions_description[87] != [[-2, 0], [-2, 0]] \
+        or positions_description[88] != [[0, 0], [0, 0]]: # Black piece sliding
+        print "Failure: Black piece sliding is incorrect"
+        return False
+
+    # TODO: Attacker/defender maps
 
 if __name__ == '__main__':
-    main()
+    main()# White non-pawn piece position

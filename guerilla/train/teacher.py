@@ -445,7 +445,7 @@ class Teacher:
 
             # set up batch
             for j in xrange(hp['BATCH_SIZE']):
-                boards[j] = dh.fen_to_channels(fens[game_indices[board_num]])
+                boards[j] = dh.fen_to_bitmap(fens[game_indices[board_num]])
                 diagonals[j] = dh.get_diagonals(boards[j])
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
@@ -471,7 +471,7 @@ class Teacher:
         boards = np.zeros((len(fens), 8, 8, hp['NUM_CHANNELS']))
         diagonals = np.zeros((len(fens), 10, 8, hp['NUM_CHANNELS']))
         for i in xrange(len(fens)):
-            boards[i] = dh.fen_to_channels(fens[i])
+            boards[i] = dh.fen_to_bitmap(fens[i])
             diagonals[i] = dh.get_diagonals(boards[i])
 
         # Get loss

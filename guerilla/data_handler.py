@@ -258,7 +258,7 @@ def main():
     # True = 1, False = 0
     random_fen = "3q3r/2QR1n2/1PR2p1b/1k2p3/1P6/3pN3/1PB1pKp1/3N4 w - - 0 1"
     positions_description = fen_to_position_description(random_fen)
-    if len(positions_description) != 89:
+    if len(positions_description) != 90:
         print "Failure: Size of position description is incorrect"
         return False
     if positions_description[0] != 1: # White's turn
@@ -339,7 +339,58 @@ def main():
         print "Failure: Black piece sliding is incorrect"
         return False
 
-    # TODO: Attacker/defender maps
+    # Attacker/defender maps. 64 x 2d tuple (defender value, attacker value), where attacker
+    # is the opposite color as piece on current square and defender is the same color
+    # King value = 1000
+    success = True
+    for rank in positions_description[89]:
+        for file in rank:
+            if rank == 0 and file = 3:
+                success &= (positions_description[89][rank][file] == (3,1))
+            if rank == 1 and file = 1:
+                success &= (positions_description[89][rank][file] == (3,0))
+            if rank == 1 and file = 2:
+                success &= (positions_description[89][rank][file] == (3,1))
+            if rank == 1 and file = 4:
+                success &= (positions_description[89][rank][file] == (1,1000))
+            if rank == 1 and file = 5:
+                success &= (positions_description[89][rank][file] == (0,0))
+            if rank == 1 and file = 6:
+                success &= (positions_description[89][rank][file] == (0,3))
+            if rank == 2 and file = 3:
+                success &= (positions_description[89][rank][file] == (0,3))
+            if rank == 2 and file = 4:
+                success &= (positions_description[89][rank][file] == (3,3))
+            if rank == 3 and file = 1:
+                success &= (positions_description[89][rank][file] == (0,1000))
+            if rank == 4 and file = 1:
+                success &= (positions_description[89][rank][file] == (0,0))
+            if rank == 4 and file = 4:
+                success &= (positions_description[89][rank][file] == (1,9))
+            if rank == 5 and file = 1:
+                success &= (positions_description[89][rank][file] == (5,1000))
+            if rank == 5 and file = 2:
+                success &= (positions_description[89][rank][file] == (9,1000))
+            if rank == 5 and file = 5:
+                success &= (positions_description[89][rank][file] == (9,5))
+            if rank == 5 and file = 7:
+                success &= (positions_description[89][rank][file] == (3,0))
+            if rank == 6 and file = 2:
+                success &= (positions_description[89][rank][file] == (1,9))
+            if rank == 6 and file = 3:
+                success &= (positions_description[89][rank][file] == (9,9))
+            if rank == 6 and file = 5:
+                success &= (positions_description[89][rank][file] == (0,5))
+            if rank == 7 and file = 3:
+                success &= (positions_description[89][rank][file] == (3,5))
+            if rank == 7 and file = 7:
+                success &= (positions_description[89][rank][file] == (3,0))
+    if not success:
+        print "Failure: Defender/Attacker map is incorrect"
+        return False
+
+    return True
+
 
 if __name__ == '__main__':
     main()# White non-pawn piece position

@@ -54,7 +54,7 @@ def flip_board(fen):
 # TODO: deal with en passant and castling
 def fen_to_bitmap(fen):
     """
-        Converts a fen string to channels for neural net.
+        Converts a fen string to bitmap channels for neural net.
         Always assumes that it's white's turn
 
         Inputs:
@@ -106,17 +106,20 @@ def fen_to_bitmap(fen):
     return channels
 
 def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, ps_index, ps):
+    # TODO: Add description
+
     # forwards, backwards for each movement: vertical, horizontal, up diag, down diag
     still_sliding = [[True] * 2 for _ in xrange(4)]
     for i in xrange(1, 8):
         # left
+        # Sliding and board boundary or piece reached
         if (piece == 'q' or piece == 'r') and still_sliding[0][0] and c_file - i >= -1 and \
             (c_file - i == -1 or occupied_bitmap[c_rank][c_file - i] != 0):
             # Slide boundary
             still_sliding[0][0] = False
-            ps[ps_index][0][0] = 1 - i
+            ps[ps_index][0][0] = i - 1
             # Defender/attacker map
-            if c_file - i != -1:
+            if c_file - i > -1:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank][c_file - i])
                 ps[89][c_rank][c_file - i][0 if defender else 1] = min(piece_value, ps[89][c_rank][c_file - i][0 if defender else 1])
         # right
@@ -126,7 +129,7 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             still_sliding[0][1] = False
             ps[ps_index][0][1] = i - 1
             # Defender/attacker map
-            if c_file + i != 8:
+            if c_file + i < 8:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank][c_file + i])
                 ps[89][c_rank][c_file + i][0 if defender else 1] = min(piece_value, ps[89][c_rank][c_file + i][0 if defender else 1])
         # down
@@ -134,9 +137,9 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             (c_rank - i == -1 or occupied_bitmap[c_rank - i][c_file] != 0):
             # Slide boundary
             still_sliding[1][0] = False
-            ps[ps_index][1][0] = 1 - i
+            ps[ps_index][1][0] = i - 1
             # Defender/attacker map
-            if c_rank - i != -1:
+            if c_rank - i > -1:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank - i][c_file])
                 ps[89][c_rank - i][c_file][0 if defender else 1] = min(piece_value, ps[89][c_rank - i][c_file][0 if defender else 1])
         # up
@@ -146,7 +149,7 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             still_sliding[1][1] = False
             ps[ps_index][1][1] = i - 1
             # Defender/attacker map
-            if c_rank + i != 8:
+            if c_rank + i < 8:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank + i][c_file])
                 ps[89][c_rank + i][c_file][0 if defender else 1] = min(piece_value, ps[89][c_rank + i][c_file][0 if defender else 1])
         # left down
@@ -154,9 +157,9 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             (c_rank - i == -1 or c_file - i == -1 or occupied_bitmap[c_rank - i][c_file - i] != 0):
             # Slide boundary
             still_sliding[2][0] = False
-            ps[ps_index][0 if piece == 'b' else 2][0] = 1 - i
+            ps[ps_index][0 if piece == 'b' else 2][0] = i - 1
             # Defender/attacker map
-            if c_rank - i != -1 and c_file - i != -1:
+            if c_rank - i > -1 and c_file - i > -1:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank - i][c_file - i])
                 ps[89][c_rank - i][c_file - i][0 if defender else 1] = min(piece_value, ps[89][c_rank - i][c_file - i][0 if defender else 1])
         # right up
@@ -166,7 +169,7 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             still_sliding[2][1] = False
             ps[ps_index][0 if piece == 'b' else 2][1] = i - 1
             # Defender/attacker map
-            if c_rank + i != 8 and c_file + i != 8:
+            if c_rank + i < 8 and c_file + i < 8:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank + i][c_file + i])
                 ps[89][c_rank + i][c_file + i][0 if defender else 1] = min(piece_value, ps[89][c_rank + i][c_file + i][0 if defender else 1])
         # left up
@@ -174,9 +177,9 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             (c_rank + i == 8 or c_file - i == -1 or occupied_bitmap[c_rank + i][c_file - i] != 0):
             # Slide boundary
             still_sliding[3][0] = False
-            ps[ps_index][1 if piece == 'b' else 3][0] = 1 - i
+            ps[ps_index][1 if piece == 'b' else 3][0] = i - 1
             # Defender/attacker map
-            if c_rank + i != 8 and c_file - i != -1:
+            if c_rank + i < 8 and c_file - i > -1:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank + i][c_file - i])
                 ps[89][c_rank + i][c_file - i][0 if defender else 1] = min(piece_value, ps[89][c_rank + i][c_file - i][0 if defender else 1])
         # right down
@@ -186,40 +189,30 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, p
             still_sliding[3][1] = False
             ps[ps_index][1 if piece == 'b' else 3][1] = i - 1
             # Defender/attacker map
-            if c_rank - i != -1 and c_file + i != 8:
+            if c_rank - i > -1 and c_file + i < 8:
                 defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank - i][c_file + i])
                 ps[89][c_rank - i][c_file + i][0 if defender else 1] = min(piece_value, ps[89][c_rank - i][c_file + i][0 if defender else 1])
 
 def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, ps):
 
-    if piece == 'n':
-        knight_moves = [(1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2)]
-        for i, j in knight_moves:
-            if 0 <= c_rank + i < 8 and 0 <= c_file + j < 8 and occupied_bitmap[c_rank + i][c_file + j] != 0:
-                defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank + i][c_file + j])
-                ps[89][c_rank + i][c_file + j][0 if defender else 1] = min(piece_value, ps[89][c_rank + i][c_file + j][0 if defender else 1])
-        return
-
     white = (occupied_bitmap[c_rank][c_file] == 1)
-    if piece == 'p':
-        if white:
-            # only attack moves
-            pawn_moves = [(1, 1), (1, -1)]
-        else:
-            pawn_moves = [(-1, 1), (-1, -1)]
-        for i, j in pawn_moves:
-            if 0 <= c_rank + i < 8 and 0 <= c_file + j < 8 and occupied_bitmap[c_rank + i][c_file + j] != 0:
-                defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank + i][c_file + j])
-                ps[89][c_rank + i][c_file + j][0 if defender else 1] = min(piece_value, ps[89][c_rank + i][c_file + j][0 if defender else 1])
-        return
+    moves_dict = {'n': [(1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2)],
+                  'p': [(1, 1), (1, -1)] if white else [(-1, 1), (-1, -1)],
+                  'k': [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]}
 
-    if piece == 'k':
-        king_moves = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
-        for i, j in king_moves:
-            if 0 <= c_rank + i < 8 and 0 <= c_file + j < 8 and occupied_bitmap[c_rank + i][c_file + j] != 0:
-                defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[c_rank + i][c_file + j])
-                ps[89][c_rank + i][c_file + j][0 if defender else 1] = min(piece_value, ps[89][c_rank + i][c_file + j][0 if defender else 1])
-        return
+    if piece not in moves_dict:
+        raise ValueError("Invalid piece input!")
+
+    for i, j in moves_dict[piece]:
+        new_r, new_f = c_rank + i, c_file + j
+        if in_bounds(new_r, new_f) and occupied_bitmap[new_r][new_f] != 0:
+            defender = (occupied_bitmap[c_rank][c_file] == occupied_bitmap[new_r][new_f])  # True if defending
+            ps[89][new_r][new_f][0 if defender else 1] = min(piece_value, ps[89][new_r][new_f][0 if defender else 1])
+
+def in_bounds(rank_idx, file_idx):
+    # Returns True if within the chess board boundary, False otherwise
+    # NOTE: Assumes 0 indexed
+    return (0 <= rank_idx < 8) and (0 <= file_idx < 8)
 
 def fen_to_position_description(fen):
 
@@ -254,14 +247,14 @@ def fen_to_position_description(fen):
         55 : 88,
     }
 
-    ps = []
-    ps += [0] * 15
-    ps += [0, (0,0)] * 32
-    ps += [[[0] * 2 for _1 in range(4)] for _2 in range(1)]
-    ps += [[[0] * 2 for _1 in range(2)] for _2 in range(4)]
-    ps += [[[0] * 2 for _1 in range(4)] for _2 in range(1)]
-    ps += [[[0] * 2 for _1 in range(2)] for _2 in range(4)] # a = [[0]*2 for _ in xrange(2)]
-    ps += [[[[999999] * 2 for _1 in range(8)] for _2 in range(8)]]
+    ps = [] # TODO: What does PS stand for?
+    ps += [0] * 15 # Slide to Move (0), Castling Rights (1-4), Material Configuration (5-14)
+    ps += [0, (0,0)] * 32 # PieceLists
+    ps += [[[0] * 2 for _1 in range(4)] for _2 in range(1)] # Sliding pieces: Queen movement white hor, vert, diag1, diag2 (x1)
+    ps += [[[0] * 2 for _1 in range(2)] for _2 in range(4)] # Sliding pieces: Rook and bishop movement white
+    ps += [[[0] * 2 for _1 in range(4)] for _2 in range(1)] # Sliding Pieces: Queen movement black
+    ps += [[[0] * 2 for _1 in range(2)] for _2 in range(4)] # Sliding pieces: Rook and bishop movement black
+    ps += [[[[999999] * 2 for _1 in range(8)] for _2 in range(8)]] # Attack and defend maps
 
     fen = fen.split(' ')
     board_str = fen[0]
@@ -270,50 +263,69 @@ def fen_to_position_description(fen):
     # en_passant = fen[3]
     
     # Used for sliding and attack/defense maps
-    occupied_bitmap = [[0 for _1 in range(8)] for _2 in range(8)]
-    board_to_ps_index = {}
-    board_to_piece_type = {}
-    
-    ps[0] = 1 if (turn == 'w') else 0
-    ps[1] = 1 if ('Q' == castling) else 0
-    ps[2] = 1 if ('K' == castling) else 0
-    ps[3] = 1 if ('q' == castling) else 0
-    ps[4] = 1 if ('k' == castling) else 0
+    occupied_bitmap = [[0]*8 for _ in range(8)] # +1 if white piece, -1 if black piece, 0 o/w
+    board_to_ps_index = {} # Key: Coordinate, Value: Piece location in ps
+    board_to_piece_type = {} # Key: Coordinate, Value: Piece type
 
+    # Slide to move
+    ps[0] = 1 if (turn == 'w') else 0
+
+    # Castling rights
+    ps[1] = 1 if ('Q' in castling) else 0
+    ps[2] = 1 if ('K' in castling) else 0
+    ps[3] = 1 if ('q' in castling) else 0
+    ps[4] = 1 if ('k' in castling) else 0
+
+    # Iterate through ranks starting from rank 1
     ranks = board_str.split('/')
     ranks.reverse()
     for c_rank, rank in enumerate(ranks):
-        c_file = 0
+        c_file = 0 # File count
         for char in rank:
             if char.isdigit():
+                # Increment file count when empty squares are encountered
                 c_file += int(char) - 1
             else:    
                 white = char.isupper()
                 char = char.lower()
+
+                # Update material configuration
                 if char != 'k':
                     ps[5 + (0 if white else 5) + piece_indices[char]] += 1
+
+                # Get the current ps index based on piece type and color (2 entries per piece)
                 curr_index = 15 + (0 if white else 32) + piece_desc_index[char] * 2
                 # print "piece: %s, white: %d, index: %d" % (char, white, curr_index)
+                # Increment ps index if slot is already filled with an identical piece
                 while ps[curr_index] == 1:
                     curr_index += 2
+                # Mark piece as present
                 ps[curr_index] = 1
-                ps[curr_index + 1] = (c_rank, c_file)
+
+                # Mark location
+                ps[curr_index + 1] = (c_rank, c_file) # TODO: Maybe normalize coordinates? They are normalized in Giraffe
                 board_to_ps_index[(c_rank, c_file)] = curr_index
                 board_to_piece_type[(c_rank, c_file)] = char
                 # set occupied bitmap
                 occupied_bitmap[c_rank][c_file] = 1 if white else -1                
-            c_file += 1
+            c_file += 1 # Increment file
 
-
-    for i in xrange(15, 78, 2):
+    # Iterate through piece lists
+    #   at most 32 pieces per board, 2 entries per piece -> 15 + 64 = 79.
+    for i in xrange(15, 79, 2):
+        # If piece is not present, skip
         if ps[i] == 0:
             continue
+
+        # Fetch coordinate
         c_rank, c_file = ps[i + 1]
-        # piece is queen, rook, or bishop
-        if 15 <= i <= 23 or 47 <= i <= 55:
+
+        if 15 <= i < 25 or 47 <= i < 57:
+            # if piece is queen, rook, or bishop then populate range of motion information and attack + defend map
             check_range_of_motion(c_rank, c_file, board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                 piece_values[board_to_piece_type[(c_rank, c_file)]], piece_index_to_slide_index[i], ps)
         else:
+            # if not then just populate attack and defend map
             set_att_def_map(c_rank, c_file, board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                 piece_values[board_to_piece_type[(c_rank, c_file)]], ps)
 
@@ -483,28 +495,27 @@ def main():
         or positions_description[77] != 1 or positions_description[78] != (4, 1): # Black piece position
         print "Failure: Black piece position is incorrect"
         return False
-    # Sliding order:
-    # Rank (left -ive, right +ive), File (down -ive, up +ive)
-    # Up diag (left down -ive, right up +ive), down diag (left up -ive, right down +ive)
+
+    # Sliding order: rank (left, right), file (down, up), '/' diag (down-left, up-right) , '\' diag (up-left, down-right)
     # (For queens, rank/file before diagonals)
-    if positions_description[79] != [[-2, 0], [0, 1], [0, 0], [-1, 1]] \
-        or positions_description[80] != [[0, 2], [-3, 0]] \
-        or positions_description[81] != [[0, 1], [-3, 0]] \
-        or positions_description[82] != [[-1, 0], [-2, 0]] \
+    if positions_description[79] != [[2, 0], [0, 1], [0, 0], [1, 1]] \
+        or positions_description[80] != [[0, 2], [3, 0]] \
+        or positions_description[81] != [[0, 1], [3, 0]] \
+        or positions_description[82] != [[1, 0], [2, 0]] \
         or positions_description[83] != [[0, 0], [0, 0]]: # White piece sliding
         print "Failure: White piece sliding is incorrect"
         return False
-    if positions_description[84] != [[-3,3], [0, 0], [0, 0], [0, 1]] \
-        or positions_description[85] != [[-3, 0], [-1, 0]] \
+    if positions_description[84] != [[3,3], [0, 0], [0, 0], [0, 1]] \
+        or positions_description[85] != [[3, 0], [1, 0]] \
         or positions_description[86] != [[0, 0], [0, 0]] \
-        or positions_description[87] != [[-2, 0], [-2, 0]] \
+        or positions_description[87] != [[2, 0], [2, 0]] \
         or positions_description[88] != [[0, 0], [0, 0]]: # Black piece sliding
         print "Failure: Black piece sliding is incorrect"
         for pd in positions_description[84:89]:
             print pd
         return False
 
-    # Attacker/defender maps. 64 x 2d tuple (defender value, attacker value), where attacker
+    # Attacker/defender maps. 64 x 2 tuple (defender value, attacker value), where attacker
     # is the opposite color as piece on current square and defender is the same color
     # King value = 1000
     success = True
@@ -512,44 +523,47 @@ def main():
         for c_file, files in enumerate(ranks):
             if c_rank == 0 and c_file == 3:
                 success &= (positions_description[89][c_rank][c_file] == [3,1])
-            if c_rank == 1 and c_file == 1:
+            elif c_rank == 1 and c_file == 1:
                 success &= (positions_description[89][c_rank][c_file] == [3,999999])
-            if c_rank == 1 and c_file == 2:
+            elif c_rank == 1 and c_file == 2:
                 success &= (positions_description[89][c_rank][c_file] == [3,1])
-            if c_rank == 1 and c_file == 4:
+            elif c_rank == 1 and c_file == 4:
                 success &= (positions_description[89][c_rank][c_file] == [1,1000])
-            if c_rank == 1 and c_file == 5:
+            elif c_rank == 1 and c_file == 5:
                 success &= (positions_description[89][c_rank][c_file] == [3,999999])
-            if c_rank == 1 and c_file == 6:
+            elif c_rank == 1 and c_file == 6:
                 success &= (positions_description[89][c_rank][c_file] == [999999,3])
-            if c_rank == 2 and c_file == 3:
+            elif c_rank == 2 and c_file == 3:
                 success &= (positions_description[89][c_rank][c_file] == [999999,3])
-            if c_rank == 2 and c_file == 4:
+            elif c_rank == 2 and c_file == 4:
                 success &= (positions_description[89][c_rank][c_file] == [3,3])
-            if c_rank == 3 and c_file == 1:
+            elif c_rank == 3 and c_file == 1:
                 success &= (positions_description[89][c_rank][c_file] == [999999,1000])
-            if c_rank == 4 and c_file == 1:
+            elif c_rank == 4 and c_file == 1:
                 success &= (positions_description[89][c_rank][c_file] == [999999,999999])
-            if c_rank == 4 and c_file == 4:
+            elif c_rank == 4 and c_file == 4:
                 success &= (positions_description[89][c_rank][c_file] == [1,9])
-            if c_rank == 5 and c_file == 1:
+            elif c_rank == 5 and c_file == 1:
                 success &= (positions_description[89][c_rank][c_file] == [5,1000])
-            if c_rank == 5 and c_file == 2:
+            elif c_rank == 5 and c_file == 2:
                 success &= (positions_description[89][c_rank][c_file] == [9,1000])
-            if c_rank == 5 and c_file == 5:
+            elif c_rank == 5 and c_file == 5:
                 success &= (positions_description[89][c_rank][c_file] == [9,5])
-            if c_rank == 5 and c_file == 7:
+            elif c_rank == 5 and c_file == 7:
                 success &= (positions_description[89][c_rank][c_file] == [3,999999])
-            if c_rank == 6 and c_file == 2:
+            elif c_rank == 6 and c_file == 2:
                 success &= (positions_description[89][c_rank][c_file] == [1,9])
-            if c_rank == 6 and c_file == 3:
+            elif c_rank == 6 and c_file == 3:
                 success &= (positions_description[89][c_rank][c_file] == [9,9])
-            if c_rank == 6 and c_file == 5:
+            elif c_rank == 6 and c_file == 5:
                 success &= (positions_description[89][c_rank][c_file] == [999999,5])
-            if c_rank == 7 and c_file == 3:
+            elif c_rank == 7 and c_file == 3:
                 success &= (positions_description[89][c_rank][c_file] == [3,5])
-            if c_rank == 7 and c_file == 7:
+            elif c_rank == 7 and c_file == 7:
                 success &= (positions_description[89][c_rank][c_file] == [3,999999])
+            else:
+                success &= (positions_description[89][c_rank][c_file] == [999999, 999999])
+
     if not success:
         print "Failure: Defender/Attacker map is incorrect"
         return False

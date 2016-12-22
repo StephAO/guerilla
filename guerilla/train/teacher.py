@@ -47,6 +47,8 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
+        self.conv_loss_thresh = 0.0001 # If all loss changes in the window <= than this value then converged
+        self.conv_window_size = 20 # Number of epochs to consider when checking for convergence
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -288,19 +290,14 @@ class Teacher:
 
             self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.nn.train_step)
 
-            # evaluate nn for convergence # TODO: Fix duplicate loss being stored
+            # evaluate nn for convergence
             state['loss'].append(self.evaluate_bootstrap(valid_fens, valid_values))
             state['train_loss'].append(self.evaluate_bootstrap(train_check_fens, train_check_values))
-            curr_loss = state['loss'][-2] - state['loss'][-1]
-            base_loss = state['loss'][0] - state['loss'][1]
-            if False: # TODO pick better convergence threshold
-                self.nn.save_weight_values()
-                plt.plot(range(state['epoch_num']), state['loss'])
-                plt.show()
 
-            # continue with rests of epochs
-            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
-                                 loss=state['loss'], train_loss=state['train_loss'])
+            if not self.is_converged(state['loss']):
+                # else continue with rest of epochs
+                self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
+                                     loss=state['loss'], train_loss=state['train_loss'])
         elif action == 'train_td_end':
             if self.verbose:
                 print "Resuming endgame TD-Leaf training..."
@@ -375,7 +372,7 @@ class Teacher:
         loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
         train_loss.append(self.evaluate_bootstrap(train_check_fens, train_check_values))
         if self.verbose:
-            print "%16d %16.2f %16.2f" % (start_epoch, loss[-1], train_loss[-1])
+            print "%16d %16.5f %16.5f" % (start_epoch, loss[-1], train_loss[-1])
         for epoch in xrange(start_epoch, hp['NUM_EPOCHS']):
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
@@ -396,15 +393,12 @@ class Teacher:
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
             train_loss.append(self.evaluate_bootstrap(train_check_fens, train_check_values))
             if self.verbose:
-                print "%16d %16.2f %16.2f" % (epoch + 1, loss[-1], train_loss[-1])
+                print "%16d %16.5f %16.5f" % (epoch + 1, loss[-1], train_loss[-1])
 
-            if len(loss) > 2:
-                base_loss = loss[0] - loss[1]
-                curr_loss = loss[-2] - loss[-1]
-                if False: # TODO pick better convergence threshold
-                    if self.verbose:
-                        print "Training complete: Reached convergence threshold"
-                    break
+            if self.is_converged(loss):
+                if self.verbose:
+                    print "Training complete: Reached convergence threshold"
+                break
         else:
             if self.verbose:
                 print "Training complete: Reached max epoch, no convergence yet"
@@ -483,9 +477,20 @@ class Teacher:
 
         return error
 
-    # ---------- TD-LEAF TRAINING METHODS
+    def is_converged(self, loss):
+        # +1 because we are looking at the number of changes
+        if len(loss) < (self.conv_window_size + 1):
+            return False
 
-    # TODO: Handle complete fens format
+        # Check if any items in the window indicate non-convergence
+        for i in range(1, self.conv_window_size + 1):
+            if abs(loss[- (i + 1)] - loss[-i]) > self.conv_loss_thresh:
+                return False
+
+        return True
+
+
+    # ---------- TD-LEAF TRAINING METHODS
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
                       end_length=None, full_length=None, batch_size=None):
@@ -602,11 +607,6 @@ class Teacher:
                         sub_end = min(game_length, sub_start + self.td_full_length)
                         fens = fens[sub_start:sub_end]
 
-                        # TODO: Remove this check later.
-                        if (len(fens) != self.td_full_length and game_length >= self.td_full_length) or \
-                                (len(fens) != game_length and game_length < self.td_full_length):
-                            if self.verbose:
-                                print "Warning: This shouldn't happen!"
 
             # Call TD-Leaf
             if self.verbose:
@@ -654,7 +654,7 @@ class Teacher:
         else:
             raise NotImplementedError("Unrecognized training type")
 
-        self.nn.add_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
+        self.nn.add_to_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
 
     def td_leaf(self, game):
         """
@@ -745,6 +745,9 @@ class Teacher:
 
         fens = cgp.load_fens(num_values=self.sp_num)
 
+        # shuffle fens
+        random.shuffle(fens)
+
         if game_indices is None:
             game_indices = np.random.choice(len(fens), self.sp_num)
 
@@ -776,12 +779,7 @@ class Teacher:
                     break
 
                 # Play move
-                try:
-                    board.push(self.guerilla.get_move(board))
-                except AttributeError:
-                    # TODO: Remove once bug is fixed
-                    print board.fen()
-                    raise
+                board.push(self.guerilla.get_move(board))
 
                 # Store fen
                 game_fens.append(board.fen())

@@ -475,7 +475,7 @@ class NeuralNet:
         # Run assignment/update
         self.sess.run(self.all_assignments, feed_dict=placeholder_dict)
 
-    def add_all_weights(self, weight_vals):  # TODO rename to add_to_all_weights
+    def add_to_all_weights(self, weight_vals):
         """
         Increments all the weight values by the input amount.
             Input:
@@ -525,7 +525,6 @@ class NeuralNet:
 
         return {self.data: board, self.data_diags: diagonal}
 
-    # TODO S: Maybe combine the following two functions? I think this only gets used in Guerilla but i'm not sure.
     def evaluate(self, fen):
         """
         Evaluates chess board.
@@ -539,10 +538,6 @@ class NeuralNet:
             raise ValueError("Invalid evaluate input, white must be next to play.")
 
         return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
-
-    def evaluate_board(self, board):
-        return self.evaluate(board.fen())
-
 
 if __name__ == 'main':
     pass

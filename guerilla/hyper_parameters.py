@@ -16,7 +16,6 @@ hp['NUM_FC_LAYERS'] = 3
 hp['LEARNING_RATE'] = 0.0001 #0.0005
 hp['VALIDATION_SIZE'] = 5000 #50k
 hp['TRAIN_CHECK_SIZE'] = 5000 #50k
-hp['LOSS_THRESHOLD'] = 0.000001
 hp['DECAY_RATE'] = 0.95 # Only used if the training mode is AdaDelta
 
 hp['NUM_CHANNELS'] = 6 * 2

@@ -215,7 +215,8 @@ def in_bounds(rank_idx, file_idx):
     return (0 <= rank_idx < 8) and (0 <= file_idx < 8)
 
 def fen_to_position_description(fen):
-
+    # TODO docstring
+    # TODO attack defenders for piece list
     piece_desc_index = {
         'q': 0,
         'r': 1,
@@ -235,26 +236,35 @@ def fen_to_position_description(fen):
     }
 
     piece_index_to_slide_index = {
-        15 : 79,
-        17 : 80,
-        19 : 81,
-        21 : 82,
-        23 : 83,
-        47 : 84,
-        49 : 85,
-        51 : 86,
-        53 : 87,
-        55 : 88,
+        15: 79,
+        17: 80,
+        19: 81,
+        21: 82,
+        23: 83,
+        47: 84,
+        49: 85,
+        51: 86,
+        53: 87,
+        55: 88,
     }
 
-    ps = [] # TODO: What does PS stand for?
-    ps += [0] * 15 # Slide to Move (0), Castling Rights (1-4), Material Configuration (5-14)
-    ps += [0, (0,0)] * 32 # PieceLists
-    ps += [[[0] * 2 for _1 in range(4)] for _2 in range(1)] # Sliding pieces: Queen movement white hor, vert, diag1, diag2 (x1)
-    ps += [[[0] * 2 for _1 in range(2)] for _2 in range(4)] # Sliding pieces: Rook and bishop movement white
-    ps += [[[0] * 2 for _1 in range(4)] for _2 in range(1)] # Sliding Pieces: Queen movement black
-    ps += [[[0] * 2 for _1 in range(2)] for _2 in range(4)] # Sliding pieces: Rook and bishop movement black
-    ps += [[[[999999] * 2 for _1 in range(8)] for _2 in range(8)]] # Attack and defend maps
+    S_IDX_PIECES_NUM = 5
+    S_IDX_PIECE_LIST = 15
+    NUM_SLOTS_PER_PIECE = 3 # For piece list
+    S_IDX_SLIDE_LIST = 111
+    S_IDX_ATKDEF_MAP = 159
+
+    NUM_SLIDE_PIECES_PER_SIDE = 5 # queen + 2 rooks + 2 bishops
+    NUM_PIECES_PER_SIDE = 16 # PER SIDE
+    BOARD_LENGTH = 8
+    BOARD_SIZE = 64
+
+    # Side to Move (0), Castling Rights (1-4), Material Configuration (5-14)
+    # Piece list (15-111)
+    # Sliding list (111-158)
+    # Def/Atk map (159-287)
+    ps = [0] * S_IDX_ATKDEF_MAP # TODO: What does PS stand for? # ANSWER (delete once you've seen it) ps is short for position description
+    ps += [99999] * (BOARD_SIZE * 2) # Attack and defend maps
 
     fen = fen.split(' ')
     board_str = fen[0]
@@ -263,7 +273,7 @@ def fen_to_position_description(fen):
     # en_passant = fen[3]
     
     # Used for sliding and attack/defense maps
-    occupied_bitmap = [[0]*8 for _ in range(8)] # +1 if white piece, -1 if black piece, 0 o/w
+    occupied_bitmap = [[0] * BOARD_LENGTH for _ in range(BOARD_LENGTH)] # +1 if white piece, -1 if black piece, 0 o/w
     board_to_ps_index = {} # Key: Coordinate, Value: Piece location in ps
     board_to_piece_type = {} # Key: Coordinate, Value: Piece type
 
@@ -291,28 +301,28 @@ def fen_to_position_description(fen):
 
                 # Update material configuration
                 if char != 'k':
-                    ps[5 + (0 if white else 5) + piece_indices[char]] += 1
+                    ps[S_IDX_PIECES_NUM + (0 if white else 5) + piece_indices[char]] += 1
 
                 # Get the current ps index based on piece type and color (2 entries per piece)
-                curr_index = 15 + (0 if white else 32) + piece_desc_index[char] * 2
+                curr_index = S_IDX_PIECE_LIST + (0 if white else NUM_PIECES_PER_SIDE * 2) + piece_desc_index[char] * NUM_SLOTS_PER_PIECE
                 # print "piece: %s, white: %d, index: %d" % (char, white, curr_index)
                 # Increment ps index if slot is already filled with an identical piece
                 while ps[curr_index] == 1:
-                    curr_index += 2
+                    curr_index += NUM_SLOTS_PER_PIECE
                 # Mark piece as present
                 ps[curr_index] = 1
 
                 # Mark location
-                ps[curr_index + 1] = (c_rank, c_file) # TODO: Maybe normalize coordinates? They are normalized in Giraffe
+                ps[curr_index + 1] = c_rank
+                ps[curr_index + 2] = c_file # TODO: Maybe normalize coordinates? They are normalized in Giraffe
                 board_to_ps_index[(c_rank, c_file)] = curr_index
                 board_to_piece_type[(c_rank, c_file)] = char
                 # set occupied bitmap
                 occupied_bitmap[c_rank][c_file] = 1 if white else -1                
             c_file += 1 # Increment file
 
-    # Iterate through piece lists
-    #   at most 32 pieces per board, 2 entries per piece -> 15 + 64 = 79.
-    for i in xrange(15, 79, 2):
+    # Iterate through piece lists.
+    for i in xrange(S_IDX_PIECE_LIST, S_IDX_SLIDE_LIST, NUM_SLOTS_PER_PIECE):
         # If piece is not present, skip
         if ps[i] == 0:
             continue
@@ -320,7 +330,8 @@ def fen_to_position_description(fen):
         # Fetch coordinate
         c_rank, c_file = ps[i + 1]
 
-        if 15 <= i < 25 or 47 <= i < 57:
+        if 0 <= i - S_IDX_PIECE_LIST < NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE or \
+           0 <= i - (S_IDX_PIECE_LIST + NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE) < NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE:
             # if piece is queen, rook, or bishop then populate range of motion information and attack + defend map
             check_range_of_motion(c_rank, c_file, board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                 piece_values[board_to_piece_type[(c_rank, c_file)]], piece_index_to_slide_index[i], ps)
@@ -442,7 +453,7 @@ def main():
         or positions_description[3] != 0 or positions_description[4] != 0: # Castling options
         print "Failure: Castling description is incorrect"
         return False
-    # Order is alwasy queens, rooks, bishops, knigths, pawns
+    # Order is always queens, rooks, bishops, knigths, pawns
     if positions_description[5] != 1 \
         or positions_description[6] != 2 \
         or positions_description[7] != 1 \
@@ -457,62 +468,60 @@ def main():
         or positions_description[14] != 5: # Black piece count
         print "Failure: Black piece count is incorrect"
         return False
-    if positions_description[15] != 1 or positions_description[16] != (6, 2) \
-        or positions_description[17] != 1 or positions_description[18] != (5, 2) \
-        or positions_description[19] != 1 or positions_description[20] != (6, 3) \
-        or positions_description[21] != 1 or positions_description[22] != (1, 2) \
-        or positions_description[23] != 0 or positions_description[24] != (0, 0) \
-        or positions_description[25] != 1 or positions_description[26] != (0, 3) \
-        or positions_description[27] != 1 or positions_description[28] != (2, 4) \
-        or positions_description[29] != 1 or positions_description[30] != (1, 1) \
-        or positions_description[31] != 1 or positions_description[32] != (3, 1) \
-        or positions_description[33] != 1 or positions_description[34] != (5, 1) \
-        or positions_description[35] != 0 or positions_description[36] != (0, 0) \
-        or positions_description[37] != 0 or positions_description[38] != (0, 0) \
-        or positions_description[39] != 0 or positions_description[40] != (0, 0) \
-        or positions_description[41] != 0 or positions_description[42] != (0, 0) \
-        or positions_description[43] != 0 or positions_description[44] != (0, 0) \
-        or positions_description[45] != 1 or positions_description[46] != (1, 5): # White piece position
+    if positions_description[15:18] != [1, 6, 2] \
+        or positions_description[18:21] != [1, 5, 2] \
+        or positions_description[21:24] != [1, 6, 3] \
+        or positions_description[24:27] != [1, 1, 2] \
+        or positions_description[27:30] != [0, 0, 0] \
+        or positions_description[30:33] != [1, 0, 3] \
+        or positions_description[33:36] != [1, 2, 4] \
+        or positions_description[36:39] != [1, 1, 1] \
+        or positions_description[39:42] != [1, 3, 1] \
+        or positions_description[42:45] != [1, 5, 1] \
+        or positions_description[45:48] != [0, 0, 0] \
+        or positions_description[48:51] != [0, 0, 0] \
+        or positions_description[51:54] != [0, 0, 0] \
+        or positions_description[54:57] != [0, 0, 0] \
+        or positions_description[57:60] != [0, 0, 0] \
+        or positions_description[60:63] != [1, 1, 5]: # White piece position
         print "Failure: White piece position is incorrect"
         for idx, i in enumerate(positions_description):
             print idx, i
         return False
-    if positions_description[47] != 1 or positions_description[48] != (7, 3) \
-        or positions_description[49] != 1 or positions_description[50] != (7, 7) \
-        or positions_description[51] != 0 or positions_description[52] != (0, 0) \
-        or positions_description[53] != 1 or positions_description[54] != (5, 7) \
-        or positions_description[55] != 0 or positions_description[56] != (0, 0) \
-        or positions_description[57] != 1 or positions_description[58] != (6, 5) \
-        or positions_description[59] != 0 or positions_description[60] != (0, 0) \
-        or positions_description[61] != 1 or positions_description[62] != (1, 4) \
-        or positions_description[63] != 1 or positions_description[64] != (1, 6) \
-        or positions_description[65] != 1 or positions_description[66] != (2, 3) \
-        or positions_description[67] != 1 or positions_description[68] != (4, 4) \
-        or positions_description[67] != 1 or positions_description[70] != (5, 5) \
-        or positions_description[71] != 0 or positions_description[72] != (0, 0) \
-        or positions_description[73] != 0 or positions_description[74] != (0, 0) \
-        or positions_description[75] != 0 or positions_description[76] != (0, 0) \
-        or positions_description[77] != 1 or positions_description[78] != (4, 1): # Black piece position
+    if positions_description[63:66] != [1, 7, 3] \
+        or positions_description[66:69] != [1, 7, 7] \
+        or positions_description[69:72] != [0, 0, 0] \
+        or positions_description[72:75] != [1, 5, 7] \
+        or positions_description[75:78] != [0, 0, 0] \
+        or positions_description[78:81] != [1, 6, 5] \
+        or positions_description[81:84] != [0, 0, 0] \
+        or positions_description[84:87] != [1, 1, 4] \
+        or positions_description[87:90] != [1, 1, 6] \
+        or positions_description[90:93] != [1, 2, 3] \
+        or positions_description[93:96] != [1, 4, 4] \
+        or positions_description[96:99] != [1, 5, 5] \
+        or positions_description[99:102] != [0, 0, 0] \
+        or positions_description[102:105] != [0, 0, 0] \
+        or positions_description[105:108] != [0, 0, 0] \
+        or positions_description[108:111] != [1, 4, 1]: # Black piece position
         print "Failure: Black piece position is incorrect"
         return False
 
     # Sliding order: rank (left, right), file (down, up), '/' diag (down-left, up-right) , '\' diag (up-left, down-right)
     # (For queens, rank/file before diagonals)
-    if positions_description[79] != [[2, 0], [0, 1], [0, 0], [1, 1]] \
-        or positions_description[80] != [[0, 2], [3, 0]] \
-        or positions_description[81] != [[0, 1], [3, 0]] \
-        or positions_description[82] != [[1, 0], [2, 0]] \
-        or positions_description[83] != [[0, 0], [0, 0]]: # White piece sliding
+    if positions_description[111:119] != [2, 0, 0, 1, 0, 0, 1, 1] \
+        or positions_description[119:123] != [0, 2, 3, 0] \
+        or positions_description[123:127] != [0, 1, 3, 0] \
+        or positions_description[127:131] != [1, 0, 2, 0] \
+        or positions_description[131:135] != [0, 0, 0, 0]: # White piece sliding
         print "Failure: White piece sliding is incorrect"
         return False
-    if positions_description[84] != [[3,3], [0, 0], [0, 0], [0, 1]] \
-        or positions_description[85] != [[3, 0], [1, 0]] \
-        or positions_description[86] != [[0, 0], [0, 0]] \
-        or positions_description[87] != [[2, 0], [2, 0]] \
-        or positions_description[88] != [[0, 0], [0, 0]]: # Black piece sliding
+    if positions_description[135:143] != [3, 3, 0, 0, 0, 0, 0, 1] \
+        or positions_description[143:147] != [3, 0, 1, 0] \
+        or positions_description[147:151] != [0, 0, 0, 0] \
+        or positions_description[151:155] != [2, 0, 2, 0] \
+        or positions_description[155:159] != [0, 0, 0, 0]: # Black piece sliding
         print "Failure: Black piece sliding is incorrect"
-        for pd in positions_description[84:89]:
-            print pd
         return False
 
     # Attacker/defender maps. 64 x 2 tuple (defender value, attacker value), where attacker
@@ -522,47 +531,47 @@ def main():
     for c_rank, ranks in enumerate(positions_description[89]): 
         for c_file, files in enumerate(ranks):
             if c_rank == 0 and c_file == 3:
-                success &= (positions_description[89][c_rank][c_file] == [3,1])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,1])
             elif c_rank == 1 and c_file == 1:
-                success &= (positions_description[89][c_rank][c_file] == [3,999999])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,999999])
             elif c_rank == 1 and c_file == 2:
-                success &= (positions_description[89][c_rank][c_file] == [3,1])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,1])
             elif c_rank == 1 and c_file == 4:
-                success &= (positions_description[89][c_rank][c_file] == [1,1000])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [1,1000])
             elif c_rank == 1 and c_file == 5:
-                success &= (positions_description[89][c_rank][c_file] == [3,999999])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,999999])
             elif c_rank == 1 and c_file == 6:
-                success &= (positions_description[89][c_rank][c_file] == [999999,3])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [999999,3])
             elif c_rank == 2 and c_file == 3:
-                success &= (positions_description[89][c_rank][c_file] == [999999,3])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [999999,3])
             elif c_rank == 2 and c_file == 4:
-                success &= (positions_description[89][c_rank][c_file] == [3,3])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,3])
             elif c_rank == 3 and c_file == 1:
-                success &= (positions_description[89][c_rank][c_file] == [999999,1000])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [999999,1000])
             elif c_rank == 4 and c_file == 1:
-                success &= (positions_description[89][c_rank][c_file] == [999999,999999])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [999999,999999])
             elif c_rank == 4 and c_file == 4:
-                success &= (positions_description[89][c_rank][c_file] == [1,9])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [1,9])
             elif c_rank == 5 and c_file == 1:
-                success &= (positions_description[89][c_rank][c_file] == [5,1000])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [5,1000])
             elif c_rank == 5 and c_file == 2:
-                success &= (positions_description[89][c_rank][c_file] == [9,1000])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [9,1000])
             elif c_rank == 5 and c_file == 5:
-                success &= (positions_description[89][c_rank][c_file] == [9,5])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [9,5])
             elif c_rank == 5 and c_file == 7:
-                success &= (positions_description[89][c_rank][c_file] == [3,999999])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,999999])
             elif c_rank == 6 and c_file == 2:
-                success &= (positions_description[89][c_rank][c_file] == [1,9])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [1,9])
             elif c_rank == 6 and c_file == 3:
-                success &= (positions_description[89][c_rank][c_file] == [9,9])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [9,9])
             elif c_rank == 6 and c_file == 5:
-                success &= (positions_description[89][c_rank][c_file] == [999999,5])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [999999,5])
             elif c_rank == 7 and c_file == 3:
-                success &= (positions_description[89][c_rank][c_file] == [3,5])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,5])
             elif c_rank == 7 and c_file == 7:
-                success &= (positions_description[89][c_rank][c_file] == [3,999999])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [3,999999])
             else:
-                success &= (positions_description[89][c_rank][c_file] == [999999, 999999])
+                success &= (positions_description[159 + c_rank * 8 + c_file] == [999999, 999999])
 
     if not success:
         print "Failure: Defender/Attacker map is incorrect"

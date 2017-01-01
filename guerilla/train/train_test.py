@@ -555,12 +555,16 @@ def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_
 
 def run_train_tests():
     all_tests = {}
-    all_tests["Stockfish tests"] = {'Stockfish Handling': stockfish_test,
-                                'NSV Alignment': nsv_test}
+    all_tests["Stockfish tests"] = {
+        'Stockfish Handling': stockfish_test,
+        # 'NSV Alignment': nsv_test
+                                    }
 
-    all_tests["Training Tests"] = {'Training': training_test,
-                                   'Load and Resume': load_and_resume_test,
-                                    'Learn Moves': learn_moves_test}
+    all_tests["Training Tests"] = {
+       'Training': training_test,
+       'Load and Resume': load_and_resume_test,
+       'Learn Moves': learn_moves_test
+    }
 
     success = True
     print "\nRunning Train Tests...\n"

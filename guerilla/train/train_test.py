@@ -111,7 +111,7 @@ def training_test(verbose=False):
             with Guerilla('Harambe', 'w', training_mode=t_m, verbose=verbose) as g:
                 g.search.max_depth = 1
                 t = Teacher(g, test=True, verbose=verbose)
-                t.set_bootstrap_params(num_bootstrap=500)  # 488037
+                t.set_bootstrap_params(num_bootstrap=400)  # 488037
                 t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
                 t.set_sp_params(num_selfplay=1, max_length=3)
                 t.sts_on = False

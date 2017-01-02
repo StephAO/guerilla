@@ -3,7 +3,27 @@ import chess
 import numpy as np
 from guerilla.hyper_parameters import *
 
-flatten = lambda l: [item for sublist in l for item in sublist]
+piece_indices = {
+    'q': 0,
+    'r': 1,
+    'b': 2,
+    'n': 3,
+    'p': 4,
+    'k': 5,
+}
+
+piece_values = {
+    'q': 9,
+    'r': 5,
+    'b': 3,
+    'n': 3,
+    'p': 1,
+    'k': 1000
+}
+
+S_IDX_PIECE_LIST = 15
+S_IDX_ATKDEF_MAP = 223
+PS_FULL_SIZE = 351
 
 def flip_board(fen):
     """ switch colors of pieces
@@ -50,6 +70,14 @@ def flip_board(fen):
         new_en_passant = '-'
 
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
+
+def fen_to_nn_input(fen):
+    if hp['NN_INPUT_TYPE'] == 'bitmap':
+        return fen_to_bitmap(fen)
+    elif hp['NN_INPUT_TYPE'] == 'position_description':
+        return fen_to_position_description(fen)
+    else:
+        raise NotImplementedError("Error: Unsupported Neural Net input type.")
 
 # TODO: deal with en passant and castling
 def fen_to_bitmap(fen):
@@ -185,7 +213,6 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
 
 def fen_to_position_description(fen):
     # TODO docstring
-    # TODO attack defenders for piece list
     piece_desc_index = {
         'q': 0,
         'r': 1,
@@ -193,15 +220,6 @@ def fen_to_position_description(fen):
         'n': 5,
         'p': 7,
         'k': 15
-    }
-
-    piece_values = {
-        'q': 9,
-        'r': 5,
-        'b': 3,
-        'n': 3,
-        'p': 1,
-        'k': 1000
     }
 
     piece_index_to_slide_index = {
@@ -218,11 +236,8 @@ def fen_to_position_description(fen):
     }
 
     S_IDX_PIECES_NUM = 5
-    S_IDX_PIECE_LIST = 15
-    NUM_SLOTS_PER_PIECE = 5 # For piece list
     S_IDX_SLIDE_LIST = 175
-    S_IDX_ATKDEF_MAP = 223
-
+    NUM_SLOTS_PER_PIECE = 5 # For piece list
     NUM_SLIDE_PIECES_PER_SIDE = 5 # queen + 2 rooks + 2 bishops
     NUM_PIECES_PER_SIDE = 16 # PER SIDE
     BOARD_LENGTH = 8

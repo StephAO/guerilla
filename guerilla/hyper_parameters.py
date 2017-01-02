@@ -12,7 +12,7 @@ hp['NUM_FEAT'] = 10  # TODO S: Rename to "filters" or something else. Currently 
 hp['NUM_EPOCHS'] = 1000 #50
 hp['BATCH_SIZE'] = 500 #5000
 hp['NUM_HIDDEN'] = 1024
-hp['NUM_FC_LAYERS'] = 3
+hp['NUM_FC_LAYERS'] = 3 # This is in addition to (i.e. excluding) convolutional layers 
 hp['LEARNING_RATE'] = 0.0001 #0.0005
 hp['VALIDATION_SIZE'] = 5000 #50k
 hp['TRAIN_CHECK_SIZE'] = 5000 #50k
@@ -25,12 +25,7 @@ hp['NUM_CHANNELS'] = 6 * 2
 hp['TD_LRN_RATE'] = 0.00001  # Learning rate
 hp['TD_DISCOUNT'] = 0.7  # Discount rate
 
-# TODO: I don't think this should be here.
-piece_indices = {
-    'q': 0,
-    'r': 1,
-    'b': 2,
-    'n': 3,
-    'p': 4,
-    'k': 5,
-}
+# Neural net input type. Options are:
+# 1. 'bitmap'
+# 2. 'position_description'
+hp['NN_INPUT_TYPE'] = 'position_description'

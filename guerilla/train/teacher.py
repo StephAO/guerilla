@@ -432,8 +432,11 @@ class Teacher:
         num_batches = int(len(game_indices) / hp['BATCH_SIZE'])
 
         board_num = 0
-        boards = np.zeros((hp['BATCH_SIZE'], 8, 8, hp['NUM_CHANNELS']))
-        diagonals = np.zeros((hp['BATCH_SIZE'], 10, 8, hp['NUM_CHANNELS']))
+        if hp['NN_INPUT_TYPE'] == 'position_description':
+            boards = np.zeros((hp['BATCH_SIZE'], dh.PS_FULL_SIZE))
+        elif hp['NN_INPUT_TYPE'] == 'bitmap':
+            boards = np.zeros((hp['BATCH_SIZE'], 8, 8, hp['NUM_CHANNELS']))
+            diagonals = np.zeros((hp['BATCH_SIZE'], 10, 8, hp['NUM_CHANNELS']))
         true_values = np.zeros(hp['BATCH_SIZE'])
 
         for i in xrange(num_batches):
@@ -445,14 +448,17 @@ class Teacher:
 
             # set up batch
             for j in xrange(hp['BATCH_SIZE']):
-                boards[j] = dh.fen_to_bitmap(fens[game_indices[board_num]])
-                diagonals[j] = dh.get_diagonals(boards[j])
+                boards[j] = dh.fen_to_nn_input(fens[game_indices[board_num]])
+                if hp['NN_INPUT_TYPE'] == 'bitmap':
+                    diagonals[j] = dh.get_diagonals(boards[j])
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
+            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values}
+            if hp['NN_INPUT_TYPE'] == 'bitmap':
+                _feed_dict[self.nn.data_diags] = diagonals
             # train batch
-            self.nn.sess.run([train_step], feed_dict={self.nn.data: boards, self.nn.data_diags: diagonals,
-                                                      self.nn.true_value: true_values})
+            self.nn.sess.run([train_step], feed_dict=_feed_dict)
 
         return False, {}
 
@@ -467,19 +473,28 @@ class Teacher:
                     Expected output for each chess board state (between 0 and 1)
         """
 
-        # Configure data
-        boards = np.zeros((len(fens), 8, 8, hp['NUM_CHANNELS']))
-        diagonals = np.zeros((len(fens), 10, 8, hp['NUM_CHANNELS']))
+        
+        if hp['NN_INPUT_TYPE'] == 'position_description':
+            # Configure data
+            boards = np.zeros((len(fens), dh.PS_FULL_SIZE))
+
+        elif hp['NN_INPUT_TYPE'] == 'bitmap':
+            # Configure data
+            boards = np.zeros((len(fens), 8, 8, hp['NUM_CHANNELS']))
+            diagonals = np.zeros((len(fens), 10, 8, hp['NUM_CHANNELS']))
+
         for i in xrange(len(fens)):
-            boards[i] = dh.fen_to_bitmap(fens[i])
-            diagonals[i] = dh.get_diagonals(boards[i])
+            boards[i] = dh.fen_to_nn_input(fens[i])
+            if hp['NN_INPUT_TYPE'] == 'bitmap':
+                diagonals[i] = dh.get_diagonals(boards[i])
+
+        _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values}
+        if hp['NN_INPUT_TYPE'] == 'bitmap':
+            _feed_dict[self.nn.data_diags] = diagonals
 
         # Get loss
-        error = self.nn.sess.run(self.nn.MSE, feed_dict={
-            self.nn.data: boards,
-            self.nn.data_diags: diagonals,
-            self.nn.true_value: true_values
-        })
+        error = self.nn.sess.run(self.nn.MSE, feed_dict=_feed_dict)
+            
 
         return error
 

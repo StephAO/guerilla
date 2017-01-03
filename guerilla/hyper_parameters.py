@@ -28,4 +28,4 @@ hp['TD_DISCOUNT'] = 0.7  # Discount rate
 # Neural net input type. Options are:
 # 1. 'bitmap'
 # 2. 'position_description'
-hp['NN_INPUT_TYPE'] = 'position_description'
+hp['NN_INPUT_TYPE'] = 'bitmap'

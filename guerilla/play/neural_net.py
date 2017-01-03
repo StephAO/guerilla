@@ -7,25 +7,6 @@ from pkg_resources import resource_filename
 import guerilla.data_handler as dh
 from guerilla.hyper_parameters import *
 
-
-def weight_variable(shape):
-    initial = tf.truncated_normal(shape, stddev=0.1, dtype=tf.float32)
-    return tf.Variable(initial)
-
-
-def bias_variable(shape):
-    initial = tf.constant(0.1, shape=shape, dtype=tf.float32)
-    return tf.Variable(initial)
-
-
-def conv5x5_grid(x, w):
-    return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME')  # Pad or fit? (same is pad, fit is valid)
-
-
-def conv8x1_line(x, w):  # includes ranks, files, and diagonals
-    return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='VALID')
-
-
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
@@ -50,6 +31,13 @@ class NeuralNet:
         elif training_mode not in NeuralNet.training_modes:
             raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
         self.training_mode = training_mode
+
+        if hp['NN_INPUT_TYPE'] == 'position_description':
+            self.variable_value = 0.001
+        elif hp['NN_INPUT_TYPE'] == 'bitmap':
+            self.variable_value = 0.1
+        else:
+            raise NotImplementedError("Neural Net input type %s is not implemented" % (hp['NN_INPUT_TYPE']))
 
         if self.verbose:
             print "Training neural net using %s." % self.training_mode
@@ -299,6 +287,24 @@ class NeuralNet:
         if self.verbose:
             print "Tensorflow session closed."
 
+    def weight_variable(self, shape):
+        initial = tf.truncated_normal(shape, stddev=self.variable_value, dtype=tf.float32)
+        return tf.Variable(initial)
+
+
+    def bias_variable(self, shape):
+        initial = tf.constant(self.variable_value, shape=shape, dtype=tf.float32)
+        return tf.Variable(initial)
+
+
+    def conv5x5_grid(self, x, w):
+        return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME')  # Pad or fit? (same is pad, fit is valid)
+
+
+    def conv8x1_line(self, x, w):  # includes ranks, files, and diagonals
+        return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='VALID')
+
+
     def define_tf_variables(self):
         """
             Initializes all weight variables to normal distribution, and all
@@ -306,44 +312,44 @@ class NeuralNet:
         """
         if hp['NN_INPUT_TYPE'] == "position_description":
             num_hidden_subgroup = int(hp['NUM_HIDDEN']/3)
-            self.W_state = weight_variable([dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_piece = weight_variable([dh.S_IDX_ATKDEF_MAP - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_board = weight_variable([dh.PS_FULL_SIZE - dh.S_IDX_ATKDEF_MAP, num_hidden_subgroup])
+            self.W_state = self.weight_variable([dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
+            self.W_piece = self.weight_variable([dh.S_IDX_ATKDEF_MAP - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
+            self.W_board = self.weight_variable([dh.PS_FULL_SIZE - dh.S_IDX_ATKDEF_MAP, num_hidden_subgroup])
 
-            self.b_state = bias_variable([num_hidden_subgroup])
-            self.b_piece = bias_variable([num_hidden_subgroup])
-            self.b_board = bias_variable([num_hidden_subgroup])
+            self.b_state = self.bias_variable([num_hidden_subgroup])
+            self.b_piece = self.bias_variable([num_hidden_subgroup])
+            self.b_board = self.bias_variable([num_hidden_subgroup])
 
         elif hp['NN_INPUT_TYPE'] == 'bitmap' and self.use_conv:
             # conv weights
-            self.W_grid = weight_variable([5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-            self.W_rank = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-            self.W_file = weight_variable([8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
-            self.W_diag = weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_grid = self.weight_variable([5, 5, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_rank = self.weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_file = self.weight_variable([8, 1, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
+            self.W_diag = self.weight_variable([1, 8, hp['NUM_CHANNELS'], hp['NUM_FEAT']])
 
             # conv biases
-            self.b_grid = bias_variable([hp['NUM_FEAT']])
-            self.b_rank = bias_variable([hp['NUM_FEAT']])
-            self.b_file = bias_variable([hp['NUM_FEAT']])
-            self.b_diag = bias_variable([hp['NUM_FEAT']])
+            self.b_grid = self.bias_variable([hp['NUM_FEAT']])
+            self.b_rank = self.bias_variable([hp['NUM_FEAT']])
+            self.b_file = self.bias_variable([hp['NUM_FEAT']])
+            self.b_diag = self.bias_variable([hp['NUM_FEAT']])
 
         # fully connected layer 1, weights + biases
         if hp['NN_INPUT_TYPE'] == "position_description":
-            self.W_fc[0] = weight_variable([num_hidden_subgroup * 3, hp['NUM_HIDDEN']])
+            self.W_fc[0] = self.weight_variable([num_hidden_subgroup * 3, hp['NUM_HIDDEN']])
         elif hp['NN_INPUT_TYPE'] == 'bitmap' and self.use_conv:
-            self.W_fc[0] = weight_variable([self.conv_layer_size * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
+            self.W_fc[0] = self.weight_variable([self.conv_layer_size * hp['NUM_FEAT'], hp['NUM_HIDDEN']])
         else:
-            self.W_fc[0] = weight_variable([8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
-        self.b_fc[0] = bias_variable([hp['NUM_HIDDEN']])
+            self.W_fc[0] = self.weight_variable([8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
+        self.b_fc[0] = self.bias_variable([hp['NUM_HIDDEN']])
 
         for i in xrange(1, hp['NUM_FC_LAYERS']):
             # fully connected layer n, weights + biases
-            self.W_fc[i] = weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
-            self.b_fc[i] = bias_variable([hp['NUM_HIDDEN']])
+            self.W_fc[i] = self.weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
+            self.b_fc[i] = self.bias_variable([hp['NUM_HIDDEN']])
 
         # Output layer
-        self.W_final = weight_variable([hp['NUM_HIDDEN'], 1])
-        self.b_final = bias_variable([1])
+        self.W_final = self.weight_variable([hp['NUM_HIDDEN'], 1])
+        self.b_final = self.bias_variable([1])
 
     def get_training_vars(self):
         """
@@ -517,10 +523,10 @@ class NeuralNet:
             o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
             
         elif hp['NN_INPUT_TYPE'] == 'bitmap' and self.use_conv:
-            o_grid = tf.nn.relu(conv5x5_grid(self.data, self.W_grid) + self.b_grid)
-            o_rank = tf.nn.relu(conv8x1_line(self.data, self.W_rank) + self.b_rank)
-            o_file = tf.nn.relu(conv8x1_line(self.data, self.W_file) + self.b_file)
-            o_diag = tf.nn.relu(conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
+            o_grid = tf.nn.relu(self.conv5x5_grid(self.data, self.W_grid) + self.b_grid)
+            o_rank = tf.nn.relu(self.conv8x1_line(self.data, self.W_rank) + self.b_rank)
+            o_file = tf.nn.relu(self.conv8x1_line(self.data, self.W_file) + self.b_file)
+            o_diag = tf.nn.relu(self.conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
 
             o_grid = tf.reshape(o_grid, [batch_size, 64 * hp['NUM_FEAT']])
             o_rank = tf.reshape(o_rank, [batch_size, 8 * hp['NUM_FEAT']])
@@ -615,16 +621,18 @@ class NeuralNet:
                 feed_dict [Dictionary]
                     Formatted input for neural net.
         """
-
-        # FINDME THIS IS THE ISSUE
-        fen = fen.split()[0]
+        
+        feed_dict = {}
         board = dh.fen_to_nn_input(fen)
-        diagonal = dh.get_diagonals(board)
+        if hp['NN_INPUT_TYPE'] == 'bitmap':
+            diagonal = dh.get_diagonals(board)
+            diagonal = np.array([diagonal])
+            feed_dict[self.data_diags] = diagonal
 
         board = np.array([board])
-        diagonal = np.array([diagonal])
+        feed_dict[self.data] = board
 
-        return {self.data: board, self.data_diags: diagonal}
+        return feed_dict
 
     # TODO S: Maybe combine the following two functions? I think this only gets used in Guerilla but i'm not sure.
     def evaluate(self, fen):

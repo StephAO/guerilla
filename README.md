@@ -19,8 +19,9 @@ Project uses python 2.7
 ### Optional Packages
 
 - sunfish (chess engine):
-  - `cd ../guerilla/engines/`
+  - `cd ../guerilla/other_engines/`
   - `git clone https://github.com/thomasahle/sunfish.git`
+  - `touch sunfish/__init__.py`
   
 ### How to Run
 

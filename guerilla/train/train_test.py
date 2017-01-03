@@ -30,7 +30,7 @@ def stockfish_test():
         Result [Boolean]
             True if test passed, False if test failed.
     """
-    seconds = 1
+    seconds = 2
     max_attempts = 3
 
     # Fens in INCREASING score value
@@ -125,22 +125,22 @@ def training_test(verbose=False):
             # Wrong number of losses
             if len(loss['train_loss']) != hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != hp['NUM_EPOCHS'] + 1:
                 error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
-                             "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d" % \
+                             "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d\n" % \
                              (hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
                 success = False
             # Training loss went up
             if loss['train_loss'][0] <= loss['train_loss'][-1]:
-                error_msg += "Bootstrap training loss went up. Losses:\n%s" % (loss['train_loss'])
+                error_msg += "Bootstrap training loss went up. Losses:\n%s\n" % (loss['train_loss'])
                 success = False
             # Validation loss went up
             if loss['loss'][0] <= loss['loss'][-1]:
-                error_msg += "Bootstrap validation loss went up. Losses:\n%s" % (loss['loss'])
+                error_msg += "Bootstrap validation loss went up. Losses:\n%s\n" % (loss['loss'])
                 success = False
             # Memory usage increased significantly
             if float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size) > 0.01:
                 success = False
                 error_msg += "Memory increasing significantly when running training.\n" \
-                             "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%" \
+                             "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%\n" \
                              % (pre_heap_size, post_heap_size,
                                 100. * float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size))
         # Training failed
@@ -555,22 +555,35 @@ def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_
 
 def run_train_tests():
     all_tests = {}
-    all_tests["Stockfish tests"] = {
+    all_tests["Stockfish Tests"] = {
         'Stockfish Handling': stockfish_test,
-        # 'NSV Alignment': nsv_test
+        'NSV Alignment': nsv_test
                                     }
 
     all_tests["Training Tests"] = {
-       'Training': training_test,
-       'Load and Resume': load_and_resume_test,
-       'Learn Moves': learn_moves_test
+        'Training': training_test,
+        'Load and Resume': load_and_resume_test,
+        'Learn Moves': learn_moves_test
     }
 
+    
+
     success = True
+    input_types = ['bitmap', 'position_description']
     print "\nRunning Train Tests...\n"
-    for group_name, group_dict in all_tests.iteritems():
-        print "--- " + group_name + " ---"
-        for name, test in group_dict.iteritems():
+        
+    print "--- Stockfish tests ---"
+    for name, test in all_tests["Stockfish Tests"].iteritems():
+        print "Testing " + name + "..."
+        if not test():
+            print "%s test failed" % name.capitalize()
+            success = False
+
+    print "--- Training Tests ---"
+    for it in input_types:
+        hp['NN_INPUT_TYPE'] = it
+        print "Testing using input type", it
+        for name, test in all_tests["Training Tests"].iteritems():
             print "Testing " + name + "..."
             if not test():
                 print "%s test failed" % name.capitalize()

@@ -231,6 +231,7 @@ class NeuralNet:
         assert self.sess is None
 
         self.sess = tf.Session()
+        # self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
         if self.verbose:
             print "Tensorflow session opened."
 

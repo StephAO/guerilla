@@ -3,12 +3,11 @@ import os
 import pickle
 import random
 import sys
-import time
 from operator import add
+import time
 
 import chess
 import chess.pgn
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from pkg_resources import resource_filename
@@ -17,7 +16,7 @@ import guerilla.data_handler as dh
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
 from guerilla.hyper_parameters import *
-from guerilla.players import Player, Guerilla
+from guerilla.players import Guerilla
 from guerilla.train.sts import eval_sts, sts_strat_files
 
 
@@ -38,6 +37,8 @@ class Teacher:
         self.nn = _guerilla.nn
         self.start_time = None
         self.training_time = None
+        self.prev_checkpoint = None
+        self.checkpoint_interval = None  # Checkpoint interval (seconds). 'None' -> only saves on timeout/completion
         self.actions = None
         self.curr_action_idx = None
         self.saved = None
@@ -47,8 +48,8 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
-        self.conv_loss_thresh = 0.0001 # If all loss changes in the window <= than this value then converged
-        self.conv_window_size = 20 # Number of epochs to consider when checking for convergence
+        self.conv_loss_thresh = 0.0001  # If all loss changes in the window <= than this value then converged
+        self.conv_window_size = 20  # Number of epochs to consider when checking for convergence
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -57,7 +58,7 @@ class Teacher:
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
         self.td_end_length = 12  # How many moves are included in endgame training
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
-        self.td_w_update = None 
+        self.td_w_update = None
         self.td_fen_index = 0
         self.td_batch_size = 50
 
@@ -78,8 +79,8 @@ class Teacher:
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
         # Build unique file modifier which demarks final output files from this session
-        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"),'_conv' if self.guerilla.nn.use_conv else '',
-                            '_' + str(hp['NUM_FC_LAYERS']))
+        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"), '_conv' if self.guerilla.nn.use_conv else '',
+                                              '_' + str(hp['NUM_FC_LAYERS']))
 
     # ---------- RUNNING AND RESUMING METHODS
 
@@ -89,7 +90,7 @@ class Teacher:
             2. configure data
             3. run actions
         """
-        self.start_time = time.time()
+        self.start_time = self.prev_checkpoint = time.time()
         self.training_time = training_time
         self.actions = actions
         self.curr_action_idx = 0  # This value gets modified if resuming
@@ -122,6 +123,9 @@ class Teacher:
                     if self.verbose:
                         print "State saved during an action."
                 break
+            elif self.checkpoint_reached():
+                # A checkpoint as been reached!
+                self.save_state(state={}, is_checkpoint=True)
 
             # Else
             action = self.actions[self.curr_action_idx]
@@ -157,7 +161,7 @@ class Teacher:
                 # If not timed out
                 self.curr_action_idx += 1
 
-    def save_state(self, state, filename="state.p"):
+    def save_state(self, state, filename="state.p", is_checkpoint=False):
         """
             Save current state so that training can resume at another time
             Note: Can only save state at whole batch intervals (but mid-epoch is fine)
@@ -170,11 +174,22 @@ class Teacher:
                             loss[list of floats]
                         (if action == 'train_td_...')
                             start_idx [int]
+                is_checkpoint [Boolean]:
+                    Denotes if the save is a checkpoint (True) or a timeout save (False).
                 filename[string]:
                     filename to save pickle to
         """
+
+        if is_checkpoint:
+            self.prev_checkpoint = time.time()
+            if self.verbose:
+                print "Checkpoint reached at " + time.strftime('%Y-%m-%d %H:%M:%S',
+                                                               time.localtime(self.prev_checkpoint))
+
         state['curr_action_idx'] = self.curr_action_idx
         state['actions'] = self.actions
+        state['prev_checkpoint'] = self.prev_checkpoint
+        state['save_time'] = self.prev_checkpoint if is_checkpoint else time.time()
 
         # Save training parameters
         state['td_leaf_param'] = {'randomize': self.td_rand_file,
@@ -206,7 +221,7 @@ class Teacher:
         pickle_path = resource_filename('guerilla', 'data/train_checkpoint/' + filename)
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
         pickle.dump(state, open(pickle_path, 'wb'))
-        self.saved = True
+        self.saved = not is_checkpoint
 
     def load_state(self, filename='state.p'):
         """
@@ -223,6 +238,9 @@ class Teacher:
         """
         pickle_path = resource_filename('guerilla', 'data/train_checkpoint/' + filename)
         state = pickle.load(open(pickle_path, 'rb'))
+
+        # Update checkpoint time
+        self.prev_checkpoint = time.time() - (state['save_time'] - state['prev_checkpoint'])
 
         # Load training parameters
         self.set_td_params(**state.pop('td_leaf_param'))
@@ -278,26 +296,13 @@ class Teacher:
             true_values = sf.load_stockfish_values(num_values=len(fens))
 
             # finish epoch
-            train_check_spacing = (len(fens) - hp['VALIDATION_SIZE']) / hp['TRAIN_CHECK_SIZE']
-
             train_fens = fens[:(-1) * hp['VALIDATION_SIZE']]  # fens to train on
-            valid_fens = fens[(-1) * hp['VALIDATION_SIZE']:]  # fens to check convergence on
-            train_check_fens = train_fens[::train_check_spacing]  # fens to evaluate training error on
-
             train_values = true_values[:(-1) * hp['VALIDATION_SIZE']]
-            valid_values = true_values[(-1) * hp['VALIDATION_SIZE']:]
-            train_check_values = train_values[::train_check_spacing]
-
             self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.nn.train_step)
 
-            # evaluate nn for convergence
-            state['loss'].append(self.evaluate_bootstrap(valid_fens, valid_values))
-            state['train_loss'].append(self.evaluate_bootstrap(train_check_fens, train_check_values))
-
-            if not self.is_converged(state['loss']):
-                # else continue with rest of epochs
-                self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
-                                     loss=state['loss'], train_loss=state['train_loss'])
+            # Continue with rest of epochs
+            self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
+                                 loss=state['loss'], train_loss=state['train_loss'])
         elif action == 'train_td_end':
             if self.verbose:
                 print "Resuming endgame TD-Leaf training..."
@@ -323,11 +328,19 @@ class Teacher:
 
     def out_of_time(self):
         """
-        Returns True if training has run out of time. False otherwise
+        Returns True if training has run out of time. False otherwise.
             Output:
                 [Boolean]
         """
         return self.training_time is not None and time.time() - self.start_time >= self.training_time
+
+    def checkpoint_reached(self):
+        """
+        Returns True if a checkpoint has been reached. False otherwise.
+            Output:
+                [Boolean]
+        """
+        return self.checkpoint_interval is not None and time.time() - self.prev_checkpoint >= self.checkpoint_interval
 
     # ---------- BOOTSTRAP TRAINING METHODS
 
@@ -374,20 +387,32 @@ class Teacher:
         if self.verbose:
             print "%16d %16.5f %16.5f" % (start_epoch, loss[-1], train_loss[-1])
         for epoch in xrange(start_epoch, hp['NUM_EPOCHS']):
+            if self.is_converged(loss):
+                if self.verbose:
+                    print "Training complete: Reached convergence threshold"
+                break
+
             # Configure data (shuffle fens -> fens to channel -> group batches)
             game_indices = range(num_boards)
             random.shuffle(game_indices)
 
             # update weights
-            save = self.weight_update_bootstrap(train_fens, train_values, game_indices, self.nn.train_step)
+            timeout, state = self.weight_update_bootstrap(train_fens, train_values, game_indices, self.nn.train_step)
 
-            # save state if timeout
-            if save[0]:
-                save[1]['epoch_num'] = epoch + 1
-                save[1]['loss'] = loss
-                save[1]['train_loss'] = train_loss
-                self.save_state(save[1])
-                return
+            # save state if timeout or checkpoint
+            if timeout or self.checkpoint_reached():
+                state['epoch_num'] = epoch
+                state['loss'] = loss
+                state['train_loss'] = train_loss
+
+                # Timeout
+                if timeout:
+                    self.save_state(state)
+                    return
+
+                # Checkpoint
+                state['game_indices'] = []
+                self.save_state(state, is_checkpoint=True)
 
             # evaluate nn for convergence
             loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
@@ -395,10 +420,6 @@ class Teacher:
             if self.verbose:
                 print "%16d %16.5f %16.5f" % (epoch + 1, loss[-1], train_loss[-1])
 
-            if self.is_converged(loss):
-                if self.verbose:
-                    print "Training complete: Reached convergence threshold"
-                break
         else:
             if self.verbose:
                 print "Training complete: Reached max epoch, no convergence yet"
@@ -478,6 +499,16 @@ class Teacher:
         return error
 
     def is_converged(self, loss):
+        """
+        Checks if the loss has converged.
+        Input:
+            loss [List of Floats]
+                The current loss
+        Output:
+            [Boolean]
+                True if the loss has converged, False otherwise.
+        """
+
         # +1 because we are looking at the number of changes
         if len(loss) < (self.conv_window_size + 1):
             return False
@@ -488,7 +519,6 @@ class Teacher:
                 return False
 
         return True
-
 
     # ---------- TD-LEAF TRAINING METHODS
 
@@ -606,7 +636,6 @@ class Teacher:
                         sub_start = random.randint(0, max(0, game_length - self.td_full_length))
                         sub_end = min(game_length, sub_start + self.td_full_length)
                         fens = fens[sub_start:sub_end]
-
 
             # Call TD-Leaf
             if self.verbose:
@@ -825,7 +854,7 @@ class Teacher:
 
 
 def direction_test():
-    with Guerilla('Harambe', 'w', _load_file='weights_train_bootstrap_20160930-193556.p') as g:
+    with Guerilla('Harambe', 'w', load_file='weights_train_bootstrap_20160930-193556.p') as g:
         g.search.max_depth = 0
         t = Teacher(g)
         board = chess.Board()
@@ -867,7 +896,7 @@ def main():
         seconds = int(sys.argv[3])
         run_time += seconds
 
-    print "Training for %f hours" % (float(run_time)/3600.0)
+    print "Training for %f hours" % (float(run_time) / 3600.0)
 
     if run_time == 0:
         run_time = None
@@ -875,14 +904,15 @@ def main():
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=500)  # 488037
+        t.set_bootstrap_params(num_bootstrap=int(1000))  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
-        # t.sts_mode = Teacher.sts_strat_files[0]
+        t.checkpoint_interval = None
         t.run(['train_bootstrap'], training_time=run_time)
         # t.run(['load_and_resume'], training_time=28000)
+
 
 if __name__ == '__main__':
     main()

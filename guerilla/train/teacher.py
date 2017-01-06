@@ -482,19 +482,35 @@ class Teacher:
                     Expected output for each chess board state (between 0 and 1)
         """
 
-        # Configure data
-        boards = np.zeros((len(fens), 8, 8, hp['NUM_CHANNELS']))
-        diagonals = np.zeros((len(fens), 10, 8, hp['NUM_CHANNELS']))
-        for i in xrange(len(fens)):
-            boards[i] = dh.fen_to_channels(fens[i])
-            diagonals[i] = dh.get_diagonals(boards[i])
+        if len(fens) % hp['BATCH_SIZE'] != 0:
+            raise Exception("Error: Validation set size (%d) is not a multiple of batch_size (%d)" %
+                            (len(fens), hp['BATCH_SIZE']))
 
-        # Get loss
-        error = self.nn.sess.run(self.nn.MSE, feed_dict={
-            self.nn.data: boards,
-            self.nn.data_diags: diagonals,
-            self.nn.true_value: true_values
-        })
+        # Configure data
+        num_batches = int(len(fens) / hp['BATCH_SIZE'])
+
+        board_num = 0
+        boards = np.zeros((hp['BATCH_SIZE'], 8, 8, hp['NUM_CHANNELS']))
+        diagonals = np.zeros((hp['BATCH_SIZE'], 10, 8, hp['NUM_CHANNELS']))
+        true_values_batch = np.zeros(hp['BATCH_SIZE'])
+
+        # Initialize Error
+        error = 0
+
+        for i in xrange(num_batches):
+            # set up batch
+            for j in xrange(hp['BATCH_SIZE']):
+                boards[j] = dh.fen_to_channels(fens[board_num])
+                diagonals[j] = dh.get_diagonals(boards[j])
+                true_values_batch[j] = true_values[board_num]
+                board_num += 1
+
+            # Get batch loss
+            error += self.nn.sess.run(self.nn.MSE, feed_dict={
+                self.nn.data: boards,
+                self.nn.data_diags: diagonals,
+                self.nn.true_value: true_values_batch
+            })
 
         return error
 

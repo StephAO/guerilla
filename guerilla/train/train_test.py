@@ -218,7 +218,7 @@ def learn_sts_test(mode = 'strategy', thresh=0.9):
     hp['NUM_EPOCHS'] = 50
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 50
-    hp['TRAIN_CHECK_SIZE'] = 5
+    hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.0001
     hp['LOSS_THRESHOLD'] = -100 # Make it so it never stops by convergence since VALIDATION_SIZE = 0
 
@@ -271,7 +271,7 @@ def learn_moves_test(num_test = 3, num_attempt = 3, verbose = False):
     hp['NUM_EPOCHS'] = 30
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 30
-    hp['TRAIN_CHECK_SIZE'] = 5
+    hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.00005
     hp['LOSS_THRESHOLD'] = 0.001
 

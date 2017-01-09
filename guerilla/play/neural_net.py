@@ -10,7 +10,7 @@ from guerilla.hyper_parameters import *
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, num_fc, use_conv=True, load_file=None, training_mode=None, verbose=True):
+    def __init__(self, num_fc=3, use_conv=True, load_file=None, training_mode=None, verbose=True):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.

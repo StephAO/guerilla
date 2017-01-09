@@ -59,9 +59,11 @@ class Player:
 
 
 class Guerilla(Player):
-    def __init__(self, name, colour=None, use_conv=True, load_file=None, training_mode = None, verbose=True):
+    def __init__(self, name, colour=None, num_fc = 3, use_conv=True,
+                 load_file=None, training_mode = None, verbose=True):
         super(Guerilla, self).__init__(name, colour)
-        self.nn = NeuralNet(use_conv=use_conv, load_file=load_file, training_mode=training_mode, verbose=verbose)
+        self.nn = NeuralNet(num_fc = num_fc, use_conv=use_conv,
+                            load_file=load_file, training_mode=training_mode, verbose=verbose)
         self.search = Search(self.nn.evaluate)
 
     def __enter__(self):

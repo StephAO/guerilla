@@ -29,16 +29,16 @@ def conv8x1_line(x, w):  # includes ranks, files, and diagonals
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, use_conv=True, num_fc = 3, load_file=None, training_mode=None, verbose=True):
+    def __init__(self, num_fc, use_conv=True, load_file=None, training_mode=None, verbose=True):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
             Input:
+                num_fc [Int]
+                    The number of fully connected layers which should compose the neural network.
                 use_conv [Bool]
                     If True then use a convolutional layer as the input layer.
                     Otherwise the input is a fully connected layer.
-                num_fc [Int]
-                    The number of fully connected layers which should compose the neural network.
                 load_file [String]
                     The filename from which the neural network weights should be loaded.
                     If 'None' then the weights are randomly initialized.

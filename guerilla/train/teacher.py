@@ -80,7 +80,7 @@ class Teacher:
 
         # Build unique file modifier which demarks final output files from this session
         self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"), '_conv' if self.guerilla.nn.use_conv else '',
-                                              '_' + str(hp['NUM_FC_LAYERS']))
+                                              '_' + str(self.nn.num_fc))
 
     # ---------- RUNNING AND RESUMING METHODS
 

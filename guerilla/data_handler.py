@@ -23,7 +23,7 @@ piece_values = {
 
 S_IDX_PIECE_LIST = 15
 S_IDX_ATKDEF_MAP = 223
-PS_FULL_SIZE = 351
+GF_FULL_SIZE = 351
 
 def flip_board(fen):
     """ switch colors of pieces
@@ -74,8 +74,8 @@ def flip_board(fen):
 def fen_to_nn_input(fen):
     if hp['NN_INPUT_TYPE'] == 'bitmap':
         return fen_to_bitmap(fen)
-    elif hp['NN_INPUT_TYPE'] == 'position_description':
-        return fen_to_position_description(fen)
+    elif hp['NN_INPUT_TYPE'] == 'giraffe':
+        return fen_to_giraffe(fen)
     else:
         raise NotImplementedError("Error: Unsupported Neural Net input type.")
 
@@ -139,7 +139,7 @@ def in_bounds(rank_idx, file_idx):
     return (0 <= rank_idx < 8) and (0 <= file_idx < 8)
 
 def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
-                          board_to_piece_index, slide_index, map_base_index, ps):
+                          board_to_piece_index, slide_index, map_base_index, gf):
     # TODO: Add description
     # rank (left, right), file (down, up), '/' diag (down-left, up-right) , '\' diag (up-left, down-right)
     still_sliding = [True] * 8 if piece == 'q' else [True] * 4
@@ -175,22 +175,22 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
             if still_sliding[i] \
                 and (not in_bounds(r, f) or occupied_bitmap[r][f] != 0):
                 still_sliding[i] = False
-                ps[slide_index + i] = offset
+                gf[slide_index + i] = offset
                 # If stopped by a piece, set defender/attacker map
                 if in_bounds(r, f):
                     defender = (occupied_bitmap[c_rank][c_file] \
                              == occupied_bitmap[r][f])
                     map_index = map_base_index + (r * 8 + f) * 2
                     map_index += 0 if defender else 1
-                    ps[map_index] = min(piece_value, ps[map_index])
-                    ps[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
-                        ps[map_index]
+                    gf[map_index] = min(piece_value, gf[map_index])
+                    gf[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
+                        gf[map_index]
 
             if not any(still_sliding):
                 break
 
 def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
-                    board_to_piece_index, map_base_index, ps):
+                    board_to_piece_index, map_base_index, gf):
 
     white = (occupied_bitmap[c_rank][c_file] == 1)
     moves_dict = {'n': [(1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2)],
@@ -198,7 +198,7 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                   'k': [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]}
 
     if piece not in moves_dict:
-        raise ValueError("Invalid piece input!")
+        raise ValueError("Invalid piece input! Piece type: %s" % (piece))
 
     for i, j in moves_dict[piece]:
         r, f = c_rank + i, c_file + j
@@ -207,11 +207,11 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                      == occupied_bitmap[r][f])  # True if defending
             map_index = map_base_index + (r * 8 + f) * 2
             map_index += 0 if defender else 1
-            ps[map_index] = min(piece_value, ps[map_index])
-            ps[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
-                ps[map_index]
+            gf[map_index] = min(piece_value, gf[map_index])
+            gf[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
+                gf[map_index]
 
-def fen_to_position_description(fen):
+def fen_to_giraffe(fen):
     # TODO docstring
     piece_desc_index = {
         'q': 0,
@@ -249,11 +249,11 @@ def fen_to_position_description(fen):
     # Piece list (15-174)
     # Sliding list (175-222)
     # Def/Atk map (223-250)
-    ps = [0] * S_IDX_PIECE_LIST # TODO: What does PS stand for? # ANSWER (delete once you've seen it) ps is short for position description
+    gf = [0] * S_IDX_PIECE_LIST # TODO: What does gf stand for? # ANSWER (delete once you've seen it) gf is short for giraffe
     for i in xrange(NUM_PIECES_PER_SIDE * 2):
-        ps += [0, 0, 0, 999999, 999999]
-    ps += [0] * (S_IDX_ATKDEF_MAP - S_IDX_SLIDE_LIST)
-    ps += [999999] * (BOARD_SIZE * 2) # Attack and defend maps
+        gf += [0, 0, 0, 999999, 999999]
+    gf += [0] * (S_IDX_ATKDEF_MAP - S_IDX_SLIDE_LIST)
+    gf += [999999] * (BOARD_SIZE * 2) # Attack and defend maps
 
     fen = fen.split(' ')
     board_str = fen[0]
@@ -264,17 +264,17 @@ def fen_to_position_description(fen):
     # Used for sliding and attack/defense maps
     # +1 if white piece, -1 if black piece, 0 o/w
     occupied_bitmap = [[0] * BOARD_LENGTH for _ in range(BOARD_LENGTH)] 
-    board_to_piece_index = {} # Key: Coordinate, Value: Piece location in ps
+    board_to_piece_index = {} # Key: Coordinate, Value: Piece location in gf
     board_to_piece_type = {} # Key: Coordinate, Value: Piece type
 
     # Slide to move
-    ps[0] = 1 if (turn == 'w') else 0
+    gf[0] = 1 if (turn == 'w') else 0
 
     # Castling rights
-    ps[1] = 1 if ('Q' in castling) else 0
-    ps[2] = 1 if ('K' in castling) else 0
-    ps[3] = 1 if ('q' in castling) else 0
-    ps[4] = 1 if ('k' in castling) else 0
+    gf[1] = 1 if ('Q' in castling) else 0
+    gf[2] = 1 if ('K' in castling) else 0
+    gf[3] = 1 if ('q' in castling) else 0
+    gf[4] = 1 if ('k' in castling) else 0
 
     # Iterate through ranks starting from rank 1
     ranks = board_str.split('/')
@@ -291,25 +291,44 @@ def fen_to_position_description(fen):
 
                 # Update material configuration
                 if char != 'k':
-                    ps[S_IDX_PIECES_NUM + (0 if white else 5) \
+                    gf[S_IDX_PIECES_NUM + (0 if white else 5) \
                                         + piece_indices[char]] += 1
 
                 black_offset = NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE
-                # Get the current ps index based on piece type and color (2 entries per piece)
+                # Get the current gf index based on piece type and color (5 entries per piece)
                 curr_index = S_IDX_PIECE_LIST \
                            + (0 if white else black_offset) \
                            + piece_desc_index[char] * NUM_SLOTS_PER_PIECE
 
                 # print "piece: %s, white: %d, index: %d" % (char, white, curr_index)
-                # Increment ps index if slot is already filled with an identical piece
-                while ps[curr_index] == 1:
+                # Increment gf index if slot is already filled with an identical piece
+                count = 1
+                too_many_pieces = False
+                while gf[curr_index] == 1:
+                    count += 1
+                    if char == 'k':
+                        start_num_pieces = 1
+                    elif char == 'q':
+                        start_num_pieces = 1
+                    elif char == 'p':
+                        start_num_pieces = 8
+                    else:
+                        start_num_pieces = 2
+
+                    if count > start_num_pieces:
+                        too_many_pieces = True
+                        break
+
                     curr_index += NUM_SLOTS_PER_PIECE
+
+                if too_many_pieces:
+                    continue
                 # Mark piece as present
-                ps[curr_index] = 1
+                gf[curr_index] = 1
 
                 # Mark location
-                ps[curr_index + 1] = c_rank
-                ps[curr_index + 2] = c_file # TODO: Maybe normalize coordinates? They are normalized in Giraffe
+                gf[curr_index + 1] = c_rank
+                gf[curr_index + 2] = c_file # TODO: Maybe normalize coordinates? They are normalized in Giraffe
                 board_to_piece_index[(c_rank, c_file)] = curr_index
                 board_to_piece_type[(c_rank, c_file)] = char
                 # set occupied bitmap
@@ -319,12 +338,11 @@ def fen_to_position_description(fen):
     # Iterate through piece lists.
     for i in xrange(S_IDX_PIECE_LIST, S_IDX_SLIDE_LIST, NUM_SLOTS_PER_PIECE):
         # If piece is not present, skip
-        if ps[i] == 0:
+        if gf[i] == 0:
             continue
 
         # Fetch coordinate
-        c_rank, c_file = ps[i + 1: i + 3]
-
+        c_rank, c_file = gf[i + 1: i + 3]
         if 0 <= i - S_IDX_PIECE_LIST < \
             NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE or \
             0 <= i - (S_IDX_PIECE_LIST + NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE) \
@@ -334,15 +352,15 @@ def fen_to_position_description(fen):
                 board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                 piece_values[board_to_piece_type[(c_rank, c_file)]], \
                 board_to_piece_index, piece_index_to_slide_index[i], \
-                S_IDX_ATKDEF_MAP, ps)
+                S_IDX_ATKDEF_MAP, gf)
         else:
             # if not then just populate attack and defend map
             set_att_def_map(c_rank, c_file, \
                 board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                 piece_values[board_to_piece_type[(c_rank, c_file)]], \
-                board_to_piece_index, S_IDX_ATKDEF_MAP, ps)
+                board_to_piece_index, S_IDX_ATKDEF_MAP, gf)
 
-    return ps
+    return np.array(gf)
 
 def get_diagonals(channels):
     """

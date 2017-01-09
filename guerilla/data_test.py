@@ -180,9 +180,9 @@ def bitmap_input_test():
 
     return success
 
-def position_description_input_test():
+def giraffe_input_test():
     """
-    Tests that boards are properly converted to position description list.
+    Tests that boards are properly converted to giraffe list.
     Output:
         Result [Boolean]
             True if test passed, False if test failed.
@@ -190,84 +190,84 @@ def position_description_input_test():
     # White = 1, Black = 0
     # True = 1, False = 0
     random_fen = "3q3r/2QR1n2/1PR2p1b/1k2p3/1P6/3pN3/1PB1pKp1/3N4 w - - 0 1"
-    positions_description = dh.fen_to_position_description(random_fen)
-    if len(positions_description) != 351:
-        print "Failure: Size of position description is incorrect"
+    giraffe = dh.fen_to_giraffe(random_fen).tolist()
+    if len(giraffe) != 351:
+        print "Failure: Size of giraffe is incorrect"
         return False
-    if positions_description[0] != 1: # White's turn
+    if giraffe[0] != 1: # White's turn
         print "Failure: Turn description is incorrect"
         return False
-    if positions_description[1] != 0 or positions_description[2] != 0 \
-        or positions_description[3] != 0 or positions_description[4] != 0: # Castling options
+    if giraffe[1] != 0 or giraffe[2] != 0 \
+        or giraffe[3] != 0 or giraffe[4] != 0: # Castling options
         print "Failure: Castling description is incorrect"
         return False
     # Order is always queens, rooks, bishops, knigths, pawns
-    if positions_description[5] != 1 \
-        or positions_description[6] != 2 \
-        or positions_description[7] != 1 \
-        or positions_description[8] != 2 \
-        or positions_description[9] != 3: # White pieces count
+    if giraffe[5] != 1 \
+        or giraffe[6] != 2 \
+        or giraffe[7] != 1 \
+        or giraffe[8] != 2 \
+        or giraffe[9] != 3: # White pieces count
         print "Failure: White piece count is incorrect"
         return False
-    if positions_description[10] != 1 \
-        or positions_description[11] != 1 \
-        or positions_description[12] != 1 \
-        or positions_description[13] != 1 \
-        or positions_description[14] != 5: # Black piece count
+    if giraffe[10] != 1 \
+        or giraffe[11] != 1 \
+        or giraffe[12] != 1 \
+        or giraffe[13] != 1 \
+        or giraffe[14] != 5: # Black piece count
         print "Failure: Black piece count is incorrect"
         return False
     # exists, rank, file, lowest valued defender, lowest valued attacker
-    if positions_description[15:20] != [1, 6, 2, 1, 9] \
-        or positions_description[20:25] != [1, 5, 2, 9, 1000] \
-        or positions_description[25:30] != [1, 6, 3, 9, 9] \
-        or positions_description[30:35] != [1, 1, 2, 3, 1] \
-        or positions_description[35:40] != [0, 0, 0, 999999, 999999] \
-        or positions_description[40:45] != [1, 0, 3, 3, 1] \
-        or positions_description[45:50] != [1, 2, 4, 3, 3] \
-        or positions_description[50:55] != [1, 1, 1, 3, 999999] \
-        or positions_description[55:60] != [1, 3, 1, 999999, 1000] \
-        or positions_description[60:65] != [1, 5, 1, 5, 1000] \
-        or positions_description[65:70] != [0, 0, 0, 999999, 999999] \
-        or positions_description[70:75] != [0, 0, 0, 999999, 999999] \
-        or positions_description[75:80] != [0, 0, 0, 999999, 999999] \
-        or positions_description[80:85] != [0, 0, 0, 999999, 999999] \
-        or positions_description[85:90] != [0, 0, 0, 999999, 999999] \
-        or positions_description[90:95] != [1, 1, 5, 3, 999999]: # White piece position
+    if giraffe[15:20] != [1, 6, 2, 1, 9] \
+        or giraffe[20:25] != [1, 5, 2, 9, 1000] \
+        or giraffe[25:30] != [1, 6, 3, 9, 9] \
+        or giraffe[30:35] != [1, 1, 2, 3, 1] \
+        or giraffe[35:40] != [0, 0, 0, 999999, 999999] \
+        or giraffe[40:45] != [1, 0, 3, 3, 1] \
+        or giraffe[45:50] != [1, 2, 4, 3, 3] \
+        or giraffe[50:55] != [1, 1, 1, 3, 999999] \
+        or giraffe[55:60] != [1, 3, 1, 999999, 1000] \
+        or giraffe[60:65] != [1, 5, 1, 5, 1000] \
+        or giraffe[65:70] != [0, 0, 0, 999999, 999999] \
+        or giraffe[70:75] != [0, 0, 0, 999999, 999999] \
+        or giraffe[75:80] != [0, 0, 0, 999999, 999999] \
+        or giraffe[80:85] != [0, 0, 0, 999999, 999999] \
+        or giraffe[85:90] != [0, 0, 0, 999999, 999999] \
+        or giraffe[90:95] != [1, 1, 5, 3, 999999]: # White piece position
         print "Failure: White piece position is incorrect"
         return False
-    if positions_description[95:100] != [1, 7, 3, 3, 5] \
-        or positions_description[100:105] != [1, 7, 7, 3, 999999] \
-        or positions_description[105:110] != [0, 0, 0, 999999, 999999] \
-        or positions_description[110:115] != [1, 5, 7, 3, 999999] \
-        or positions_description[115:120] != [0, 0, 0, 999999, 999999] \
-        or positions_description[120:125] != [1, 6, 5, 999999, 5] \
-        or positions_description[125:130] != [0, 0, 0, 999999, 999999] \
-        or positions_description[130:135] != [1, 1, 4, 1, 1000] \
-        or positions_description[135:140] != [1, 1, 6, 999999, 3] \
-        or positions_description[140:145] != [1, 2, 3, 999999, 3] \
-        or positions_description[145:150] != [1, 4, 4, 1, 9] \
-        or positions_description[150:155] != [1, 5, 5, 9, 5] \
-        or positions_description[155:160] != [0, 0, 0, 999999, 999999] \
-        or positions_description[160:165] != [0, 0, 0, 999999, 999999] \
-        or positions_description[165:170] != [0, 0, 0, 999999, 999999] \
-        or positions_description[170:175] != [1, 4, 1, 999999, 999999]: # Black piece position
+    if giraffe[95:100] != [1, 7, 3, 3, 5] \
+        or giraffe[100:105] != [1, 7, 7, 3, 999999] \
+        or giraffe[105:110] != [0, 0, 0, 999999, 999999] \
+        or giraffe[110:115] != [1, 5, 7, 3, 999999] \
+        or giraffe[115:120] != [0, 0, 0, 999999, 999999] \
+        or giraffe[120:125] != [1, 6, 5, 999999, 5] \
+        or giraffe[125:130] != [0, 0, 0, 999999, 999999] \
+        or giraffe[130:135] != [1, 1, 4, 1, 1000] \
+        or giraffe[135:140] != [1, 1, 6, 999999, 3] \
+        or giraffe[140:145] != [1, 2, 3, 999999, 3] \
+        or giraffe[145:150] != [1, 4, 4, 1, 9] \
+        or giraffe[150:155] != [1, 5, 5, 9, 5] \
+        or giraffe[155:160] != [0, 0, 0, 999999, 999999] \
+        or giraffe[160:165] != [0, 0, 0, 999999, 999999] \
+        or giraffe[165:170] != [0, 0, 0, 999999, 999999] \
+        or giraffe[170:175] != [1, 4, 1, 999999, 999999]: # Black piece position
         print "Failure: Black piece position is incorrect"
         return False
 
     # Sliding order: rank (left, right), file (down, up), '/' diag (down-left, up-right) , '\' diag (up-left, down-right)
     # (For queens, rank/file before diagonals)
-    if positions_description[175:183] != [2, 0, 0, 1, 0, 0, 1, 1] \
-        or positions_description[183:187] != [0, 2, 3, 0] \
-        or positions_description[187:191] != [0, 1, 3, 0] \
-        or positions_description[191:195] != [1, 0, 2, 0] \
-        or positions_description[195:199] != [0, 0, 0, 0]: # White piece sliding
+    if giraffe[175:183] != [2, 0, 0, 1, 0, 0, 1, 1] \
+        or giraffe[183:187] != [0, 2, 3, 0] \
+        or giraffe[187:191] != [0, 1, 3, 0] \
+        or giraffe[191:195] != [1, 0, 2, 0] \
+        or giraffe[195:199] != [0, 0, 0, 0]: # White piece sliding
         print "Failure: White piece sliding is incorrect"
         return False
-    if positions_description[199:207] != [3, 3, 0, 0, 0, 0, 0, 1] \
-        or positions_description[207:211] != [3, 0, 1, 0] \
-        or positions_description[211:215] != [0, 0, 0, 0] \
-        or positions_description[215:219] != [2, 0, 2, 0] \
-        or positions_description[219:223] != [0, 0, 0, 0]: # Black piece sliding
+    if giraffe[199:207] != [3, 3, 0, 0, 0, 0, 0, 1] \
+        or giraffe[207:211] != [3, 0, 1, 0] \
+        or giraffe[211:215] != [0, 0, 0, 0] \
+        or giraffe[215:219] != [2, 0, 2, 0] \
+        or giraffe[219:223] != [0, 0, 0, 0]: # Black piece sliding
         print "Failure: Black piece sliding is incorrect"
         return False
 
@@ -278,7 +278,7 @@ def position_description_input_test():
     success = True
     for c_rank in xrange(8):
         for c_file in xrange(8):
-            atk, dfn = positions_description[
+            atk, dfn = giraffe[
                        223 + (c_rank * 8 + c_file) * 2 : \
                        223 + (c_rank * 8 + c_file) * 2 + 2]
             if c_rank == 0 and c_file == 3:
@@ -335,7 +335,7 @@ def run_data_tests():
     all_tests["Input Tests"] = {
         'Board to Bitmap': bitmap_input_test,
         'Bitmap to Diagonals': diag_input_test,
-        'Board to Position Description': position_description_input_test
+        'Board to Giraffe': giraffe_input_test
     }
 
     success = True

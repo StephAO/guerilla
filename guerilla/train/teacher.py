@@ -432,8 +432,8 @@ class Teacher:
         num_batches = int(len(game_indices) / hp['BATCH_SIZE'])
 
         board_num = 0
-        if hp['NN_INPUT_TYPE'] == 'position_description':
-            boards = np.zeros((hp['BATCH_SIZE'], dh.PS_FULL_SIZE))
+        if hp['NN_INPUT_TYPE'] == 'giraffe':
+            boards = np.zeros((hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
         elif hp['NN_INPUT_TYPE'] == 'bitmap':
             boards = np.zeros((hp['BATCH_SIZE'], 8, 8, hp['NUM_CHANNELS']))
             diagonals = np.zeros((hp['BATCH_SIZE'], 10, 8, hp['NUM_CHANNELS']))
@@ -472,11 +472,9 @@ class Teacher:
                 true_values[ndarray]:
                     Expected output for each chess board state (between 0 and 1)
         """
-
-        
-        if hp['NN_INPUT_TYPE'] == 'position_description':
+        if hp['NN_INPUT_TYPE'] == 'giraffe':
             # Configure data
-            boards = np.zeros((len(fens), dh.PS_FULL_SIZE))
+            boards = np.zeros((len(fens), dh.GF_FULL_SIZE))
 
         elif hp['NN_INPUT_TYPE'] == 'bitmap':
             # Configure data
@@ -493,9 +491,10 @@ class Teacher:
             _feed_dict[self.nn.data_diags] = diagonals
 
         # Get loss
+        # print "Expected:", true_values
+        # print "Predicted:", self.nn.sess.run(self.nn.pred_value, feed_dict=_feed_dict)
         error = self.nn.sess.run(self.nn.MSE, feed_dict=_feed_dict)
-            
-
+        
         return error
 
     # ---------- TD-LEAF TRAINING METHODS
@@ -890,15 +889,17 @@ def main():
         run_time = None
 
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
-        g.search.max_depth = 1
+        g.search.max_depth = 2
+        # print eval_sts(g)
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=500)  # 488037
+        t.set_bootstrap_params(num_bootstrap=1010000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         # t.sts_mode = Teacher.sts_strat_files[0]
         t.run(['train_bootstrap'], training_time=run_time)
+        print eval_sts(g)
         # t.run(['load_and_resume'], training_time=28000)
 
 if __name__ == '__main__':

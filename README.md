@@ -3,7 +3,8 @@
 Project uses python 2.7
 
 ### Required Packages
-
+- python-chess:
+  - `sudo pip install python-chess`
 - tensorflow:
   - https://www.tensorflow.org/versions/r0.10/get_started/os_setup.html
 - stockfish:

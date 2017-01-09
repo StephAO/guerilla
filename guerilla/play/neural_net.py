@@ -10,18 +10,26 @@ from guerilla.hyper_parameters import *
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, use_conv=True, load_file=None, training_mode=None, verbose=True):
+    def __init__(self, use_conv=True, num_fc = 3, load_file=None, training_mode=None, verbose=True):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
             Input:
-                load_weights [Bool]:
-                    If true, the neural net will load weights saved from a file
-                    instead of initializing them from a normal distribution.
+                use_conv [Bool]
+                    If True then use a convolutional layer as the input layer.
+                    Otherwise the input is a fully connected layer.
+                num_fc [Int]
+                    The number of fully connected layers which should compose the neural network.
+                load_file [String]
+                    The filename from which the neural network weights should be loaded.
+                    If 'None' then the weights are randomly initialized.
                 training_mode [String]
                     Training mode to be used. Defaults to Adagrad.
+                verbose [Bool]
+                    Enables Verbose mode.
         """
         self.use_conv = use_conv
+        self.num_fc = num_fc
 
         self.load_file = load_file
         self.verbose = verbose
@@ -61,8 +69,8 @@ class NeuralNet:
             self.b_rank = None
             self.b_file = None
             self.b_diag = None
-        self.W_fc = [None] * hp['NUM_FC_LAYERS']
-        self.b_fc = [None] * hp['NUM_FC_LAYERS']
+        self.W_fc = [None] * self.num_fc
+        self.b_fc = [None] * self.num_fc
         self.W_final = None
         self.b_final = None
 
@@ -138,8 +146,8 @@ class NeuralNet:
             self.b_file_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
             self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[hp['NUM_FEAT']])
 
-        self.W_fc_placeholders = [None] * hp['NUM_FC_LAYERS']
-        self.b_fc_placeholders = [None] * hp['NUM_FC_LAYERS']
+        self.W_fc_placeholders = [None] * self.num_fc
+        self.b_fc_placeholders = [None] * self.num_fc
         if hp['NN_INPUT_TYPE'] == 'giraffe':
             self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
                                                        shape=[num_hidden_subgroup * 3, hp['NUM_HIDDEN']])
@@ -150,7 +158,7 @@ class NeuralNet:
             self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
         self.b_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
 
-        for i in xrange(1, hp['NUM_FC_LAYERS']):
+        for i in xrange(1, self.num_fc):
             self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
             self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[hp['NUM_HIDDEN']])
 
@@ -198,9 +206,9 @@ class NeuralNet:
             self.b_file_assignment = self.b_file.assign(self.b_file_placeholder)
             self.b_diag_assignment = self.b_diag.assign(self.b_diag_placeholder)
 
-        self.W_fc_assignments = [None] * hp['NUM_FC_LAYERS']
-        self.b_fc_assignments = [None] * hp['NUM_FC_LAYERS']
-        for i in xrange(hp['NUM_FC_LAYERS']):
+        self.W_fc_assignments = [None] * self.num_fc
+        self.b_fc_assignments = [None] *self.num_fc
+        for i in xrange(self.num_fc):
             self.W_fc_assignments[i] = (self.W_fc[i].assign(self.W_fc_placeholders[i]))
             self.b_fc_assignments[i] = (self.b_fc[i].assign(self.b_fc_placeholders[i]))
 
@@ -276,6 +284,7 @@ class NeuralNet:
         assert self.sess is None
 
         self.sess = tf.Session()
+        # self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
         if self.verbose:
             print "Tensorflow session opened."
 
@@ -342,7 +351,7 @@ class NeuralNet:
             self.W_fc[0] = self.weight_variable([8 * 8 * hp['NUM_CHANNELS'], hp['NUM_HIDDEN']])
         self.b_fc[0] = self.bias_variable([hp['NUM_HIDDEN']])
 
-        for i in xrange(1, hp['NUM_FC_LAYERS']):
+        for i in xrange(1, self.num_fc):
             # fully connected layer n, weights + biases
             self.W_fc[i] = self.weight_variable([hp['NUM_HIDDEN'], hp['NUM_HIDDEN']])
             self.b_fc[i] = self.bias_variable([hp['NUM_HIDDEN']])
@@ -500,7 +509,7 @@ class NeuralNet:
         """
         batch_size = tf.shape(self.data)[0]
 
-        o_fc = [None] * hp['NUM_FC_LAYERS']
+        o_fc = [None] * self.num_fc
 
         if hp['NN_INPUT_TYPE'] == 'giraffe':
             # Output of each subgroup
@@ -544,7 +553,7 @@ class NeuralNet:
             # output of fully connected layer 1
             o_fc[0] = tf.nn.relu(tf.matmul(data, self.W_fc[0]) + self.b_fc[0])
 
-        for i in xrange(1, hp['NUM_FC_LAYERS']):
+        for i in xrange(1, self.num_fc):
             # output of fully connected layer n
             o_fc[i] = tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i])
 
@@ -581,7 +590,7 @@ class NeuralNet:
         # Run assignment/update
         self.sess.run(self.all_assignments, feed_dict=placeholder_dict)
 
-    def add_all_weights(self, weight_vals):  # TODO rename to add_to_all_weights
+    def add_to_all_weights(self, weight_vals):
         """
         Increments all the weight values by the input amount.
             Input:
@@ -634,7 +643,6 @@ class NeuralNet:
 
         return feed_dict
 
-    # TODO S: Maybe combine the following two functions? I think this only gets used in Guerilla but i'm not sure.
     def evaluate(self, fen):
         """
         Evaluates chess board.
@@ -648,10 +656,6 @@ class NeuralNet:
             raise ValueError("Invalid evaluate input, white must be next to play.")
 
         return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
-
-    def evaluate_board(self, board):
-        return self.evaluate(board.fen())
-
 
 if __name__ == 'main':
     pass

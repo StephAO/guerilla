@@ -159,5 +159,7 @@ def get_epds(filenames):
     return epds
 
 if __name__ == '__main__':
-    test_p = Sunfish("bob", time_limit=1)
-    print eval_sts(test_p, mode=sts_piece_files)
+    with Guerilla('Harambe', 'w', training_mode='adagrad', load_file='w_train_td_end_1219-2247_conv_4FC.p') as g:
+        g.search.max_depth = 2
+        print eval_sts(g, mode=sts_piece_files)
+        print eval_sts(g, mode=sts_strat_files)

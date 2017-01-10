@@ -72,6 +72,16 @@ def flip_board(fen):
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
 def fen_to_nn_input(fen):
+    """
+        Return neural net input types base on hyper parameters
+
+        Inputs:
+            fen[string]:
+                fen of board to be converted
+        Outputs:
+            nn_input_type[varies]:
+                correct neural net inputs type
+    """
     if hp['NN_INPUT_TYPE'] == 'bitmap':
         return fen_to_bitmap(fen)
     elif hp['NN_INPUT_TYPE'] == 'giraffe':
@@ -134,13 +144,37 @@ def fen_to_bitmap(fen):
     return channels
 
 def in_bounds(rank_idx, file_idx):
-    # Returns True if within the chess board boundary, False otherwise
+    """ Returns True if within the chess board boundary, False otherwise """
     # NOTE: Assumes 0 indexed
     return (0 <= rank_idx < 8) and (0 <= file_idx < 8)
 
 def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                           board_to_piece_index, slide_index, map_base_index, gf):
-    # TODO: Add description
+    """
+        Finds the range of motion of a sliding piece (Queen, Rook, or Bishop).
+        Set slide range for piece for giraffe input data structure.
+        Updates attack defend maps.
+
+        Inputs:
+            c_rank[int]:
+                rank of piece (0-7)
+            c_file[int]:
+                file of piece (0-7)
+            piece[char]:
+                piece type ('q', 'r', 'b')
+            occupied bitmap[int[8][8]]:
+                bitmap of occupied tiles. white = 1, black = -1, empty = 0
+            piece_value[int]:
+                piece value
+            board_to_piece_index[dict]:
+                maps rank, file to index of piece in piece list of giraffe input
+            slide_index[int]:
+                index of pieces slide list of giraffe input
+            map_base_index[int]:
+                index of start of attack/defend maps in giraffe input
+            gf[list]:
+                giraffe input
+    """
     # rank (left, right), file (down, up), '/' diag (down-left, up-right) , '\' diag (up-left, down-right)
     still_sliding = [True] * 8 if piece == 'q' else [True] * 4
 
@@ -191,6 +225,27 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
 
 def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                     board_to_piece_index, map_base_index, gf):
+    """
+        Updates attack defend maps for non sliding pieces.
+
+        Inputs:
+            c_rank[int]:
+                rank of piece (0-7)
+            c_file[int]:
+                file of piece (0-7)
+            piece[char]:
+                piece type ('n', 'p', 'k')
+            occupied bitmap[int[8][8]]:
+                bitmap of occupied tiles. white = 1, black = -1, empty = 0
+            piece_value[int]:
+                piece value
+            board_to_piece_index[dict]:
+                maps rank, file to index of piece in piece list of giraffe input
+            map_base_index[int]:
+                index of start of attack/defend maps in giraffe input
+            gf[list]:
+                giraffe input
+    """
 
     white = (occupied_bitmap[c_rank][c_file] == 1)
     moves_dict = {'n': [(1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2)],
@@ -212,7 +267,22 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                 gf[map_index]
 
 def fen_to_giraffe(fen):
-    # TODO docstring
+    """
+        Converts a fen string to giraffe input list for neural net.
+        Giraffe input list is based on Matthew Lai's giraffe model.
+        He describes his input on page 17 of https://arxiv.org/pdf/1509.01549v1.pdf.
+
+        Inputs:
+            fen[string]:
+                fen string describing current state. 
+
+        Output:
+            gf[ndarray]:
+                Consists of a list of length 351 comprised of 3 main parts
+                1. State data (0-14). Turn, Castling, num of pieces
+                2. Piece data (15-174). Piece exists, placement, lowest and highest valued attacker
+                3. Board data (174-351). Slide range for sliding pieces. Attack and Defend maps
+    """
     piece_desc_index = {
         'q': 0,
         'r': 1,
@@ -249,7 +319,7 @@ def fen_to_giraffe(fen):
     # Piece list (15-174)
     # Sliding list (175-222)
     # Def/Atk map (223-250)
-    gf = [0] * S_IDX_PIECE_LIST # TODO: What does gf stand for? # ANSWER (delete once you've seen it) gf is short for giraffe
+    gf = [0] * S_IDX_PIECE_LIST
     for i in xrange(NUM_PIECES_PER_SIDE * 2):
         gf += [0, 0, 0, 999999, 999999]
     gf += [0] * (S_IDX_ATKDEF_MAP - S_IDX_SLIDE_LIST)

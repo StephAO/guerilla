@@ -147,9 +147,8 @@ def sigmoid_array(values):
         1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a
         few data points and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided
         on (by me, deal with it).
-        Ideally this fitter function is learned, but this is just for testing so..."""
-    # TODO S: Improve sigmoid mapping.
-
+        Ideally this fitter function is learned, However using this function directly
+        on STS did result in a high results."""
     return 1. / (1. + np.exp(-0.00547 * values))
 
 

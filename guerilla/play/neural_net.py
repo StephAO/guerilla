@@ -50,6 +50,10 @@ class NeuralNet:
         if self.verbose:
             print "Training neural net using %s." % self.training_mode
 
+        # Dropout keep probability placeholder -> By default does not dropout when session is run
+        self.kp_default = tf.constant(1.0, dtype=tf.float32)
+        self.keep_prob = tf.placeholder_with_default(self.kp_default,self.kp_default.get_shape())
+
         # declare layer variables
         self.sess = None
         if hp['NN_INPUT_TYPE'] == 'giraffe':
@@ -87,21 +91,24 @@ class NeuralNet:
 
         # all weights + biases
         # Currently the order is necessary for assignment operators
-        self.all_weights = []
+        self.all_weights_biases = []
 
         if hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_weights.extend([self.W_state, self.W_piece, self.W_board])
+            self.all_weights_biases.extend([self.W_state, self.W_piece, self.W_board])
         elif hp['NN_INPUT_TYPE'] == 'bitmap' and self.use_conv:
-            self.all_weights.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
-        self.all_weights.extend(self.W_fc)
-        self.all_weights.append(self.W_final)
+            self.all_weights_biases.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
+        self.all_weights_biases.extend(self.W_fc)
+        self.all_weights_biases.append(self.W_final)
+
+        # Store all weights
+        self.all_weights = list(self.all_weights_biases)
 
         if hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_weights.extend([self.b_state, self.b_piece, self.b_board])
+            self.all_weights_biases.extend([self.b_state, self.b_piece, self.b_board])
         elif hp['NN_INPUT_TYPE'] == 'bitmap' and self.use_conv:
-            self.all_weights.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
-        self.all_weights.extend(self.b_fc)
-        self.all_weights.append(self.b_final)
+            self.all_weights_biases.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
+        self.all_weights_biases.extend(self.b_fc)
+        self.all_weights_biases.append(self.b_final)
 
         if hp['NN_INPUT_TYPE'] == 'giraffe':
             # subsets of weights and biases
@@ -240,10 +247,9 @@ class NeuralNet:
         self.neural_net()
 
         # gradient op and placeholder (must be defined after self.pred_value is defined)
-        self.grad_all_op = tf.gradients(self.pred_value, self.all_weights)
+        self.grad_all_op = tf.gradients(self.pred_value, self.all_weights_biases)
 
         # Define training operators and variables
-        # Using MAE since value difference will always be 0 <= x <= 1, don't want the sublinear error when using MSE
         #   Note: Ensures that both inputs are the same shape
         self.MAE = tf.reduce_sum(tf.abs(tf.sub(
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
@@ -251,13 +257,16 @@ class NeuralNet:
         self.MSE = tf.reduce_sum(tf.pow(tf.sub(
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
 
+        # Regularization Term
+        self.regularization = sum(map(tf.nn.l2_loss, self.all_weights))*hp['REGULARIZATION_CONST']
+
         if self.training_mode == 'adagrad':
             self.train_optimizer = tf.train.AdagradOptimizer(hp['LEARNING_RATE'])
         elif self.training_mode == 'adadelta':
             self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=hp['LEARNING_RATE'], rho=hp['DECAY_RATE'])
         elif self.training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(hp['LEARNING_RATE'])
-        self.train_step = self.train_optimizer.minimize(self.MSE)
+        self.train_step = self.train_optimizer.minimize(self.MSE + self.regularization)
         self.train_saver = tf.train.Saver(
             var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 
@@ -272,7 +281,7 @@ class NeuralNet:
         if self.load_file:
             self.load_weight_values(self.load_file)
             # Initialize un-initialized variables (non-weight variables)
-            self.sess.run(tf.initialize_variables(set(tf.all_variables()) - set(self.all_weights)))
+            self.sess.run(tf.initialize_variables(set(tf.all_variables()) - set(self.all_weights_biases)))
         else:
             if self.verbose:
                 print "Initializing variables from a normal distribution."
@@ -555,7 +564,8 @@ class NeuralNet:
 
         for i in xrange(1, self.num_fc):
             # output of fully connected layer n
-            o_fc[i] = tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i])
+            # Includes dropout
+            o_fc[i] = tf.nn.dropout(tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i]), self.keep_prob)
 
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc[-1], self.W_final) + self.b_final)
@@ -580,7 +590,7 @@ class NeuralNet:
                 weight_vals [List]
                     List of values with which to update weights. Must be in desired order.
         """
-        assert len(weight_vals) == len(self.all_weights)
+        assert len(weight_vals) == len(self.all_weights_biases)
 
         # match value to placeholders
         placeholder_dict = dict()
@@ -598,7 +608,7 @@ class NeuralNet:
                     List of values with which to update weights. Must be in desired order.
         """
 
-        old_weights = self.get_weights(self.all_weights)
+        old_weights = self.get_weights(self.all_weights_biases)
         new_weights = [old_weights[i] + weight_vals[i] for i in range(len(weight_vals))]
 
         self.set_all_weights(new_weights)

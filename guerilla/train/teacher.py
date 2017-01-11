@@ -51,6 +51,7 @@ class Teacher:
         self.num_bootstrap = -1
         self.conv_loss_thresh = 0.0001  # If all loss changes in the window <= than this value then converged
         self.conv_window_size = 20  # Number of epochs to consider when checking for convergence
+        self.keep_prob = 1.0 # Probability of dropout during neural network training
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -66,7 +67,7 @@ class Teacher:
         if self.nn.training_mode == 'adagrad':
             self.td_adagrad_acc = None
             self.weight_shapes = []
-            for weight in self.nn.all_weights:
+            for weight in self.nn.all_weights_biases:
                 self.weight_shapes.append(self.nn.sess.run(tf.shape(weight)))
 
         # Self-play parameters
@@ -86,7 +87,7 @@ class Teacher:
     # ---------- RUNNING AND RESUMING METHODS
 
     def run(self, actions, training_time=None):
-        """ 
+        """
             1. load data from file
             2. configure data
             3. run actions
@@ -470,7 +471,7 @@ class Teacher:
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
-            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values}
+            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values, self.nn.keep_prob: self.keep_prob}
             if hp['NN_INPUT_TYPE'] == 'bitmap':
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch
@@ -497,7 +498,7 @@ class Teacher:
         num_batches = int(len(fens) / hp['BATCH_SIZE'])
 
         board_num = 0
-        
+
         if hp['NN_INPUT_TYPE'] == 'giraffe':
             # Configure data
             boards = np.zeros((hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
@@ -935,14 +936,14 @@ def main():
     with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
         g.search.max_depth = 1
         t = Teacher(g)
-        t.set_bootstrap_params(num_bootstrap=1010000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=25000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         t.checkpoint_interval = None
         t.run(['train_bootstrap'], training_time=run_time)
-        print eval_sts(g)
+        # print eval_sts(g)
         # t.run(['load_and_resume'], training_time=28000)
 
 

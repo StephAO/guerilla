@@ -1,0 +1,8 @@
+"NN_INPUT_TYPE" : "giraffe"
+"USE_CONV" : true
+"NUM_FC" : 3
+"NUM_HIDDEN" : 1024
+"NUM_FEAT" : 10
+"NUM_CHANNELS" : 12
+
+

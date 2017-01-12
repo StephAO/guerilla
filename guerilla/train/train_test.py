@@ -75,42 +75,100 @@ def stockfish_test():
 
     return True
 
+def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_repeat=3):
+    """
+    Tests that fens.nsv and sf_values.nsv file are properly aligned. Also checks that the FENS are "white plays next".
+    NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
+    Input:
+        num_check [Int]
+            Number of fens to check.
+        max_step [Int]
+            Maximum size of the random line jump within a file. i.e. at most, the next line checked will be max_step
+            lines away from the current line.
+        tolerance [Float]
+            How far away the expected stockfish score can be from the actual stockfish score. 0 < tolerance < 1
+        allow_err [Float]
+            The percentage of mismatching stockfish scores allowed. 0 < allow_err < 1
+        score_repeat [Int]
+            Each stockfish scoring is repeated score_repeat times and the median is taken. Allows for variations in
+            available memory.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+    # Number of seconds spent on each stockfish score
+    seconds = 1
+    wrong = []
+    max_wrong = num_check * allow_err
 
+    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fens_file, \
+            open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as sf_file:
+        fens_count = 0
+        line_count = 0
+        while fens_count < num_check and len(wrong) <= max_wrong:
+            for i in range(rnd.randint(0, max_step)):
+                fens_file.readline()
+                sf_file.readline()
+                line_count += 1
+
+            # Get median stockfish score
+            fen = fens_file.readline().rstrip()
+            median_arr = []
+            for i in range(score_repeat):
+                median_arr.append(sf.get_stockfish_score(fen, seconds=seconds))
+
+            # Convert to probability of winning
+            expected = sf.sigmoid_array(np.median(median_arr))
+            actual = float(sf_file.readline().rstrip())
+
+            if abs(expected - actual) > tolerance:
+                wrong.append("For FEN '%s' calculated score of %f, got file score of %f (line %d)." %
+                             (fen, expected, actual, line_count))
+
+            if dh.black_is_next(fen):
+                print "White does not play next in this FEN: %s" % fen
+                return False
+
+            fens_count += 1
+            line_count += 1
+
+    if len(wrong) > max_wrong:
+        for info in wrong:
+            print info
+
+        return False
+
+    return True
 
 ###############################################################################
 # TRAINING TESTS
 ###############################################################################
 
-def training_test(verbose=False):
+def training_test(nn_input_type, verbose=False):
     """
     Runs training in variety of fashions.
     Checks crashing, decrease in cost over epochs, consistent output, and memory usage.
     """
     success = True
     # Set hyper params for mini-test
-    hp['NUM_FEAT'] = 10
-    hp['NUM_EPOCHS'] = 10
-    hp['BATCH_SIZE'] = 50
-    hp['VALIDATION_SIZE'] = 50
-    hp['TRAIN_CHECK_SIZE'] = 50
-    hp['TD_LRN_RATE'] = 0.00001  # Learning rate
-    hp['TD_DISCOUNT'] = 0.7  # Discount rate
-    hp['LOSS_THRESHOLD'] = 0.000001
-
+    
     for t_m in nn.NeuralNet.training_modes:
-        if t_m == 'adagrad':
-            hp['LEARNING_RATE'] = 0.00001
-        elif t_m == 'adadelta':
-            continue  # TODO remove when adadelta is fully implemented
-            hp['LEARNING_RATE'] = 0.00001
-        elif t_m == 'bootstrap':
-            hp['LEARNING_RATE'] = 0.00001
-
         error_msg = ""
         try:
             with Guerilla('Harambe', 'w', training_mode=t_m, verbose=verbose) as g:
+                g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
                 g.search.max_depth = 1
-                t = Teacher(g, test=True, verbose=verbose)
+
+                t = Teacher(g, test=True, verbose=verbose, 
+                            load_hp_file='training_test.yaml')
+                if t_m == 'adagrad':
+                    t.set_hyper_params(LEARNING_RATE=0.00001)
+                elif t_m == 'adadelta':
+                    continue  # TODO remove when adadelta is fully implemented
+                    t.set_hyper_params(LEARNING_RATE=0.00001)
+                elif t_m == 'bootstrap':
+                    t.set_hyper_params(LEARNING_RATE=0.00001)
+
                 t.set_bootstrap_params(num_bootstrap=400)  # 488037
                 t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
                 t.set_sp_params(num_selfplay=1, max_length=3)
@@ -118,31 +176,31 @@ def training_test(verbose=False):
                 t.sts_interval = 100
 
                 pre_heap_size = hpy().heap().size
-                t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay', ], training_time=60)
+                t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay'], training_time=60)
                 post_heap_size = hpy().heap().size
 
-            loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
-            # Wrong number of losses
-            if len(loss['train_loss']) != hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != hp['NUM_EPOCHS'] + 1:
-                error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
-                             "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d\n" % \
-                             (hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
-                success = False
-            # Training loss went up
-            if loss['train_loss'][0] <= loss['train_loss'][-1]:
-                error_msg += "Bootstrap training loss went up. Losses:\n%s\n" % (loss['train_loss'])
-                success = False
-            # Validation loss went up
-            if loss['loss'][0] <= loss['loss'][-1]:
-                error_msg += "Bootstrap validation loss went up. Losses:\n%s\n" % (loss['loss'])
-                success = False
-            # Memory usage increased significantly
-            if float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size) > 0.01:
-                success = False
-                error_msg += "Memory increasing significantly when running training.\n" \
-                             "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%\n" \
-                             % (pre_heap_size, post_heap_size,
-                                100. * float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size))
+                loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
+                # Wrong number of losses
+                if len(loss['train_loss']) != t.hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != t.hp['NUM_EPOCHS'] + 1:
+                    error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
+                                 "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d\n" % \
+                                 (t.hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
+                    success = False
+                # Training loss went up
+                if loss['train_loss'][0] <= loss['train_loss'][-1]:
+                    error_msg += "Bootstrap training loss went up. Losses:\n%s\n" % (loss['train_loss'])
+                    success = False
+                # Validation loss went up
+                if loss['loss'][0] <= loss['loss'][-1]:
+                    error_msg += "Bootstrap validation loss went up. Losses:\n%s\n" % (loss['loss'])
+                    success = False
+                # Memory usage increased significantly
+                if float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size) > 0.01:
+                    success = False
+                    error_msg += "Memory increasing significantly when running training.\n" \
+                                 "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%\n" \
+                                 % (pre_heap_size, post_heap_size,
+                                    100. * float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size))
         # Training failed
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -215,6 +273,7 @@ def learn_sts_test(mode = 'strategy', thresh=0.9):
     print len(fens)
 
     # Set hyper parameters
+    hp = {}
     hp['NUM_EPOCHS'] = 50
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 50
@@ -236,6 +295,7 @@ def learn_sts_test(mode = 'strategy', thresh=0.9):
         # Train
         g.search.max_depth = 1
         t = Teacher(g)
+        t.set_hyper_params(**hp)
         t.train_bootstrap(fens, values)
 
         # Run STS Test
@@ -268,6 +328,7 @@ def learn_moves_test(num_test = 3, num_attempt = 3, verbose = False):
     """
 
     # Set hyper parameters
+    hp = {}
     hp['NUM_EPOCHS'] = 30
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 30
@@ -332,6 +393,7 @@ def learn_moves_test(num_test = 3, num_attempt = 3, verbose = False):
             # Train
             g.search.max_depth = 1
             t = Teacher(g, verbose=verbose)
+            t.set_hyper_params(**hp)
             t.train_bootstrap(fens, values)
 
             # Evaluate
@@ -379,6 +441,7 @@ def load_and_resume_test(verbose=False):
 
     # Modify hyperparameters for a small training example.
     success = True
+    hp = {}
     hp['NUM_FEAT'] = 10
     hp['NUM_EPOCHS'] = 5
     hp['BATCH_SIZE'] = 5
@@ -407,6 +470,7 @@ def load_and_resume_test(verbose=False):
         with Guerilla('Harambe', 'w', verbose=verbose) as g:
             g.search.max_depth = 1
             t = Teacher(g, test=True, verbose=verbose)
+            t.set_hyper_params(**hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
             t.set_sp_params(num_selfplay=3, max_length=5)
@@ -485,73 +549,6 @@ def load_and_resume_test(verbose=False):
             print "Load and resume with action %s fails:\n%s" % (str(action), error_msg)
 
     return success
-
-
-
-def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_repeat=3):
-    """
-    Tests that fens.nsv and sf_values.nsv file are properly aligned. Also checks that the FENS are "white plays next".
-    NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
-    Input:
-        num_check [Int]
-            Number of fens to check.
-        max_step [Int]
-            Maximum size of the random line jump within a file. i.e. at most, the next line checked will be max_step
-            lines away from the current line.
-        tolerance [Float]
-            How far away the expected stockfish score can be from the actual stockfish score. 0 < tolerance < 1
-        allow_err [Float]
-            The percentage of mismatching stockfish scores allowed. 0 < allow_err < 1
-        score_repeat [Int]
-            Each stockfish scoring is repeated score_repeat times and the median is taken. Allows for variations in
-            available memory.
-    Output:
-        Result [Boolean]
-            True if test passed, False if test failed.
-    """
-    # Number of seconds spent on each stockfish score
-    seconds = 1
-    wrong = []
-    max_wrong = num_check * allow_err
-
-    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fens_file, \
-            open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as sf_file:
-        fens_count = 0
-        line_count = 0
-        while fens_count < num_check and len(wrong) <= max_wrong:
-            for i in range(rnd.randint(0, max_step)):
-                fens_file.readline()
-                sf_file.readline()
-                line_count += 1
-
-            # Get median stockfish score
-            fen = fens_file.readline().rstrip()
-            median_arr = []
-            for i in range(score_repeat):
-                median_arr.append(sf.get_stockfish_score(fen, seconds=seconds))
-
-            # Convert to probability of winning
-            expected = sf.sigmoid_array(np.median(median_arr))
-            actual = float(sf_file.readline().rstrip())
-
-            if abs(expected - actual) > tolerance:
-                wrong.append("For FEN '%s' calculated score of %f, got file score of %f (line %d)." %
-                             (fen, expected, actual, line_count))
-
-            if dh.black_is_next(fen):
-                print "White does not play next in this FEN: %s" % fen
-                return False
-
-            fens_count += 1
-            line_count += 1
-
-    if len(wrong) > max_wrong:
-        for info in wrong:
-            print info
-
-        return False
-
-    return True
 
 def run_train_tests():
     all_tests = {}

@@ -71,7 +71,7 @@ def flip_board(fen):
 
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
-def fen_to_nn_input(fen):
+def fen_to_nn_input(fen, nn_type, num_channels=None):
     """
         Return neural net input types base on hyper parameters
 
@@ -82,15 +82,17 @@ def fen_to_nn_input(fen):
             nn_input_type[varies]:
                 correct neural net inputs type
     """
-    if hp['NN_INPUT_TYPE'] == 'bitmap':
+    if nn_type == 'bitmap':
+        if num_channels == None:
+            raise NameError("The number of channels must be specified when using bitmap input")
         return fen_to_bitmap(fen)
-    elif hp['NN_INPUT_TYPE'] == 'giraffe':
+    elif nn_type == 'giraffe':
         return fen_to_giraffe(fen)
     else:
         raise NotImplementedError("Error: Unsupported Neural Net input type.")
 
 # TODO: deal with en passant and castling
-def fen_to_bitmap(fen):
+def fen_to_bitmap(fen, num_channels):
     """
         Converts a fen string to bitmap channels for neural net.
         Always assumes that it's white's turn
@@ -116,7 +118,7 @@ def fen_to_bitmap(fen):
     # castling = fen[2]
     # en_passant = fen[3]
 
-    channels = np.zeros((8, 8, hp['NUM_CHANNELS']))
+    channels = np.zeros((8, 8, num_channels))
 
     c_file = 0
     c_rank = 7
@@ -432,7 +434,7 @@ def fen_to_giraffe(fen):
 
     return np.array(gf)
 
-def get_diagonals(channels):
+def get_diagonals(channels, num_channels):
     """
         Retrieves and returns the diagonals from the board
 
@@ -444,8 +446,8 @@ def get_diagonals(channels):
                 Each piece array has 10 diagonals with max size of 8 (shorter diagonals are 0 padded at the end)
                 Diagonal ordering is a3 up, a6 down, a2 up, a7 down, a1 up, a8 down, b1 up, b8 down, c1 up, c8 down
     """
-    diagonals = np.zeros((10, 8, hp['NUM_CHANNELS']))
-    for i in xrange(hp['NUM_CHANNELS']):
+    diagonals = np.zeros((10, 8, num_channels))
+    for i in xrange(num_channels):
         index = 0
         for o in xrange(-2,3):
             diag_up = np.diagonal(channels[:, :, i], offset=o)

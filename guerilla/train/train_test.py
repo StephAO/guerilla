@@ -15,7 +15,6 @@ import guerilla.play.neural_net as nn
 import guerilla.train.stockfish_eval as sf
 import guerilla.train.sts as sts
 import guerilla.train.chess_game_parser as cgp
-from guerilla.hyper_parameters import *
 from guerilla.players import Guerilla
 from guerilla.train.teacher import Teacher
 
@@ -152,15 +151,15 @@ def training_test(nn_input_type, verbose=False):
     success = True
     # Set hyper params for mini-test
     
-    for t_m in nn.NeuralNet.training_modes:
+    for t_m in Teacher.training_modes:
         error_msg = ""
         try:
-            with Guerilla('Harambe', 'w', training_mode=t_m, verbose=verbose) as g:
+            with Guerilla('Harambe', 'w', verbose=verbose) as g:
                 g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
                 g.search.max_depth = 1
 
-                t = Teacher(g, test=True, verbose=verbose, 
-                            load_hp_file='training_test.yaml')
+                t = Teacher(g, training_mode=t_m, test=True, verbose=verbose, 
+                            hp_load_file='training_test.yaml')
                 if t_m == 'adagrad':
                     t.set_hyper_params(LEARNING_RATE=0.00001)
                 elif t_m == 'adadelta':
@@ -215,7 +214,7 @@ def training_test(nn_input_type, verbose=False):
 
     return success
 
-def learn_sts_test(mode = 'strategy', thresh=0.9):
+def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     """
     Tests that Guerilla can learn the best moves in the Strategic Test Suite (STS).
     Fetches all the STS epds. Takes the top moves and gives them high probability of winning.
@@ -291,10 +290,11 @@ def learn_sts_test(mode = 'strategy', thresh=0.9):
     values = values[:len(fens)]
 
     # Train and Test Guerilla
-    with Guerilla('Harambe', 'w', training_mode='adagrad') as g:
-        # Train
+    with Guerilla('Harambe', 'w') as g:
+        g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
         g.search.max_depth = 1
-        t = Teacher(g)
+        # Train
+        t = Teacher(g, training_mode='adagrad')
         t.set_hyper_params(**hp)
         t.train_bootstrap(fens, values)
 
@@ -308,7 +308,7 @@ def learn_sts_test(mode = 'strategy', thresh=0.9):
     return True
 
 
-def learn_moves_test(num_test = 3, num_attempt = 3, verbose = False):
+def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     """
     Tests that Guerilla can learn the best moves of a few boards, thus demonstrating that the input Guerilla converge
     to learning chess moves.
@@ -389,10 +389,11 @@ def learn_moves_test(num_test = 3, num_attempt = 3, verbose = False):
     err_msg = ''
     for i in range(num_attempt):
         score = 0
-        with Guerilla('Harambe', 'w', training_mode='gradient_descent', verbose=verbose) as g:
-            # Train
+        with Guerilla('Harambe', 'w', verbose=verbose) as g:
+            g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
             g.search.max_depth = 1
-            t = Teacher(g, verbose=verbose)
+            # Train
+            t = Teacher(g, training_mode='gradient_descent', verbose=verbose)
             t.set_hyper_params(**hp)
             t.train_bootstrap(fens, values)
 
@@ -420,7 +421,7 @@ def learn_moves_test(num_test = 3, num_attempt = 3, verbose = False):
     print err_msg
     return False
 
-def load_and_resume_test(verbose=False):
+def load_and_resume_test(nn_input_type, verbose=False):
     """
     Tests the load_and_resume functionality of teacher.
     Things it checks for:
@@ -468,6 +469,7 @@ def load_and_resume_test(verbose=False):
 
         # Run action
         with Guerilla('Harambe', 'w', verbose=verbose) as g:
+            g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
             g.search.max_depth = 1
             t = Teacher(g, test=True, verbose=verbose)
             t.set_hyper_params(**hp)
@@ -578,11 +580,10 @@ def run_train_tests():
 
     print "--- Training Tests ---"
     for it in input_types:
-        hp['NN_INPUT_TYPE'] = it
         print "Testing using input type", it
         for name, test in all_tests["Training Tests"].iteritems():
             print "Testing " + name + "..."
-            if not test():
+            if not test(it):
                 print "%s test failed" % name.capitalize()
                 success = False
 

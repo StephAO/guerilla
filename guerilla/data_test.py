@@ -87,7 +87,7 @@ def diag_input_test():
 
     success = True
     for i in range(len(fens)):
-        actual = dh.get_diagonals(dh.fen_to_bitmap(fens[i]))
+        actual = dh.get_diagonals(dh.fen_to_bitmap(fens[i], 12), 12)
         if not np.array_equal(corr[i], actual):
             print "Failed converting fen to diagonals:"
             print fens[i]
@@ -165,7 +165,7 @@ def bitmap_input_test():
 
     success = True
     for i in range(len(fens)):
-        actual = dh.fen_to_bitmap(fens[i])
+        actual = dh.fen_to_bitmap(fens[i], 12)
         if not np.array_equal(corr[i], actual):
             print "Failed converting fen to channels:"
             print fens[i]

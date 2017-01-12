@@ -59,12 +59,12 @@ class Player:
 
 
 class Guerilla(Player):
-    def __init__(self, name, colour=None, load_file=None, load_hp_file=None, 
+    def __init__(self, name, colour=None, load_file=None, hp_load_file=None, 
                  nn_input_type='bitmap', use_conv=True, num_fc=3, 
                  num_hidden=1024, num_feat=10, num_channels=12,
                  verbose=True):
         super(Guerilla, self).__init__(name, colour)
-        self.nn = NeuralNet(load_file=load_file, load_hp_file=load_hp_file, 
+        self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, 
                             nn_input_type=nn_input_type, use_conv=use_conv, 
                             num_fc=num_fc, num_hidden=num_hidden, 
                             num_feat=num_feat, num_channels=num_channels,

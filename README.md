@@ -7,6 +7,8 @@ Project uses python 2.7
   - `sudo pip install python-chess`
 - tensorflow:
   - https://www.tensorflow.org/versions/r0.10/get_started/os_setup.html
+- pyYAML:
+  - `pip install pyYAML`
 - stockfish:
   - `sudo apt-get install stockfish`
 - psutil (used when calling stockfish):
@@ -27,11 +29,11 @@ Project uses python 2.7
 ### How to Run
 
 1. Get fens:
-  - `python chess_game_parser.py  
+  - `python -m guerilla.train.chess_game_parser`  
 1. Get stockfish values:
-  - `python stockfish_eval.py`
+  - `python -m guerilla.train.stockfish_eval`
 1. Train by running:
-  - `python teacher.py` <number hours (optional)> <number minutes (optional)> <number seconds (optional)>
+  - `python -m guerilla.train.teacher <number hours (optional)> <number minutes (optional)> <number seconds (optional)>`
 1. Run game by running:
-  - `python game.py` TODO add input options
+  - `python -m guerilla.play.game` TODO add input options
 

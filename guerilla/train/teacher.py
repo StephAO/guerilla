@@ -11,12 +11,12 @@ import chess.pgn
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import yaml
 from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
-from guerilla.hyper_parameters import *
 from guerilla.players import Guerilla
 from guerilla.train.sts import eval_sts, sts_strat_files
 
@@ -79,6 +79,7 @@ class Teacher:
         self.td_fen_index = 0
         self.td_batch_size = 50
 
+        self.hp = {}
         if hp_load_file is None:
             hp_load_file = 'default.yaml'
         self.set_hyper_params_from_file(hp_load_file)
@@ -109,8 +110,9 @@ class Teacher:
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
         # Build unique file modifier which demarks final output files from this session
-        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"), '_conv' if self.guerilla.nn.use_conv else '',
-                                              '_' + str(self.nn.num_fc))
+        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"), 
+                                '_conv' if self.guerilla.nn.hp['USE_CONV'] else '',
+                                '_' + str(self.nn.hp['NUM_FC']))
 
         # Regularization Term
         self.regularization = sum(map(tf.nn.l2_loss, self.nn.all_weights))*self.hp['REGULARIZATION_CONST']
@@ -294,7 +296,7 @@ class Teacher:
                                   'full_length': self.td_full_length,
                                   'batch_size': self.td_batch_size,
                                   }
-        if self.nn.training_mode == 'adagrad':
+        if self.training_mode == 'adagrad':
             state['adagrad'] = {'w_update': self.td_w_update,
                                 'fen_index': self.td_fen_index,
                                 'adagrad_acc': self.td_adagrad_acc}
@@ -342,7 +344,7 @@ class Teacher:
         self.set_sp_params(**state.pop('sp_param'))
 
         # Load adagrad params
-        if self.nn.training_mode == 'adagrad':
+        if self.training_mode == 'adagrad':
             self.td_w_update = state['adagrad']['w_update']
             self.td_fen_index = state['adagrad']['fen_index']
             self.td_adagrad_acc = state['adagrad']['adagrad_acc']
@@ -393,7 +395,7 @@ class Teacher:
             # finish epoch
             train_fens = fens[:(-1) * self.hp['VALIDATION_SIZE']]  # fens to train on
             train_values = true_values[:(-1) * self.hp['VALIDATION_SIZE']]
-            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.nn.train_step)
+            self.weight_update_bootstrap(train_fens, train_values, state['game_indices'], self.train_step)
 
             # Continue with rest of epochs
             self.train_bootstrap(fens, true_values, start_epoch=state['epoch_num'] + 1,
@@ -548,7 +550,7 @@ class Teacher:
             random.shuffle(game_indices)
 
             # update weights
-            timeout, state = self.weight_update_bootstrap(train_fens, train_values, game_indices, self.nn.train_step)
+            timeout, state = self.weight_update_bootstrap(train_fens, train_values, game_indices, self.train_step)
 
             # save state if timeout or checkpoint
             if timeout or self.checkpoint_reached():
@@ -598,11 +600,11 @@ class Teacher:
         num_batches = int(len(game_indices) / self.hp['BATCH_SIZE'])
 
         board_num = 0
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.hp['NUM_CHANNELS']))
-            diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.hp['NUM_CHANNELS']))
+        elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
+            diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
         true_values = np.zeros(self.hp['BATCH_SIZE'])
 
         for i in xrange(num_batches):
@@ -615,15 +617,15 @@ class Teacher:
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
                 boards[j] = dh.fen_to_nn_input(fens[game_indices[board_num]], 
-                                               self.hp['NN_INPUT_TYPE'],
-                                               self.hp['NUM_CHANNELS'])
-                if self.hp['NN_INPUT_TYPE'] == 'bitmap':
-                    diagonals[j] = dh.get_diagonals(boards[j])
+                                               self.nn.hp['NN_INPUT_TYPE'],
+                                               self.nn.hp['NUM_CHANNELS'])
+                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+                    diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values, self.nn.keep_prob: self.keep_prob}
-            if self.hp['NN_INPUT_TYPE'] == 'bitmap':
+            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch
             self.nn.sess.run([train_step], feed_dict=_feed_dict)
@@ -650,14 +652,14 @@ class Teacher:
 
         board_num = 0
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             # Configure data
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
 
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
+        elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
             # Configure data
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.hp['NUM_CHANNELS']))
-            diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.hp['NUM_CHANNELS']))
+            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
+            diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
         true_values_batch = np.zeros(self.hp['BATCH_SIZE'])
 
         # Initialize Error
@@ -667,15 +669,15 @@ class Teacher:
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
                 boards[j] = dh.fen_to_nn_input(fens[board_num], 
-                                               self.hp['NN_INPUT_TYPE'],
-                                               self.hp['NUM_CHANNELS'])
-                if self.hp['NN_INPUT_TYPE'] == 'bitmap':
-                    diagonals[j] = dh.get_diagonals(boards[j])
+                                               self.nn.hp['NN_INPUT_TYPE'],
+                                               self.nn.hp['NUM_CHANNELS'])
+                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+                    diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
                 true_values_batch[j] = true_values[board_num]
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values_batch}
-            if self.hp['NN_INPUT_TYPE'] == 'bitmap':
+            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
                 _feed_dict[self.nn.data_diags] = diagonals
 
             # Get batch loss
@@ -781,7 +783,7 @@ class Teacher:
             sts_scores = []
 
         self.td_fen_index = 0
-        if self.nn.training_mode == 'adagrad':
+        if self.training_mode == 'adagrad':
             self.reset_adagrad()
 
         for i in xrange(start_idx, len(game_indices)):
@@ -858,12 +860,12 @@ class Teacher:
         Note: The plurality of gradients is a function of the number nodes not the number of actual gradients.
         """
         avg_gradients = [grad / self.td_batch_size for grad in self.td_w_update]
-        if self.nn.training_mode == 'adagrad':
+        if self.training_mode == 'adagrad':
             self.td_adagrad_acc = map(add, self.td_adagrad_acc, [grad ** 2 for grad in avg_gradients])
             learning_rates = [self.hp['TD_LRN_RATE'] / (np.sqrt(grad) + 1.0e-8) for grad in self.td_adagrad_acc]
-        elif self.nn.training_mode == 'adadelta':
+        elif self.training_mode == 'adadelta':
             raise NotImplementedError("TD leaf adadelta training has not yet been implemented")
-        elif self.nn.training_mode == 'gradient_descent':
+        elif self.training_mode == 'gradient_descent':
             learning_rates = [self.hp['TD_LRN_RATE']] * len(avg_gradients)
         else:
             raise NotImplementedError("Unrecognized training type")
@@ -970,7 +972,7 @@ class Teacher:
             sts_scores = []
 
         self.td_fen_index = 0
-        if self.nn.training_mode == 'adagrad':
+        if self.training_mode == 'adagrad':
             self.reset_adagrad()
 
         for i in xrange(start_idx, len(game_indices)):

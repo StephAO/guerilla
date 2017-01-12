@@ -1,7 +1,7 @@
 import time
 import chess
 import numpy as np
-from guerilla.hyper_parameters import *
+
 
 piece_indices = {
     'q': 0,
@@ -85,7 +85,7 @@ def fen_to_nn_input(fen, nn_type, num_channels=None):
     if nn_type == 'bitmap':
         if num_channels == None:
             raise NameError("The number of channels must be specified when using bitmap input")
-        return fen_to_bitmap(fen)
+        return fen_to_bitmap(fen, num_channels)
     elif nn_type == 'giraffe':
         return fen_to_giraffe(fen)
     else:

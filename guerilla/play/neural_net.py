@@ -9,8 +9,10 @@ import guerilla.data_handler as dh
 
 class NeuralNet:
 
+    training_modes = ['adagrad', 'adadelta', 'gradient_descent']
+
     def __init__(self, load_file=None, hp_load_file=None, nn_input_type='bitmap',
-                 use_conv=True, num_fc=3, num_hidden=1024, num_feat=10, 
+                 use_conv=True, num_fc=3, num_hidden=1024, num_feat=10,
                  num_channels=12, verbose=True):
         """
             Initializes neural net. Generates session, placeholders, variables,
@@ -21,7 +23,7 @@ class NeuralNet:
                     If 'None' then the weights are randomly initialized.
                 hp_load_file [String]:
                     The filename from which hyper parameters should be laoded from.
-                    If 'None' then keyword arguments will be used (if not 
+                    If 'None' then keyword arguments will be used (if not
                     provided, then default).
                 verbose [Bool]:
                     Enables Verbose mode.
@@ -34,7 +36,7 @@ class NeuralNet:
             self.set_hyper_params_from_file(hp_load_file)
         else:
             self.set_hyper_params(NN_INPUT_TYPE=nn_input_type, USE_CONV=use_conv,
-                             NUM_FC=num_fc, NUM_HIDDEN=num_hidden, 
+                             NUM_FC=num_fc, NUM_HIDDEN=num_hidden,
                              NUM_FEAT=num_feat, NUM_CHANNELS=num_channels)
 
         if self.hp['NN_INPUT_TYPE'] == 'giraffe':
@@ -243,13 +245,16 @@ class NeuralNet:
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights_biases)
 
-        # Define cost operators
+        # Define loss functions
         #   Note: Ensures that both inputs are the same shape
         self.MAE = tf.reduce_sum(tf.abs(tf.sub(
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
 
         self.MSE = tf.reduce_sum(tf.pow(tf.sub(
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
+
+        # Blank training variables. Call 'init_training' to initialize them
+        self.train_optimizer = None
 
     def init_graph(self):
         """
@@ -285,6 +290,7 @@ class NeuralNet:
         self.sess.close()
         if self.verbose:
             print "Tensorflow session closed."
+
 
     def weight_variable(self, shape):
         initial = tf.truncated_normal(shape, stddev=self.variable_value, dtype=tf.float32)
@@ -387,6 +393,107 @@ class NeuralNet:
                     hyperparameters to update with
         """
         self.hp.update(hyper_parameters)
+
+
+    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, decay_rate = None):
+        """
+        Initializes the training optimizer, loss function and training step.
+        Input:
+            training_mode [String]
+                Training mode to use. See NeuralNet.training_modes for options.
+            learning_rate [Float]
+                Learning rate to use in training.
+            reg_const [Float]
+                Regularization constant. To not use regularization simply input 0.
+            loss_mode [Tensor]
+                Loss function to use.
+            decay_rate [String]
+                Decay rate. Input is only necessary when training mode is 'adadelta'.
+        """
+
+        if training_mode not in NeuralNet.training_modes:
+            raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
+
+        # Regularization Term
+        regularization = sum(map(tf.nn.l2_loss, self.all_weights))*reg_const
+
+        # Set tensorflow training method for bootstrap training
+        if training_mode == 'adagrad':
+            self.train_optimizer = tf.train.AdagradOptimizer(learning_rate)
+        elif training_mode == 'adadelta':
+            if decay_rate is None:
+                raise ValueError("When the training mode is 'adadelta' the decay rate must be specified!")
+            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=decay_rate)
+        elif training_mode == 'gradient_descent':
+            self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        train_step = self.train_optimizer.minimize(loss_fn + regularization)
+        self.train_saver = tf.train.Saver(
+            var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
+
+        # initialize training variables if necessary
+        train_vars = self.get_training_vars()
+        if train_vars is not None:
+            self.sess.run(tf.initialize_variables(train_vars.values()))
+
+        return train_step
+
+    def get_training_vars(self):
+        """
+        Returns the training variables associated with the current training mode.
+        Returns None if there are no associated variables.
+        Output:
+            var_dict [Dict] or [None]:
+                Dictionary of variables.
+        """
+        var_dict = dict()
+        train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
+        for name in slot_names:
+            for var in train_vars:
+                val = self.train_optimizer.get_slot(var, name)
+                if val:
+                    var_dict[var.name] = val
+
+        if var_dict == {}:
+            return None
+
+        return var_dict
+
+    def save_training_vars(self, path):
+        """
+        Saves the training variables associated with the current training mode to a file in path.
+        Returns the file name.
+        Input:
+            path [String]:
+                Path specifying where the variables should be saved.
+        Ouput:
+            filename [String]:
+                Filename specifying where the training variables were saved.
+        """
+        filename = None
+        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
+            return None
+        else:
+            filename = self.train_saver.save(self.sess, path)
+
+        if self.verbose:
+            print "Saved training vars to %s" % filename
+        return filename
+
+    def load_training_vars(self, filename):
+        """
+        Loads the training variable associated with the current training mode.
+        Input:
+            filename [String]:
+                Filename where training variables are stored.
+        """
+        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
+            return None
+        else:
+            self.train_saver.restore(self.sess, filename)
+
+        if self.verbose:
+            print "Loaded training vars from %s " % filename
 
 
     def load_weight_values(self, _filename='weight_values.p'):

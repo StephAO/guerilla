@@ -151,7 +151,7 @@ def training_test(nn_input_type, verbose=False):
     success = True
     # Set hyper params for mini-test
     
-    for t_m in Teacher.training_modes:
+    for t_m in nn.NeuralNet.training_modes:
         error_msg = ""
         try:
             with Guerilla('Harambe', 'w', verbose=verbose) as g:
@@ -442,15 +442,6 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
     # Modify hyperparameters for a small training example.
     success = True
-    hp = {}
-    hp['NUM_FEAT'] = 10
-    hp['NUM_EPOCHS'] = 5
-    hp['BATCH_SIZE'] = 5
-    hp['VALIDATION_SIZE'] = 5
-    hp['TRAIN_CHECK_SIZE'] = 5
-    hp['TD_LRN_RATE'] = 0.00001  # Learning rate
-    hp['TD_DISCOUNT'] = 0.7  # Discount rate
-    hp['LEARNING_RATE'] = 0.00001
 
     # Pickle path
     loss_path = resource_filename('guerilla', 'data/loss/')
@@ -471,8 +462,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         with Guerilla('Harambe', 'w', verbose=verbose) as g:
             g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose)
-            t.set_hyper_params(**hp)
+            t = Teacher(g, test=True, verbose=verbose, hp_load_file = 'load_and_resume_test.yaml')
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
             t.set_sp_params(num_selfplay=3, max_length=5)
@@ -495,8 +485,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run resume
         with Guerilla('Harambe', 'w', verbose=verbose) as g:
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose)
-            t.set_bootstrap_params(num_bootstrap=500)  # 488037
+            t = Teacher(g, test=True, verbose=verbose, hp_load_file = 'load_and_resume_test.yaml')
+            t.set_bootstrap_params(num_bootstrap=50)  # 488037
 
             # Run
             t.run(['load_and_resume'])
@@ -542,7 +532,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Check that correct number of epochs is run
         with open(loss_path + 'loss_test.p', 'r') as f:
             loss = pickle.load(f)
-            if hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
+            if t.hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
                 error_msg += "On action %s there was the wrong number of epochs. " % action
                 error_msg += "Expected %d epochs, but got %d epochs." % (hp['NUM_EPOCHS'], len(loss['loss']) - 1)
                 success = False

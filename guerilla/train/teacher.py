@@ -10,7 +10,6 @@ import chess
 import chess.pgn
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
 import yaml
 from pkg_resources import resource_filename
 
@@ -29,8 +28,6 @@ class Teacher:
         'train_selfplay',
         'load_and_resume'
     ]
-
-    training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
     def __init__(self, _guerilla, hp_load_file=None, training_mode=None,
                  test=False, verbose=True):
@@ -86,9 +83,10 @@ class Teacher:
 
         if training_mode is None:
             training_mode = 'adagrad'
-        elif training_mode not in Teacher.training_modes:
-            raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
         self.training_mode = training_mode
+        self.train_step = self.nn.init_training(self.training_mode, learning_rate = self.hp['LEARNING_RATE'],
+                                                reg_const = self.hp['REGULARIZATION_CONST'], loss_fn = self.nn.MSE,
+                                                decay_rate= self.hp['DECAY_RATE'])
 
         if self.verbose:
             print "Training neural net using %s." % self.training_mode
@@ -97,7 +95,7 @@ class Teacher:
             self.td_adagrad_acc = None
             self.weight_shapes = []
             for weight in self.nn.all_weights_biases:
-                self.weight_shapes.append(self.nn.sess.run(tf.shape(weight)))
+                self.weight_shapes.append(weight.get_shape().as_list())
 
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
@@ -114,19 +112,6 @@ class Teacher:
                                 '_conv' if self.guerilla.nn.hp['USE_CONV'] else '',
                                 '_' + str(self.nn.hp['NUM_FC']))
 
-        # Regularization Term
-        self.regularization = sum(map(tf.nn.l2_loss, self.nn.all_weights))*self.hp['REGULARIZATION_CONST']
-
-        # Set tensorflow training method for bootstrap training
-        if self.training_mode == 'adagrad':
-            self.train_optimizer = tf.train.AdagradOptimizer(self.hp['LEARNING_RATE'])
-        elif self.training_mode == 'adadelta':
-            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.hp['LEARNING_RATE'], rho=self.hp['DECAY_RATE'])
-        elif self.training_mode == 'gradient_descent':
-            self.train_optimizer = tf.train.GradientDescentOptimizer(self.hp['LEARNING_RATE'])
-        self.train_step = self.train_optimizer.minimize(self.nn.MSE + self.regularization)
-        self.train_saver = tf.train.Saver(
-            var_list=self.get_nn_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 
     # ---------- RUNNING AND RESUMING METHODS
 
@@ -311,7 +296,7 @@ class Teacher:
 
         # Save training variables
         train_var_path = resource_filename('guerilla', 'data/train_checkpoint/in_training_vars.vars')
-        train_var_file = self.nn.save_nn_training_vars(train_var_path)
+        train_var_file = self.nn.save_training_vars(train_var_path)
         if train_var_file:
             state['train_var_file'] = train_var_file
 
@@ -357,7 +342,7 @@ class Teacher:
 
         # Load training variables
         if 'train_var_file' in state:
-            self.load_nn_training_vars(state['train_var_file'])
+            self.nn.load_training_vars(state['train_var_file'])
 
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
@@ -422,63 +407,6 @@ class Teacher:
 
         self.curr_action_idx += 1
         return
-
-    def get_nn_training_vars(self):
-        """
-        Returns the training variables associated with the current training mode.
-        Returns None if there are no associated variables.
-        Output:
-            var_dict [Dict] or [None]:
-                Dictionary of variables.
-        """
-        if self.training_mode == 'gradient_descent':
-            return None
-        else:
-            var_dict = dict()
-            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
-            for name in slot_names:
-                for var in train_vars:
-                    val = self.train_optimizer.get_slot(var, name)
-                    if val:
-                        var_dict[var.name] = val
-            return var_dict
-
-    def save_nn_training_vars(self, path):
-        """
-        Saves the training variables associated with the current training mode to a file in path.
-        Returns the file name.
-        Input:
-            path [String]:
-                Path specifying where the variables should be saved.
-        Ouput:
-            filename [String]:
-                Filename specifying where the training variables were saved.
-        """
-        filename = None
-        if self.training_mode == 'gradient_descent':
-            pass
-        else:
-            filename = self.train_saver.save(self.sess, path)
-
-        if self.verbose:
-            print "Saved training vars to %s" % filename
-        return filename
-
-    def load_nn_training_vars(self, filename):
-        """
-        Loads the training variable associated with the current training mode.
-        Input:
-            filename [String]:
-                Filename where training variables are stored.
-        """
-        if self.training_mode == 'gradient_descent':
-            pass
-        else:
-            self.train_saver.restore(self.nn.sess, filename)
-
-        if self.verbose:
-            print "Loaded training vars from %s " % filename
 
     def out_of_time(self):
         """
@@ -1089,7 +1017,7 @@ def main():
     with Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 1
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=1050000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=1000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False

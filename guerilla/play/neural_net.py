@@ -11,9 +11,7 @@ class NeuralNet:
 
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, load_file=None, hp_load_file=None, nn_input_type='bitmap',
-                 use_conv=True, num_fc=3, num_hidden=1024, num_feat=10,
-                 num_channels=12, verbose=True):
+    def __init__(self, load_file=None, hp_load_file=None, verbose=True, **hp):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -27,17 +25,20 @@ class NeuralNet:
                     provided, then default).
                 verbose [Bool]:
                     Enables Verbose mode.
+                **hp[**kwargs]:
+                    Hyper parameters in keyword format. Keyword must match hyper
+                    parameter name. See self._set_hyper_params for valid hyper
+                    parameters. Hyper parameters defined in hp will overwrite
+                    params loaded from a file.
         """
         self.load_file = load_file
         self.verbose = verbose
         self.hp = {}
 
-        if hp_load_file is not None:
-            self.set_hyper_params_from_file(hp_load_file)
-        else:
-            self.set_hyper_params(NN_INPUT_TYPE=nn_input_type, USE_CONV=use_conv,
-                             NUM_FC=num_fc, NUM_HIDDEN=num_hidden,
-                             NUM_FEAT=num_feat, NUM_CHANNELS=num_channels)
+        if hp_load_file is None:
+            hp_load_file = 'default.yaml'
+        self._set_hyper_params_from_file(hp_load_file)
+        self._set_hyper_params(**hp)
 
         if self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.variable_value = 0.001
@@ -356,11 +357,14 @@ class NeuralNet:
         self.W_final = self.weight_variable([self.hp['NUM_HIDDEN'], 1])
         self.b_final = self.bias_variable([1])
 
-    def set_hyper_params_from_file(self, file):
+    def _set_hyper_params_from_file(self, file):
         """
             Updates hyper parameters from a yaml file.
             Will only affect hyper parameters that are provided. Unspecified
             hyper parameters will not change.
+            WARNING: This can only be called at the start of init, since
+                     that is where the shape of the neural net is defined.
+
             Inputs:
                 file[String]:
                     filename to use. File must be in data/hyper_params/teacher/
@@ -370,11 +374,14 @@ class NeuralNet:
         with open(filepath, 'r') as yaml_file:
             self.hp.update(yaml.load(yaml_file))
 
-    def set_hyper_params(self, **hyper_parameters):
+    def _set_hyper_params(self, **hyper_parameters):
         """
             Updates hyper parameters from arguments.
             Will only affect hyper parameters that are provided. Unspecified
             hyper parameters will not change.
+            WARNING: This can only be called at the start of init, since
+                     that is where the shape of the neural net is defined.
+
             Hyper parameters that are used:
                 "NUM_FEAT" - Number of times the output nodes of the convolution
                              are repeated

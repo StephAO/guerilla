@@ -29,8 +29,8 @@ class Teacher:
         'load_and_resume'
     ]
 
-    def __init__(self, _guerilla, hp_load_file=None, training_mode=None,
-                 test=False, verbose=True):
+    def __init__(self, _guerilla, hp_load_file=None, training_mode=None, 
+                 test=False, verbose=True, **hp):
         """
             Initialize teacher, sets member variables.
 
@@ -43,6 +43,11 @@ class Teacher:
                     Set to true if its a test. If true, doesn't save weights.
                 verbose [Bool]:
                     If true, teacher prints more output.
+                **hp[**kwargs]:
+                    Hyper parameters in keyword format. Keyword must match hyper
+                    parameter name. See self._set_hyper_params for valid hyper
+                    parameters. Hyper parameters defined in hp will overwrite
+                    params loaded from a file.
         """
         # dictionary of different training/evaluation methods
 
@@ -80,6 +85,7 @@ class Teacher:
         if hp_load_file is None:
             hp_load_file = 'default.yaml'
         self.set_hyper_params_from_file(hp_load_file)
+        self.set_hyper_params(**hp)
 
         if training_mode is None:
             training_mode = 'adagrad'
@@ -532,7 +538,8 @@ class Teacher:
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
         elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
             boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
-            diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
+            if self.nn.hp['USE_CONV']:
+                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
         true_values = np.zeros(self.hp['BATCH_SIZE'])
 
         for i in xrange(num_batches):
@@ -547,13 +554,13 @@ class Teacher:
                 boards[j] = dh.fen_to_nn_input(fens[game_indices[board_num]], 
                                                self.nn.hp['NN_INPUT_TYPE'],
                                                self.nn.hp['NUM_CHANNELS'])
-                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                     diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values, self.nn.keep_prob: self.keep_prob}
-            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch
             self.nn.sess.run([train_step], feed_dict=_feed_dict)
@@ -587,7 +594,8 @@ class Teacher:
         elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
             # Configure data
             boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
-            diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
+            if self.nn.hp['USE_CONV']:
+                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
         true_values_batch = np.zeros(self.hp['BATCH_SIZE'])
 
         # Initialize Error
@@ -599,13 +607,13 @@ class Teacher:
                 boards[j] = dh.fen_to_nn_input(fens[board_num], 
                                                self.nn.hp['NN_INPUT_TYPE'],
                                                self.nn.hp['NUM_CHANNELS'])
-                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                     diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
                 true_values_batch[j] = true_values[board_num]
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values_batch}
-            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
+            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
 
             # Get batch loss

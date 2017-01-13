@@ -154,8 +154,7 @@ def training_test(nn_input_type, verbose=False):
     for t_m in nn.NeuralNet.training_modes:
         error_msg = ""
         try:
-            with Guerilla('Harambe', 'w', verbose=verbose) as g:
-                g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
+            with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
                 g.search.max_depth = 1
 
                 t = Teacher(g, training_mode=t_m, test=True, verbose=verbose, 
@@ -290,8 +289,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     values = values[:len(fens)]
 
     # Train and Test Guerilla
-    with Guerilla('Harambe', 'w') as g:
-        g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
+    with Guerilla('Harambe', 'w', NN_INPUT_TYPE=nn_input_type) as g:
         g.search.max_depth = 1
         # Train
         t = Teacher(g, training_mode='adagrad')
@@ -389,8 +387,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     err_msg = ''
     for i in range(num_attempt):
         score = 0
-        with Guerilla('Harambe', 'w', verbose=verbose) as g:
-            g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
+        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
             g.search.max_depth = 1
             # Train
             t = Teacher(g, training_mode='gradient_descent', verbose=verbose)
@@ -459,8 +456,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run action
-        with Guerilla('Harambe', 'w', verbose=verbose) as g:
-            g.nn.set_hyper_params(NN_INPUT_TYPE=nn_input_type)
+        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
             g.search.max_depth = 1
             t = Teacher(g, test=True, verbose=verbose, hp_load_file = 'load_and_resume_test.yaml')
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
@@ -483,7 +479,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run resume
-        with Guerilla('Harambe', 'w', verbose=verbose) as g:
+        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
             g.search.max_depth = 1
             t = Teacher(g, test=True, verbose=verbose, hp_load_file = 'load_and_resume_test.yaml')
             t.set_bootstrap_params(num_bootstrap=50)  # 488037

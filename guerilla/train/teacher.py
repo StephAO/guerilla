@@ -1023,9 +1023,9 @@ def main():
         run_time = None
 
     with Guerilla('Harambe', 'w') as g:
-        g.search.max_depth = 1
+        g.search.max_depth = 2
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=1000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=80000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False

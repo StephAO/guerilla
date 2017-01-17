@@ -5,12 +5,12 @@ Functions for interacting with single game pgn files.
 import os
 import time
 from os.path import isfile, join
+import random as rnd
 
 import chess.pgn
 from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
-
 
 def read_pgn(filename):
     """
@@ -27,8 +27,6 @@ def read_pgn(filename):
         game = chess.pgn.read_game(pgn)
         while not game.is_end():
             fen = game.board().fen()
-            if fen.split(' ')[1] == 'b':
-                fen = dh.flip_board(fen)
             # fen = fen.split(' ')[0]
             fens.append(fen)
             game = game.variation(0)
@@ -56,14 +54,29 @@ def get_fens(generate_time):
             game_num = int(l)
 
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
-    
+
     start_time = time.clock()
     with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'a') as fen_file:
         print "Opened fens output file..."
         while (time.clock() - start_time) < generate_time:
             fens = read_pgn(games_path + '/' + files[game_num])
             for fen in fens:
-                fen_file.write(fen + '\n')
+
+                #Make EACH PLAYER do a random move and then store
+                board = chess.Board(fen)
+                for i in range(2):
+                    if not list(board.legal_moves):
+                        break
+                    board.push(rnd.choice(list(board.legal_moves)))
+
+                else:
+                    # only store if 2 random moves were applied
+                    # flip board if necessary
+                    fen = board.fen()
+                    if dh.black_is_next(fen):
+                        fen = dh.flip_board(fen)
+
+                    fen_file.write(fen + '\n')
 
             print "Processed game %d..." % game_num
             game_num += 1

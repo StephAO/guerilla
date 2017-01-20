@@ -54,8 +54,8 @@ def num_skip_func(goal_num, curr_num):
             Number of fens to skip in the next game processed.
     """
 
-    ALL_PERC = 5
-    NO_START_PERC = 50
+    ALL_PERC = 3
+    NO_START_PERC = 30
     MAX_SKIP = 40  # Note: On average 40 moves per game
 
     curr_percent = float(curr_num) * 100 / goal_num
@@ -76,7 +76,7 @@ def num_skip_func(goal_num, curr_num):
     # TODO: Shuffle validation fens
 
 
-def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.5):
+def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.25):
     """
     Returns a list of fens from games.
     Will either read from all games in folder /pgn_files/single_game_pgns.
@@ -118,7 +118,7 @@ def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.5):
 
                 # When using random moves, store original board with some probability
                 out_fens = []
-                if num_random > 0 and rnd.randint() < store_prob:
+                if num_random > 0 and rnd.random() < store_prob:
                     out_fens.append(fen)
 
                 # Default: Make EACH PLAYER do a random move and then store
@@ -154,7 +154,7 @@ def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.5):
 
 def load_fens(filename='fens.nsv', num_values=None):
     """
-    Loads the fens pickle.
+    Loads the fens file.
         Input:
             filename:
                 Pickle filename.
@@ -162,7 +162,8 @@ def load_fens(filename='fens.nsv', num_values=None):
                 Max number of stockfish values to return. 
                 (will return min of num_values and number of values stored in file)
         Output:
-            Loaded pickle.
+        fens [List]
+            Loaded fens
     """
     full_path = resource_filename('guerilla', 'data/extracted_data/' + filename)
     fens = []

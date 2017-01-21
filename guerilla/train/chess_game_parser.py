@@ -14,69 +14,35 @@ from pkg_resources import resource_filename
 import guerilla.data_handler as dh
 
 
-def read_pgn(filename, num_skip=0):
+def read_pgn(filename, max_skip=80):
     """
     Given a pgn filename, reads the file and returns a fen for each position in the game.
         Input:
-            filename:
-                the file nameS
-            min_move:
-                Number of moves which are skipped and for which no FEN is stored.
+            filename [String]:
+                the file name
+            max_skip [Int]:
+                The maximum number of half-moves which are skipped.
         Output:
             fens:
                 list of fen strings
     """
     fens = []
-    move_count = 0
     with open(filename, 'r') as pgn:
         game = chess.pgn.read_game(pgn)
-        while not game.is_end():
-            # Don't store the first 'num_skip' moves.
-            if move_count >= num_skip:
-                fen = game.board().fen()
-                fens.append(fen)
+        while True:
+            fens.append(game.board().fen())
+            if game.is_end():
+                break
             game = game.variation(0)
-            move_count += 1
-    return fens
+
+    # Down sample based on half-move count
+    max_skip = min(max_skip, len(fens) - 1)
+    skip_start = rnd.randint(0, max_skip)
+
+    return fens[skip_start:]
 
 
-def num_skip_func(goal_num, curr_num):
-    """
-    Function defining the number of moves to skip in each game based on the goal and current number of fens.
-    Input:
-        goal_num [Int]
-            Goal number of fens to generate.
-        curr_num [Int]
-            Number of fens generated thus far.
-
-    Output:
-        skip [Int]
-            Number of fens to skip in the next game processed.
-    """
-
-    ALL_PERC = 3
-    NO_START_PERC = 30
-    MAX_SKIP = 40  # Note: On average 40 moves per game
-
-    curr_percent = float(curr_num) * 100 / goal_num
-
-    # Store everything (starting board included) for first 5% of fens
-    if curr_percent < ALL_PERC:
-        return 0
-
-    # Store everything but starting board up until 50% of fens
-    if curr_percent < NO_START_PERC:
-        return 1
-
-    # Skip more and more fens as you progress
-    skip = (MAX_SKIP) * float(curr_percent - NO_START_PERC) / (100 - NO_START_PERC)
-
-    return int(skip)
-
-    # TODO: Shuffle validation fens
-
-
-def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.25):
+def get_fens(generate_time, num_random=0, store_prob=0.5):
     """
     Returns a list of fens from games.
     Will either read from all games in folder /pgn_files/single_game_pgns.
@@ -95,14 +61,10 @@ def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.25):
     games_path = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
 
     game_num = 0
-    fen_count = 0
     if os.path.isfile(checkpoint_path):
         with open(checkpoint_path) as f:
-            data = pickle.load(f)
-            game_num = data['game_num']
-            print "Goal number of %d was overwritten by stored goal number of %d" % (goal_num, data['goal_num'])
-            goal_num = data['goal_num']
-            fen_count = data['fen_count']
+            l = f.readline()
+            game_num = int(l)
 
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
 
@@ -110,9 +72,8 @@ def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.25):
     with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'a') as fen_file:
         print "Opened fens output file..."
         while (time.clock() - start_time) < generate_time:
-            fens = read_pgn(games_path + '/' + files[game_num], num_skip = num_skip_func(goal_num, fen_count))
+            fens = read_pgn(games_path + '/' + files[game_num])
             for fen in fens:
-
 
                 board = chess.Board(fen)
 
@@ -137,20 +98,14 @@ def get_fens(generate_time, goal_num=100000, num_random=0, store_prob=0.25):
                         out_fen = dh.flip_board(out_fen)
 
                     fen_file.write(out_fen + '\n')
-                    fen_count += 1
 
             print "Processed game %d..." % game_num
             game_num += 1
 
-            if fen_count > goal_num:
-                print "Goal number of fens (%d) reached!" % goal_num
-                break
-
     # Write out next game to be processed
-    with open(resource_filename('guerilla', 'data/extracted_data/cgp_data.p'), 'w') as cgp_file:
-        pickle.dump({'game_num': game_num,
-                     'goal_num': goal_num,
-                     'fen_count': fen_count}, cgp_file)
+    with open(resource_filename('guerilla', 'data/extracted_data/game_num.txt'), 'w') as num_file:
+        num_file.write(str(game_num))
+
 
 def load_fens(filename='fens.nsv', num_values=None):
     """
@@ -180,27 +135,7 @@ def load_fens(filename='fens.nsv', num_values=None):
 def main():
     generate_time = raw_input("How many seconds do you want to generate fens for?: ")
 
-    fens = get_fens(int(generate_time), goal_num=10000)
-
-    # white_win = black_win = draw = 0
-    #
-    # games_path = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
-    # files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
-    # for i in range(1264):
-    #     filename = games_path + '/' + files[i]
-    #     with open(filename, 'r') as pgn:
-    #         game = chess.pgn.read_game(pgn)
-    #         if game.headers['Result'] == '0-1':
-    #             black_win += 1
-    #         elif game.headers['Result'] == '1-0':
-    #             white_win += 1
-    #         else:
-    #             draw += 1
-    #
-    # print "White win " + str(white_win)
-    # print "Black win " + str(black_win)
-    # print "Draw " + str(draw)
-
+    get_fens(int(generate_time))
 
 if __name__ == "__main__":
     main()

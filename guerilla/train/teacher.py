@@ -66,9 +66,8 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
-        self.conv_loss_thresh = 0.0001  # 
-        self.conv_window_size = 20  # Number of epochs to consider when checking for convergence
-        self.keep_prob = 1.0 # Probability of dropout during neural network training
+        self.conv_loss_thresh = 0.0001  # Threshold for loss convergence
+        self.conv_window_size = 10  # Number of epochs to consider when checking for convergence
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -274,6 +273,7 @@ class Teacher:
                 "REGULARIZATION_CONST" - Constant used to determine value of
                                          regularization term
                 "DECAY_RATE" -Used in AdaDelta
+                "KEEP_PROB" - The complement of the dropout probability. Used during training.
             Inputs:
                 hyperparmeters [**kwargs]:
                     hyperparameters to update with
@@ -590,7 +590,8 @@ class Teacher:
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
-            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values, self.nn.keep_prob: self.keep_prob}
+            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values,
+                          self.nn.keep_prob: self.self.hp['KEEP_PROB']}
             if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch
@@ -669,7 +670,7 @@ class Teacher:
 
         # Check if any items in the window indicate non-convergence
         for i in range(1, self.conv_window_size + 1):
-            if abs(loss[- (i + 1)] - loss[-i]) > self.hp['LOSS_THRESHOLD']:
+            if loss[- (i + 1)] - loss[-i] > self.hp['LOSS_THRESHOLD']:
                 return False
 
         return True

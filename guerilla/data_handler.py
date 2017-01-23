@@ -21,6 +21,9 @@ piece_values = {
     'k': 1000
 }
 
+BOARD_LENGTH = 8
+BOARD_SIZE = 64
+
 S_IDX_PIECE_LIST = 15
 S_IDX_ATKDEF_MAP = 223
 GF_FULL_SIZE = 351
@@ -118,7 +121,7 @@ def fen_to_bitmap(fen, num_channels):
     # castling = fen[2]
     # en_passant = fen[3]
 
-    channels = np.zeros((8, 8, num_channels))
+    channels = np.zeros((BOARD_LENGTH, BOARD_LENGTH, num_channels))
 
     c_file = 0
     c_rank = 7
@@ -148,7 +151,7 @@ def fen_to_bitmap(fen, num_channels):
 def in_bounds(rank_idx, file_idx):
     """ Returns True if within the chess board boundary, False otherwise """
     # NOTE: Assumes 0 indexed
-    return (0 <= rank_idx < 8) and (0 <= file_idx < 8)
+    return (0 <= rank_idx < BOARD_LENGTH) and (0 <= file_idx < BOARD_LENGTH)
 
 def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                           board_to_piece_index, slide_index, map_base_index, gf):
@@ -181,17 +184,17 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
     still_sliding = [True] * 8 if piece == 'q' else [True] * 4
 
     crosswise = [
-        (lambda x: np.array([0, -x - 1]), 0), # left
-        (lambda x: np.array([0, +x + 1]), 1), # right
-        (lambda x: np.array([-x - 1, 0]), 2), # down
-        (lambda x: np.array([+x + 1, 0]), 3)  # up
+        lambda x: np.array([0, -x - 1]), # left
+        lambda x: np.array([0, +x + 1]), # right
+        lambda x: np.array([-x - 1, 0]), # down
+        lambda x: np.array([+x + 1, 0])  # up
     ]
 
     diagonals = [
-        (lambda x: np.array([-x - 1, -x - 1]), 4), # down left
-        (lambda x: np.array([+x + 1, +x + 1]), 5), # up right
-        (lambda x: np.array([+x + 1, -x - 1]), 6), # up left
-        (lambda x: np.array([-x - 1, +x + 1]), 7)  # down right
+        lambda x: np.array([-x - 1, -x - 1]), # down left
+        lambda x: np.array([+x + 1, +x + 1]), # up right
+        lambda x: np.array([+x + 1, -x - 1]), # up left
+        lambda x: np.array([-x - 1, +x + 1])  # down right
     ]
 
     directions = []
@@ -202,11 +205,11 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
 
     pos = np.array([c_rank, c_file])
     
-    for offset in xrange(0, 8):
+    for offset in xrange(0, BOARD_LENGTH):
         # check horizontal and vertical sliding
         for i, direction in enumerate(directions):
             # tile to check
-            r, f = pos + direction[0](offset)
+            r, f = pos + direction(offset)
             # If end of slide (piece in the way or out of bounds)
             if still_sliding[i] \
                 and (not in_bounds(r, f) or occupied_bitmap[r][f] != 0):
@@ -216,7 +219,7 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                 if in_bounds(r, f):
                     defender = (occupied_bitmap[c_rank][c_file] \
                              == occupied_bitmap[r][f])
-                    map_index = map_base_index + (r * 8 + f) * 2
+                    map_index = map_base_index + (r * BOARD_LENGTH + f) * 2
                     map_index += 0 if defender else 1
                     gf[map_index] = min(piece_value, gf[map_index])
                     gf[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
@@ -262,7 +265,7 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
         if in_bounds(r, f) and occupied_bitmap[r][f] != 0:
             defender = (occupied_bitmap[c_rank][c_file] \
                      == occupied_bitmap[r][f])  # True if defending
-            map_index = map_base_index + (r * 8 + f) * 2
+            map_index = map_base_index + (r * BOARD_LENGTH + f) * 2
             map_index += 0 if defender else 1
             gf[map_index] = min(piece_value, gf[map_index])
             gf[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
@@ -312,8 +315,7 @@ def fen_to_giraffe(fen):
     NUM_SLOTS_PER_PIECE = 5 # For piece list
     NUM_SLIDE_PIECES_PER_SIDE = 5 # queen + 2 rooks + 2 bishops
     NUM_PIECES_PER_SIDE = 16 # PER SIDE
-    BOARD_LENGTH = 8
-    BOARD_SIZE = 64
+    BLACK_SLIDE_OFFSET = NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE
 
     # Side to Move (0)
     # Castling Rights (1-4)
@@ -366,10 +368,9 @@ def fen_to_giraffe(fen):
                     gf[S_IDX_PIECES_NUM + (0 if white else 5) \
                                         + piece_indices[char]] += 1
 
-                black_offset = NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE
                 # Get the current gf index based on piece type and color (5 entries per piece)
                 curr_index = S_IDX_PIECE_LIST \
-                           + (0 if white else black_offset) \
+                           + (0 if white else BLACK_SLIDE_OFFSET) \
                            + piece_desc_index[char] * NUM_SLOTS_PER_PIECE
 
                 # print "piece: %s, white: %d, index: %d" % (char, white, curr_index)
@@ -434,6 +435,229 @@ def fen_to_giraffe(fen):
 
     return np.array(gf)
 
+def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
+    """
+        Finds the range of motion of a sliding piece (Queen, Rook, or Bishop).
+        Set slide range for piece for giraffe input data structure.
+        Updates attack defend maps.
+
+        Inputs:
+            c_rank[int]:
+                rank of piece (0-7)
+            c_file[int]:
+                file of piece (0-7)
+            piece[String]:
+                piece type (e.g. 'wq', 'br1', 'bk', ... see piece_move_slice)
+            occupied bitmap[String[8][8]]:
+                bitmap of occupied tiles. each tile has a piece (see above)
+            piece_move_slice[Dict]:
+                slice of move_map tile list for a given piece type
+            mm[list]:
+                move map input
+    """
+    crosswise_fn = [
+        lambda x: np.array([0, -x - 1]), # left
+        lambda x: np.array([0, +x + 1]), # right
+        lambda x: np.array([-x - 1, 0]), # down
+        lambda x: np.array([+x + 1, 0])  # up
+    ]
+
+    crosswise = []
+    for fn in crosswise_fn:
+        crosswise.extend([fn(i) for i in xrange(0, BOARD_LENGTH)])
+
+    diagonals_fn = [
+        lambda x: np.array([-x - 1, -x - 1]), # down left
+        lambda x: np.array([+x + 1, +x + 1]), # up right
+        lambda x: np.array([+x + 1, -x - 1]), # up left
+        lambda x: np.array([-x - 1, +x + 1])  # down right
+    ]
+
+    diagonals = []
+    for fn in diagonals_fn:
+        diagonals.extend([fn(i) for i in xrange(0, BOARD_LENGTH)])
+
+    knight_moves = [np.array(x) for x in [[1, 2], [2, 1], [2, -1], [1, -2], 
+                                          [-1, -2], [-2, -1], [-2, 1], [-1, 2]]]
+    pawn_moves = [np.array(x) for x in ([[1, 1], [1, -1]] if piece[0] == 'w' else \
+                                        [[-1, 1], [-1, -1]])]
+    king_moves = [np.array(x) for x in [[1, 0], [1, 1], [0, 1], [-1, 1], 
+                                        [-1, 0], [-1, -1], [0, -1], [1, -1]]]
+
+    piece_moves = {
+        'q': crosswise + diagonals,
+        'r': crosswise,
+        'b': diagonals,
+        'n': knight_moves,
+        'p': pawn_moves,
+        'k': king_moves
+    }
+
+    pos = np.array([c_rank, c_file])
+    
+    if piece[1] in ['q', 'r', 'b']:
+        still_sliding = True
+
+    for i, move in enumerate(piece_moves[piece[1]]):
+        # tile to check
+        if piece[1] in ['q', 'r', 'b'] and not still_sliding:
+            if i % BOARD_LENGTH == 0:
+                still_sliding = True
+            else:
+                continue
+
+        r, f = pos + move
+        # Out of bounds
+        if not in_bounds(r, f):
+            still_sliding = False
+            continue
+
+        if piece[1] == 'p':
+            full_piece = piece + ('1' if f > c_file else '2')
+        else:
+            full_piece = piece
+
+        # Set map
+        mm[r][f][piece_move_slice[full_piece]] = [c_rank, c_file]
+
+        # End of slide (piece in the way)
+        if piece[1] in ['q', 'r', 'b'] and occupied_bitmap[r][f] != 0:
+            still_sliding = False
+
+def fen_to_movemap(fen):
+    """ 
+        Move map is a 64 x (12 + 18 + 18) representation of the board. Each
+        tile (64) on the board contains:
+            1. One hot encoding of the piece type (12)
+            2. White tiles that can move to that square (18)
+            3. Black tiles that can move to that square (18)
+        One hot encoding order is wq, wr, wb, wn, wp, wk, bq, br, bb, bn, bp, bk
+        18 is chosen because a piece can only be attacked/defended by 9 pieces
+        at a time without having had a pawn promotion. Each piece is defined by
+        its tile square, which requires 2 inputs (2 * 9 = 18).
+    
+        Order for pieces attacking is 
+        wq, wr*2, wb, wn*2, wp*2, wk, bq, br*2, bb*2, bn, bp*2, bk
+
+        Inputs:
+            fen[String]:
+                fen
+    """
+    bs = np.zeros((15))
+    mm = np.zeros((BOARD_LENGTH, BOARD_LENGTH, 48))
+
+    S_IDX_PIECES_NUM = 5
+
+    fen = fen.split(' ')
+    board_str = fen[0]
+    turn = fen[1]
+    castling = fen[2]
+    en_passant = fen[3]
+    
+    piece_type_index = {
+        'wq' : 0,
+        'wr' : 1,
+        'wb' : 2,
+        'wn' : 3,
+        'wp' : 4,
+        'wk' : 5,
+        'bq' : 6,
+        'br' : 7,
+        'bb' : 8,
+        'bn' : 9,
+        'bp' : 10,
+        'bk' : 11
+    }
+
+    piece_move_slice = {
+        'wq' : slice(12, 14, None),
+        'wr1' : slice(14, 16, None),
+        'wr2' : slice(16, 18, None),
+        'wb' : slice(18, 20, None),
+        'wn1' : slice(20, 22, None),
+        'wn2' : slice(22, 24, None),
+        'wp1' : slice(24, 26, None),
+        'wp2' : slice(26, 28, None),
+        'wk' : slice(28, 30, None),
+        'bq' : slice(30, 32, None),
+        'br1' : slice(32, 34, None),
+        'br2' : slice(34, 36, None),
+        'bb' : slice(36, 38, None),
+        'bn1' : slice(38, 40, None),
+        'bn2' : slice(40, 42, None),
+        'bp1' : slice(42, 44, None),
+        'bp2' : slice(44, 46, None),
+        'bk' :slice(46, 48, None)
+    }
+
+    piece_count = {
+        'wq': 1,
+        'wr': 2,
+        'wb': 2,
+        'wn': 2,
+        'wp': 8,
+        'wk': 1,
+        'bq': 1,
+        'br': 2,
+        'bb': 2,
+        'bn': 2,
+        'bp': 8,
+        'bk': 1
+    }
+
+    # Slide to move
+    bs[0] = 1 if (turn == 'w') else 0
+
+    # Castling rights
+    bs[1] = 1 if ('Q' in castling) else 0
+    bs[2] = 1 if ('K' in castling) else 0
+    bs[3] = 1 if ('q' in castling) else 0
+    bs[4] = 1 if ('k' in castling) else 0
+
+    occupied_bitmap = [[0] * 8 for _ in range(8)] 
+
+    ranks = board_str.split('/')
+    ranks.reverse()
+    for c_rank, rank in enumerate(ranks):
+        c_file = 0 # File count
+        for char in rank:
+            if char.isdigit():
+                # Increment file count when empty squares are encountered
+                c_file += int(char) - 1
+            else:    
+                white = char.isupper()
+                char = char.lower()
+                piece = ('w' if white else 'b') + char
+                            
+                if char != 'k':
+                    bs[S_IDX_PIECES_NUM + (0 if white else 5) \
+                         + piece_indices[char]] += 1
+
+                piece_count[piece] -= 1
+                if piece_count[piece] < 0:
+                    continue
+
+                mm[c_rank][c_file][piece_type_index[piece]] = 1
+
+                if char in ['r', 'n']:
+                    piece += str(2 - piece_count[piece])
+
+                occupied_bitmap[c_rank][c_file] = piece
+
+            c_file += 1
+            if c_file > BOARD_LENGTH:
+                raise ValueError("Fen has more than 8 pieces on a single rank")
+
+
+    for c_rank in xrange(BOARD_LENGTH):
+        for c_file in xrange(BOARD_LENGTH):
+            if occupied_bitmap[c_rank][c_file] != 0:
+                piece = occupied_bitmap[c_rank][c_file]
+                set_move_map(c_rank, c_file, piece, occupied_bitmap, 
+                             piece_move_slice, mm)
+
+    return bs, mm
+
 def get_diagonals(channels, num_channels):
     """
         Retrieves and returns the diagonals from the board
@@ -446,16 +670,16 @@ def get_diagonals(channels, num_channels):
                 Each piece array has 10 diagonals with max size of 8 (shorter diagonals are 0 padded at the end)
                 Diagonal ordering is a3 up, a6 down, a2 up, a7 down, a1 up, a8 down, b1 up, b8 down, c1 up, c8 down
     """
-    diagonals = np.zeros((10, 8, num_channels))
+    diagonals = np.zeros((10, BOARD_LENGTH, num_channels))
     for i in xrange(num_channels):
         index = 0
         for o in xrange(-2,3):
             diag_up = np.diagonal(channels[:, :, i], offset=o)
             diag_down = np.diagonal(np.flipud(channels[:, :, i]), offset=o)
 
-            diagonals[index, 0 : 8 - abs(o), i] = diag_up
+            diagonals[index, 0 : BOARD_LENGTH - abs(o), i] = diag_up
             index += 1
-            diagonals[index, 0 : 8 - abs(o), i] = diag_down
+            diagonals[index, 0 : BOARD_LENGTH - abs(o), i] = diag_down
             index += 1
 
     return diagonals
@@ -535,4 +759,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()# White non-pawn piece position
+    main()

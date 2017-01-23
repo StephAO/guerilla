@@ -330,12 +330,332 @@ def giraffe_input_test():
         
     return True
 
+def move_map_input_test():
+    piece_type_index = {
+        'wq' : 0,
+        'wr' : 1,
+        'wb' : 2,
+        'wn' : 3,
+        'wp' : 4,
+        'wk' : 5,
+        'bq' : 6,
+        'br' : 7,
+        'bb' : 8,
+        'bn' : 9,
+        'bp' : 10,
+        'bk' : 11
+    }
+
+    piece_move_slice = {
+        'wq' : slice(12, 14, None),
+        'wr1' : slice(14, 16, None),
+        'wr2' : slice(16, 18, None),
+        'wb' : slice(18, 20, None),
+        'wn1' : slice(20, 22, None),
+        'wn2' : slice(22, 24, None),
+        'wp1' : slice(24, 26, None),
+        'wp2' : slice(26, 28, None),
+        'wk' : slice(28, 30, None),
+        'bq' : slice(30, 32, None),
+        'br1' : slice(32, 34, None),
+        'br2' : slice(34, 36, None),
+        'bb' : slice(36, 38, None),
+        'bn1' : slice(38, 40, None),
+        'bn2' : slice(40, 42, None),
+        'bp1' : slice(42, 44, None),
+        'bp2' : slice(44, 46, None),
+        'bk' :slice(46, 48, None)
+    }
+
+    random_fen = "3k1B2/8/4p3/2b3P1/bP6/2nN3K/3P2RR/1R3q2 w - - 0 1"
+
+    board_state, move_map = dh.fen_to_movemap(random_fen)
+
+    success = True
+
+    if board_state.shape != (15,):
+        print "Failure: shape of board info is incorrect"
+        success = False 
+
+    if not (board_state == np.array([1,0,0,0,0,0,3,1,1,3,1,0,2,1,1])).all():
+        print "Failure: Info of board_state is incorrect"
+        success = False 
+
+    if move_map.shape != ((8, 8, 48)):
+        print "Failure: shape of move_map is incorrect"
+        success = False 
+
+    move_map = move_map.tolist()
+
+    if move_map[0][0][piece_move_slice['wr1']] != [0,1]:
+        print move_map[0][0] 
+        print "Failure: Info for tile 0,0 is incorrect"
+        success = False
+
+    if move_map[0][1][piece_type_index['wr']] != 1 and \
+        move_map[0][1][piece_move_slice['bq']] != [0,5] and \
+        move_map[0][1][piece_move_slice['bn1']] != [2,2]:
+        print "Failure: Info for tile 0,1 is incorrect"
+        success = False
+
+    if move_map[0][2][piece_move_slice['wn1']] != [2,3] and \
+        move_map[0][2][piece_move_slice['wr1']] != [0,1] and \
+        move_map[0][2][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 0,2 is incorrect"
+        success = False
+
+    if move_map[0][3][piece_move_slice['wr1']] != [0,1] and \
+        move_map[0][3][piece_move_slice['bn1']] != [2,2] and \
+        move_map[0][3][piece_move_slice['bb']] != [3,0] and \
+        move_map[0][3][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 1,5 is incorrect"
+        success = False
+
+    if move_map[0][4][piece_move_slice['wn1']] != [2,3] and \
+        move_map[0][4][piece_move_slice['wr1']] != [0,1] and \
+        move_map[0][4][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 0,4 is incorrect"
+        print move_map[0][4]
+        success = False
+
+    if move_map[0][5][piece_type_index['bq']] != 1 and \
+        move_map[0][5][piece_move_slice['wr1']] != [0,1]:
+        print "Failure: Info for tile 0,5 is incorrect"
+        success = False
+
+    if move_map[0][6][piece_move_slice['wr2']] != [1,6] and \
+        move_map[0][6][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 0,6 is incorrect"
+        success = False
+
+    if move_map[0][7][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 0,7 is incorrect"
+        success = False
+
+    if move_map[1][0][piece_move_slice['bn1']] != [2,2]:
+        print "Failure: Info for tile 1,0 is incorrect"
+        success = False
+
+    if move_map[1][1][piece_move_slice['wr1']] != [0,1] and \
+        move_map[1][1][piece_move_slice['wn1']] != [2,3]:
+        print "Failure: Info for tile 1,1 is incorrect"
+        success = False
+
+    if move_map[1][2][piece_move_slice['bb']] != [3,0]:
+        print "Failure: Info for tile 1,2 is incorrect"
+        success = False
+
+    if move_map[1][3][piece_type_index['wp']] != 1 and \
+        move_map[1][3][piece_move_slice['wr2']] != [1,6]:
+        print "Failure: Info for tile 1,3 is incorrect"
+        success = False
+
+    if move_map[1][4][piece_move_slice['wr2']] != [1,6] and \
+        move_map[1][4][piece_move_slice['bn1']] != [2,2]:
+        print "Failure: Info for tile 1,4 is incorrect"
+        success = False
+
+    if move_map[1][5][piece_move_slice['wr2']] != [1,6] and \
+        move_map[1][5][piece_move_slice['wn1']] != [2,3]:
+        print "Failure: Info for tile 1,5 is incorrect"
+        success = False
+
+    if move_map[1][6][piece_type_index['wr']] != 1 and \
+        move_map[1][6][piece_move_slice['wk']] != [2,7] and \
+        move_map[1][6][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 1,6 is incorrect"
+        success = False
+
+    if move_map[1][7][piece_move_slice['wr2']] != [1,6] and \
+        move_map[1][7][piece_move_slice['wk']] != [2,7]:
+        print "Failure: Info for tile 1,7 is incorrect"
+        success = False
+
+    if move_map[2][1][piece_move_slice['wr1']] != [0,1] and \
+        move_map[2][1][piece_move_slice['bb']] != [3,0]:
+        print "Failure: Info for tile 2,1 is incorrect"
+        success = False
+
+    if move_map[2][2][piece_type_index['bn']] != 1 and \
+        move_map[2][2][piece_move_slice['wp1']] != [1,3]:
+        print "Failure: Info for tile 2,2 is incorrect"
+        success = False
+
+    if move_map[2][3][piece_type_index['wn']] != 1 and \
+        move_map[2][3][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 2,3 is incorrect"
+        success = False
+
+    if move_map[2][4][piece_move_slice['bb']] != [4,2] and \
+        move_map[2][2][piece_move_slice['wp1']] != [1,3]:
+        print "Failure: Info for tile 2,4 is incorrect"
+        success = False
+
+    if move_map[2][5][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 2,5 is incorrect"
+        success = False
+
+    if move_map[2][6][piece_move_slice['wr2']] != [1,6] and \
+        move_map[2][6][piece_move_slice['wk']] != [2,7]:
+        print "Failure: Info for tile 2,6 is incorrect"
+        success = False
+
+    if move_map[2][7][piece_type_index['wk']] != 1:
+        print "Failure: Info for tile 2,7 is incorrect"
+        success = False
+
+    if move_map[3][0][piece_type_index['bb']] != 1 and \
+        move_map[3][0][piece_move_slice['bn1']] != [2,2]:
+        print "Failure: Info for tile 3,0 is incorrect"
+        success = False
+
+    if move_map[3][1][piece_type_index['wp']] != 1 and \
+        move_map[3][1][piece_move_slice['wn1']] != [2,3] and \
+        move_map[3][1][piece_move_slice['wr1']] != [0,1] and \
+        move_map[3][1][piece_move_slice['bb']] != [4,2]:
+        print "Failure: Info for tile 1,5 is incorrect"
+        success = False
+
+    if move_map[3][3][piece_move_slice['bb']] != [4,2]:
+        print "Failure: Info for tile 3,3 is incorrect"
+        success = False
+
+    if move_map[3][4][piece_move_slice['bn1']] != [2,2]:
+        print "Failure: Info for tile 3,4 is incorrect"
+        success = False
+
+    if move_map[3][5][piece_move_slice['wn1']] != [2,3] and \
+        move_map[3][5][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 3,5 is incorrect"
+        success = False
+
+    if move_map[3][6][piece_move_slice['wr2']] != [1,6] and \
+        move_map[3][6][piece_move_slice['wk']] != [2,7]:
+        print "Failure: Info for tile 3,6 is incorrect"
+        success = False
+
+    if move_map[3][7][piece_move_slice['wk']] != [2,7]:
+        print "Failure: Info for tile 3,7 is incorrect"
+        success = False
+
+    if move_map[4][0][piece_move_slice['wp2']] != [3,1]:
+        print "Failure: Info for tile 4,0 is incorrect"
+        success = False
+
+    if move_map[4][1][piece_move_slice['bb']] != [3,0] and \
+        move_map[4][1][piece_move_slice['bn1']] != [2,2]:
+        print "Failure: Info for tile 4,1 is incorrect"
+        success = False
+
+    if move_map[4][2][piece_type_index['bb']] != 1 and \
+        move_map[4][2][piece_move_slice['wp1']] != [3,1] and \
+        move_map[4][2][piece_move_slice['wn1']] != [2,3] and \
+        move_map[4][2][piece_move_slice['wb']] != [7,5]:
+        print "Failure: Info for tile 1,5 is incorrect"
+        success = False
+
+    if move_map[4][3][piece_move_slice['bn1']] != [2,2] and \
+        move_map[4][3][piece_move_slice['bp2']] != [5,4]:
+        print "Failure: Info for tile 4,3 is incorrect"
+        success = False
+
+    if move_map[4][4][piece_move_slice['wn1']] != [2,3]:
+        print "Failure: Info for tile 4,4 is incorrect"
+        success = False
+
+    if move_map[4][5][piece_move_slice['bq']] != [0,5] and \
+        move_map[4][3][piece_move_slice['bp1']] != [5,4]:
+        print "Failure: Info for tile 4,5 is incorrect"
+        success = False
+
+    if move_map[4][6][piece_type_index['wp']] != 1 and \
+        move_map[4][6][piece_move_slice['wr2']] != [1,6]:
+        print "Failure: Info for tile 4,6 is incorrect"
+        success = False
+
+    if move_map[5][1][piece_move_slice['bb']] != [4,2]:
+        print "Failure: Info for tile 5,1 is incorrect"
+        success = False
+
+    if move_map[5][2][piece_move_slice['bb']] != [3,0]:
+        print "Failure: Info for tile 5,2 is incorrect"
+        success = False
+
+    if move_map[5][3][piece_move_slice['wb']] != [7,5] and \
+        move_map[5][3][piece_move_slice['bb']] != [4,2]:
+        print "Failure: Info for tile 5,3 is incorrect"
+        success = False
+
+    if move_map[5][4][piece_type_index['bp']] != 1:
+        print "Failure: Info for tile 5,4 is incorrect"
+        success = False
+
+    if move_map[5][5][piece_move_slice['bq']] != [0,5] and \
+        move_map[5][5][piece_move_slice['wp1']] != [4,6]:
+        print "Failure: Info for tile 5,5 is incorrect"
+        success = False
+
+    if move_map[5][7][piece_move_slice['wp1']] != [4,6]:
+        print "Failure: Info for tile 5,7 is incorrect"
+        success = False
+
+    if move_map[6][0][piece_move_slice['bb']] != [4,2]:
+        print "Failure: Info for tile 6,0 is incorrect"
+        success = False
+
+    if move_map[6][2][piece_move_slice['bk']] != [7,3]:
+        print "Failure: Info for tile 6,2 is incorrect"
+        success = False
+
+    if move_map[6][3][piece_move_slice['bb']] != [3,0] and \
+        move_map[6][3][piece_move_slice['bk']] != [7,3]:
+        print "Failure: Info for tile 6,3 is incorrect"
+        success = False
+    
+
+    if move_map[6][4][piece_move_slice['wb']] != [7,5] and \
+        move_map[6][4][piece_move_slice['bb']] != [4,2] and \
+        move_map[6][4][piece_move_slice['bk']] != [7,3]:
+        print "Failure: Info for tile 6,4 is incorrect"
+        success = False
+    
+
+    if move_map[6][5][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 6,5 is incorrect"
+        success = False
+
+    if move_map[6][6][piece_move_slice['wb']] != [7,5]:
+        print "Failure: Info for tile 6,6 is incorrect"
+        success = False
+
+    if move_map[7][2][piece_move_slice['bk']] != [7,3]:
+        print "Failure: Info for tile 7,2 is incorrect"
+        success = False
+
+    if move_map[7][3][piece_type_index['bk']] != 1:
+        print "Failure: Info for tile 7,3 is incorrect"
+        success = False
+
+    if move_map[7][4][piece_move_slice['bb']] != [3,0] and \
+        move_map[7][4][piece_move_slice['bk']] != [7,3]:
+        print "Failure: Info for tile 7,4 is incorrect"
+        success = False
+
+    if move_map[7][5][piece_type_index['wb']] != 1 and \
+        move_map[7][5][piece_move_slice['bb']] != [4,2] and \
+        move_map[7][5][piece_move_slice['bq']] != [0,5]:
+        print "Failure: Info for tile 7,5 is incorrect"
+        success = False
+
+    return success
+
 def run_data_tests():
     all_tests = {}
     all_tests["Input Tests"] = {
         'Board to Bitmap': bitmap_input_test,
         'Bitmap to Diagonals': diag_input_test,
-        'Board to Giraffe': giraffe_input_test
+        'Board to Giraffe': giraffe_input_test,
+        'Board to Move Map': move_map_input_test
     }
 
     success = True

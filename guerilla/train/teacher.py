@@ -29,7 +29,7 @@ class Teacher:
         'load_and_resume'
     ]
 
-    def __init__(self, _guerilla, hp_load_file=None, training_mode=None, 
+    def __init__(self, _guerilla, hp_load_file=None, training_mode=None,
                  test=False, verbose=True, **hp):
         """
             Initialize teacher, sets member variables.
@@ -66,9 +66,8 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
-        self.conv_loss_thresh = 0.0001  # 
-        self.conv_window_size = 20  # Number of epochs to consider when checking for convergence
-        self.keep_prob = 1.0 # Probability of dropout during neural network training
+        self.conv_loss_thresh = 0.0001  # Threshold for loss convergence
+        self.conv_window_size = 10  # Number of epochs to consider when checking for convergence
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -90,9 +89,9 @@ class Teacher:
         if training_mode is None:
             training_mode = 'adagrad'
         self.training_mode = training_mode
-        self.train_step = self.nn.init_training(self.training_mode, learning_rate = self.hp['LEARNING_RATE'],
-                                                reg_const = self.hp['REGULARIZATION_CONST'], loss_fn = self.nn.MSE,
-                                                decay_rate= self.hp['DECAY_RATE'])
+        self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
+                                                reg_const=self.hp['REGULARIZATION_CONST'], loss_fn=self.nn.MSE,
+                                                decay_rate=self.hp['DECAY_RATE'])
 
         if self.verbose:
             print "Training neural net using %s." % self.training_mode
@@ -114,10 +113,9 @@ class Teacher:
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
         # Build unique file modifier which demarks final output files from this session
-        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"), 
-                                '_conv' if self.guerilla.nn.hp['USE_CONV'] else '',
-                                '_' + str(self.nn.hp['NUM_FC']))
-
+        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"),
+                                              '_conv' if self.guerilla.nn.hp['USE_CONV'] else '',
+                                              '_' + str(self.nn.hp['NUM_FC']))
 
     # ---------- RUNNING AND RESUMING METHODS
 
@@ -171,10 +169,7 @@ class Teacher:
                     print "Performing Bootstrap training!"
                     print "Fetching stockfish values..."
 
-                fens = cgp.load_fens(num_values=self.num_bootstrap)
-                if (len(fens) % self.hp['BATCH_SIZE']) != 0:
-                    fens = fens[:(-1) * (len(fens) % self.hp['BATCH_SIZE'])]
-                true_values = sf.load_stockfish_values(num_values=len(fens))
+                fens, true_values = self.load_data()
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_end':
@@ -197,6 +192,41 @@ class Teacher:
             if not self.saved:
                 # If not timed out
                 self.curr_action_idx += 1
+
+    def load_data(self, shuffle=True, seed=123456):
+        """
+        Loads FENs and corresponding Stockfish values. Optional shuffle.
+
+        Input:
+            shuffle [Boolean] (Optional)
+                If True then the FENs and corresponding Stockfish values are shuffled.
+            seed [Float] (Optional)
+                Seed for the random function. Used for reproducability. If 'None' then the seed is not set.
+
+        Output:
+            fens [List of Strings]
+                List of FENs.
+            sf [List of Floats]
+                List of Stockfish values corresponding to the fens list.
+        """
+
+        if seed:
+            random.seed(seed)
+
+        # load
+        fens = cgp.load_fens(num_values=self.num_bootstrap)
+        if (len(fens) % self.hp['BATCH_SIZE']) != 0:
+            fens = fens[:(-1) * (len(fens) % self.hp['BATCH_SIZE'])]
+        true_values = sf.load_stockfish_values(num_values=len(fens))
+
+        # Optional shuffle
+        if shuffle:
+            shuffle_idxs = range(len(fens))
+            random.shuffle(shuffle_idxs)
+            fens =[fens[i] for i in shuffle_idxs]
+            true_values = [true_values[i] for i in shuffle_idxs]
+
+        return fens, true_values
 
     def set_hyper_params_from_file(self, file):
         """
@@ -243,6 +273,7 @@ class Teacher:
                 "REGULARIZATION_CONST" - Constant used to determine value of
                                          regularization term
                 "DECAY_RATE" -Used in AdaDelta
+                "KEEP_PROB" - The complement of the dropout probability. Used during training.
             Inputs:
                 hyperparmeters [**kwargs]:
                     hyperparameters to update with
@@ -551,7 +582,7 @@ class Teacher:
 
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
-                boards[j] = dh.fen_to_nn_input(fens[game_indices[board_num]], 
+                boards[j] = dh.fen_to_nn_input(fens[game_indices[board_num]],
                                                self.nn.hp['NN_INPUT_TYPE'],
                                                self.nn.hp['NUM_CHANNELS'])
                 if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
@@ -559,7 +590,8 @@ class Teacher:
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
-            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values, self.nn.keep_prob: self.keep_prob}
+            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values,
+                          self.nn.keep_prob: self.self.hp['KEEP_PROB']}
             if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch
@@ -604,7 +636,7 @@ class Teacher:
         for i in xrange(num_batches):
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
-                boards[j] = dh.fen_to_nn_input(fens[board_num], 
+                boards[j] = dh.fen_to_nn_input(fens[board_num],
                                                self.nn.hp['NN_INPUT_TYPE'],
                                                self.nn.hp['NUM_CHANNELS'])
                 if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
@@ -638,7 +670,7 @@ class Teacher:
 
         # Check if any items in the window indicate non-convergence
         for i in range(1, self.conv_window_size + 1):
-            if abs(loss[- (i + 1)] - loss[-i]) > self.hp['LOSS_THRESHOLD']:
+            if loss[- (i + 1)] - loss[-i] > self.hp['LOSS_THRESHOLD']:
                 return False
 
         return True
@@ -1023,9 +1055,9 @@ def main():
         run_time = None
 
     with Guerilla('Harambe', 'w') as g:
-        g.search.max_depth = 1
+        g.search.max_depth = 2
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=1000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=10000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False

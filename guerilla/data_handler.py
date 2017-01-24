@@ -91,6 +91,8 @@ def fen_to_nn_input(fen, nn_type, num_channels=None):
         return fen_to_bitmap(fen, num_channels)
     elif nn_type == 'giraffe':
         return fen_to_giraffe(fen)
+    elif nn_type == 'movemap':
+        return fen_to_movemap(fen)
     else:
         raise NotImplementedError("Error: Unsupported Neural Net input type.")
 

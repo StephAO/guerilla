@@ -114,9 +114,13 @@ class Teacher:
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
         # Build unique file modifier which demarks final output files from this session
-        self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"), 
-                                '_conv' if self.guerilla.nn.hp['USE_CONV'] else '',
-                                '_' + str(self.nn.hp['NUM_FC']))
+        self.file_modifier = "_%s_%s_%s_%sFC.p" % (time.strftime("%m%d-%H%M"),
+                                self.nn.hp['NN_INPUT_TYPE'],
+                                'conv' if \
+                                    (self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' \
+                                     and self.guerilla.nn.hp['USE_CONV']) 
+                                    else '',
+                                str(self.nn.hp['NUM_FC']))
 
 
     # ---------- RUNNING AND RESUMING METHODS
@@ -534,7 +538,11 @@ class Teacher:
         num_batches = int(len(game_indices) / self.hp['BATCH_SIZE'])
 
         board_num = 0
-        if self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
+            # Configure data
+            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 48))
+            state_data = np.zeros((self.hp['BATCH_SIZE'], 15))
+        elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
         elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
             boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
@@ -551,16 +559,24 @@ class Teacher:
 
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
-                boards[j] = dh.fen_to_nn_input(fens[game_indices[board_num]], 
+                nn_input = dh.fen_to_nn_input(fens[game_indices[board_num]], 
                                                self.nn.hp['NN_INPUT_TYPE'],
                                                self.nn.hp['NUM_CHANNELS'])
-                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
+                if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
+                    state_data[j] = nn_input[0]
+                    boards[j] = nn_input[1]
+                elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
+                    boards[j] = nn_input
+                elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
+                    boards[j] = nn_input
                     diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values, self.nn.keep_prob: self.keep_prob}
-            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
+            if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
+                _feed_dict[self.nn.state_data] = state_data
+            elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch
             self.nn.sess.run([train_step], feed_dict=_feed_dict)
@@ -587,7 +603,11 @@ class Teacher:
 
         board_num = 0
 
-        if self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
+            # Configure data
+            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 48))
+            state_data = np.zeros((self.hp['BATCH_SIZE'], 15))
+        elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             # Configure data
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
 
@@ -604,16 +624,24 @@ class Teacher:
         for i in xrange(num_batches):
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
-                boards[j] = dh.fen_to_nn_input(fens[board_num], 
+                nn_input = dh.fen_to_nn_input(fens[board_num], 
                                                self.nn.hp['NN_INPUT_TYPE'],
                                                self.nn.hp['NUM_CHANNELS'])
-                if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
+                if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
+                    state_data[j] = nn_input[0]
+                    boards[j] = nn_input[1]
+                elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
+                    boards[j] = nn_input
+                elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
+                    boards[j] = nn_input
                     diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
                 true_values_batch[j] = true_values[board_num]
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values_batch}
-            if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
+            if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
+                _feed_dict[self.nn.state_data] = state_data
+            elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
 
             # Get batch loss
@@ -1023,9 +1051,9 @@ def main():
         run_time = None
 
     with Guerilla('Harambe', 'w') as g:
-        g.search.max_depth = 1
+        g.search.max_depth = 2
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=1000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=80000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False

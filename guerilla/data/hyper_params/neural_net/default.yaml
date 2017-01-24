@@ -1,4 +1,4 @@
-"NN_INPUT_TYPE" : "giraffe"
+"NN_INPUT_TYPE" : "movemap"
 "USE_CONV" : true
 "NUM_FC" : 3
 "NUM_HIDDEN" : 1024

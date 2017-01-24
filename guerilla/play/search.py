@@ -9,10 +9,10 @@ class Search:
     Implements game tree search.
     """
 
-    def __init__(self, eval_fn, max_depth=2, search_mode="recipromax"):
+    def __init__(self, eval_fn, max_depth=2, search_mode="complementmax"):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
-        self.search_opts = {"recipromax": self.recipromax,
+        self.search_opts = {"complementmax": self.complementmax,
                             "montecarlo": self.monte_carlo}
 
         if search_mode not in self.search_opts:
@@ -57,7 +57,7 @@ class Search:
                 n.simulate()
                 n.backpropagate()
 
-    def recipromax(self, board, depth=0, a=1.0):
+    def complementmax(self, board, depth=0, a=1.0):
         """ 
             Recursive function to search for best move using recipromax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -98,7 +98,7 @@ class Search:
                 # recursive call
                 board.push(move)
                 # print move
-                score, next_move, leaf_board = self.recipromax(board, depth + 1, 1 - best_score)
+                score, next_move, leaf_board = self.complementmax(board, depth + 1, 1 - best_score)
                 # Take reciprocal of score since alternating levels
                 score = 1 - score
                 board.pop()

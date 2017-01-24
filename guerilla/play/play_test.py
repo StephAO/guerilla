@@ -65,7 +65,7 @@ def white_search_test():
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluation function.
-    shallow = Search(eval_fn=basic_test_eval, max_depth=1, search_mode='recipromax')
+    shallow = Search(eval_fn=basic_test_eval, max_depth=1, search_mode='complementmax')
     score, move, _ = shallow.run(board)
     if (score == 0.6) and (str(move) == "b3b4"):
         return True
@@ -81,7 +81,7 @@ def black_search_test():
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluation function.
-    shallow = Search(eval_fn=basic_test_eval, max_depth=1, search_mode='recipromax')
+    shallow = Search(eval_fn=basic_test_eval, max_depth=1, search_mode='complementmax')
     score, move, _ = shallow.run(board)
     if (score == 0.6) and (str(move) == "b3b4"):
         return True
@@ -95,7 +95,7 @@ def checkmate_search_test():
     Tests that checkmates are working.
     """
 
-    s = Search(eval_fn=(lambda x: 1), search_mode='recipromax')
+    s = Search(eval_fn=(lambda x: 1), search_mode='complementmax')
     white_wins = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
     black_wins = chess.Board('8/8/8/8/8/2k5/1p6/rK6 w - - 0 1')
     result, _, _ = s.run(white_wins)
@@ -120,7 +120,7 @@ def minimax_pruning_test():
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
-    shallow = Search(eval_fn=minimax_test_eval, max_depth=3, search_mode='recipromax')
+    shallow = Search(eval_fn=minimax_test_eval, max_depth=3, search_mode='complementmax')
     score, move, _ = shallow.run(board)
     if (score == 0.6) and (str(move) == "b3b4"):
         return True

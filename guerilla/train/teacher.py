@@ -114,7 +114,7 @@ class Teacher:
 
         # Build unique file modifier which demarks final output files from this session
         self.file_modifier = "_%s%s%sFC.p" % (time.strftime("%m%d-%H%M"),
-                                              '_conv' if self.guerilla.nn.hp['USE_CONV'] else '',
+                                              '_' + self.nn.hp['NN_INPUT_TYPE'] if self.nn.hp['USE_CONV'] else '',
                                               '_' + str(self.nn.hp['NUM_FC']))
 
     # ---------- RUNNING AND RESUMING METHODS
@@ -591,7 +591,7 @@ class Teacher:
                 board_num += 1
 
             _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values,
-                          self.nn.keep_prob: self.self.hp['KEEP_PROB']}
+                          self.nn.keep_prob: self.hp['KEEP_PROB']}
             if self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                 _feed_dict[self.nn.data_diags] = diagonals
             # train batch

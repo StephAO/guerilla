@@ -568,7 +568,7 @@ def run_train_tests():
     success = True
     input_types = ['bitmap', 'giraffe']
     print "\nRunning Train Tests...\n"
-        
+
     print "--- Stockfish tests ---"
     for name, test in all_tests["Stockfish Tests"].iteritems():
         print "Testing " + name + "..."

@@ -159,7 +159,7 @@ def get_epds(filenames):
     return epds
 
 if __name__ == '__main__':
-    with Guerilla('Harambe', 'w', training_mode='adagrad', load_file='w_train_td_end_1219-2247_conv_4FC.p') as g:
+    with Guerilla('Harambe', 'w', training_mode='adagrad', load_file='w_train_bootstrap_0116-0154_conv_3FC.p') as g:
         g.search.max_depth = 2
-        print eval_sts(g, mode=sts_piece_files)
+        #print eval_sts(g, mode=sts_piece_files)
         print eval_sts(g, mode=sts_strat_files)

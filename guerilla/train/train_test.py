@@ -215,6 +215,8 @@ def training_test(nn_input_type, verbose=False):
 
 def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     """
+    NOTE: DEPRECATED. The test does not converge quickly (if at all). Replaced with learn_moves_test.
+
     Tests that Guerilla can learn the best moves in the Strategic Test Suite (STS).
     Fetches all the STS epds. Takes the top moves and gives them high probability of winning.
     Then randomly generates the same number of bad moves and gives them a low probability of winning.
@@ -339,7 +341,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     low_value = 0.1
 
     # Load fens
-    fen_multipler = 20
+    fen_multiplier = 20
     spacing = 100
     base_fens = cgp.load_fens(num_values=num_test*spacing)[::spacing] # So not all within the same game
 
@@ -359,8 +361,8 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
 
         # Score goal move highly
         board.push(goal_move)
-        fens += [dh.flip_board(board.fen())]*fen_multipler # Flip board and give low value since NN input must be white next
-        values += [1 - high_value]*fen_multipler
+        fens += [dh.flip_board(board.fen())]*fen_multiplier # Flip board and give low value since NN input must be white next
+        values += [1 - high_value]*fen_multiplier
         board.pop()
 
         # Build validation set
@@ -439,6 +441,14 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
     # Modify hyperparameters for a small training example.
     success = True
+    hp = {}
+    hp['NUM_EPOCHS'] = 5
+    hp['BATCH_SIZE'] = 5
+    hp['VALIDATION_SIZE'] = 5
+    hp['TRAIN_CHECK_SIZE'] = 5
+    hp['TD_LRN_RATE'] = 0.00001  # Learning rate
+    hp['TD_DISCOUNT'] = 0.7  # Discount rate
+    hp['LEARNING_RATE'] = 0.00001
 
     # Pickle path
     loss_path = resource_filename('guerilla', 'data/loss/')
@@ -458,7 +468,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run action
         with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose, hp_load_file = 'load_and_resume_test.yaml')
+            t = Teacher(g, test=True, verbose=verbose)
+            t.set_hyper_params(**hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
             t.set_sp_params(num_selfplay=3, max_length=5)
@@ -481,7 +492,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run resume
         with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose, hp_load_file = 'load_and_resume_test.yaml')
+            t = Teacher(g, test=True, verbose=verbose)
+            t.set_hyper_params(**hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
 
             # Run
@@ -528,7 +540,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Check that correct number of epochs is run
         with open(loss_path + 'loss_test.p', 'r') as f:
             loss = pickle.load(f)
-            if t.hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
+            if hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
                 error_msg += "On action %s there was the wrong number of epochs. " % action
                 error_msg += "Expected %d epochs, but got %d epochs." % (hp['NUM_EPOCHS'], len(loss['loss']) - 1)
                 success = False
@@ -556,7 +568,7 @@ def run_train_tests():
     success = True
     input_types = ['movemap', 'bitmap', 'giraffe',]
     print "\nRunning Train Tests...\n"
-        
+
     print "--- Stockfish tests ---"
     for name, test in all_tests["Stockfish Tests"].iteritems():
         print "Testing " + name + "..."
@@ -566,7 +578,7 @@ def run_train_tests():
 
     print "--- Training Tests ---"
     for it in input_types:
-        print "Testing using input type", it
+        print "Testing using input type", it.upper()
         for name, test in all_tests["Training Tests"].iteritems():
             print "Testing " + name + "..."
             if not test(it):

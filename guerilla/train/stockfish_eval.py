@@ -67,16 +67,16 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
 
                 if (sf_num + 1) % batch_size == 0:
                     mapped_scores = sigmoid_array(np.array(scores))
-                    for score in mapped_scores:
-                        sf_file.write(str(score) + '\n')
+                    for mscore in mapped_scores:
+                        sf_file.write(str(mscore) + '\n')
                     scores = []
 
                     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
                         num_file.write(str(sf_num))
 
             mapped_scores = sigmoid_array(np.array(scores))
-            for score in mapped_scores:
-                sf_file.write(str(score) + '\n')
+            for mscore in mapped_scores:
+                sf_file.write(str(mscore) + '\n')
 
     # Write out the index of the next fen to score
     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
@@ -134,8 +134,12 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
     output = output[0].split(' ')
     if output[0] == 'mate':
         mate_in = int(output[1])
+        if mate_in == 0:
+            # avoids division by zero
+            mate_in = 1e-9
         score = MATE_BASE * (1 + 1.0 / abs(mate_in))
         if mate_in < 0:
+            # White will LOSE in mate_in turns, therefore make the score negative
             score *= -1
     else:  # cp
         score = float(output[1])

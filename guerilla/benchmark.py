@@ -2,6 +2,7 @@
 import time
 import chess
 
+import guerilla.data_handler as dh
 from guerilla.players import Guerilla
 
 
@@ -48,14 +49,39 @@ def search_bench(max_depth=3, num_rep=3, verbose=True):
 
     return output
 
+def data_processing_bench():
+    fen = '3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24'
+    input_types = ['bitmap', 'giraffe', 'movemap']
+    for input_type in input_types:
+        start_time = time.time()
+        for _ in xrange(1000):
+            dh.fen_to_nn_input(fen, input_type, 12)
+        print '1000 iterations of fen to %s took %f seconds' % \
+              (input_type, time.time() - start_time)
+        
+def nn_evaluation_bench():
+    fen = '3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24'
+    input_types = ['bitmap', 'giraffe', 'movemap']
+    for input_type in input_types:
+        for num_fc in xrange(1, 5):
+            start_time = time.time()
+            with Guerilla('curious_george','w', verbose=False, 
+                NUM_FC=num_fc, NN_INPUT_TYPE=input_type) as g:
+                for _ in xrange(100):
+                    g.nn.evaluate(fen)
+            print '100 iterations of evaluate using %s with %d fc layers took %f seconds' % \
+                  (input_type, num_fc, time.time() - start_time)
+
 def run_benchmark_tests():
     benchmarks = {
-        'Search': search_bench
+        #'Search': search_bench,
+        'Data Processing': data_processing_bench,
+        'Evaluation' : nn_evaluation_bench
     }
 
-    print "\nRunning Benchmarks...\n"
+    print "\nRunning Benchmarks..."
     for name, test in benchmarks.iteritems():
-        print "Running " + name + " Benchmark..."
+        print "\nRunning " + name + " Benchmark..."
         test()
 
 if __name__ == '__main__':

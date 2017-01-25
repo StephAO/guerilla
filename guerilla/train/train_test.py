@@ -555,15 +555,13 @@ def run_train_tests():
     all_tests["Stockfish Tests"] = {
         #'Stockfish Handling': stockfish_test,
         #'NSV Alignment': nsv_test
-                                    }
+    }
 
     all_tests["Training Tests"] = {
         'Training': training_test,
         'Load and Resume': load_and_resume_test,
         'Learn Moves': learn_moves_test
     }
-
-    
 
     success = True
     input_types = ['movemap', 'bitmap', 'giraffe',]

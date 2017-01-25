@@ -28,6 +28,43 @@ S_IDX_PIECE_LIST = 15
 S_IDX_ATKDEF_MAP = 223
 GF_FULL_SIZE = 351
 
+crosswise_fn = [
+    lambda x: np.array([0, -x - 1]), # left
+    lambda x: np.array([0, +x + 1]), # right
+    lambda x: np.array([-x - 1, 0]), # down
+    lambda x: np.array([+x + 1, 0])  # up
+]
+
+crosswise = []
+for fn in crosswise_fn:
+    crosswise.extend([fn(i) for i in xrange(0, BOARD_LENGTH - 1)])
+
+diagonals_fn = [
+    lambda x: np.array([-x - 1, -x - 1]), # down left
+    lambda x: np.array([+x + 1, +x + 1]), # up right
+    lambda x: np.array([+x + 1, -x - 1]), # up left
+    lambda x: np.array([-x - 1, +x + 1])  # down right
+]
+
+diagonals = []
+for fn in diagonals_fn:
+    diagonals.extend([fn(i) for i in xrange(0, BOARD_LENGTH - 1)])
+
+knight_moves = [np.array(x) for x in [[1, 2], [2, 1], [2, -1], [1, -2], 
+                                      [-1, -2], [-2, -1], [-2, 1], [-1, 2]]]
+pawn_moves = [np.array(x) for x in [[1, 1], [1, -1]]]
+king_moves = [np.array(x) for x in [[1, 0], [1, 1], [0, 1], [-1, 1], 
+                                    [-1, 0], [-1, -1], [0, -1], [1, -1]]]
+
+piece_moves = {
+    'q': crosswise + diagonals,
+    'r': crosswise,
+    'b': diagonals,
+    'n': knight_moves,
+    'p': pawn_moves,
+    'k': king_moves
+}
+
 def flip_board(fen):
     """ switch colors of pieces
         input:
@@ -457,74 +494,42 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
             mm[list]:
                 move map input
     """
-    crosswise_fn = [
-        lambda x: np.array([0, -x - 1]), # left
-        lambda x: np.array([0, +x + 1]), # right
-        lambda x: np.array([-x - 1, 0]), # down
-        lambda x: np.array([+x + 1, 0])  # up
-    ]
-
-    crosswise = []
-    for fn in crosswise_fn:
-        crosswise.extend([fn(i) for i in xrange(0, BOARD_LENGTH)])
-
-    diagonals_fn = [
-        lambda x: np.array([-x - 1, -x - 1]), # down left
-        lambda x: np.array([+x + 1, +x + 1]), # up right
-        lambda x: np.array([+x + 1, -x - 1]), # up left
-        lambda x: np.array([-x - 1, +x + 1])  # down right
-    ]
-
-    diagonals = []
-    for fn in diagonals_fn:
-        diagonals.extend([fn(i) for i in xrange(0, BOARD_LENGTH)])
-
-    knight_moves = [np.array(x) for x in [[1, 2], [2, 1], [2, -1], [1, -2], 
-                                          [-1, -2], [-2, -1], [-2, 1], [-1, 2]]]
-    pawn_moves = [np.array(x) for x in ([[1, 1], [1, -1]] if piece[0] == 'w' else \
-                                        [[-1, 1], [-1, -1]])]
-    king_moves = [np.array(x) for x in [[1, 0], [1, 1], [0, 1], [-1, 1], 
-                                        [-1, 0], [-1, -1], [0, -1], [1, -1]]]
-
-    piece_moves = {
-        'q': crosswise + diagonals,
-        'r': crosswise,
-        'b': diagonals,
-        'n': knight_moves,
-        'p': pawn_moves,
-        'k': king_moves
-    }
-
-    pos = np.array([c_rank, c_file])
+    piece_colour = piece[0]
+    piece_type = piece[1]
+    pos = np.array([c_rank, c_file])  
+    still_sliding = True
+    i = 0
     
-    if piece[1] in ['q', 'r', 'b']:
-        still_sliding = True
+    while i < (len(piece_moves[piece_type])):
+        move = piece_moves[piece_type][i]
 
-    for i, move in enumerate(piece_moves[piece[1]]):
-        # tile to check
-        if piece[1] in ['q', 'r', 'b'] and not still_sliding:
-            if i % BOARD_LENGTH == 0:
-                still_sliding = True
-            else:
-                continue
+        if piece_type == 'p' and piece_colour == 'b':
+            move[0] *= (-1)
 
         r, f = pos + move
         # Out of bounds
         if not in_bounds(r, f):
             still_sliding = False
-            continue
-
-        if piece[1] == 'p':
-            full_piece = piece + ('1' if f > c_file else '2')
         else:
-            full_piece = piece
 
-        # Set map
-        mm[r][f][piece_move_slice[full_piece]] = [c_rank, c_file]
+            if piece_type == 'p':
+                full_piece = piece + ('1' if f > c_file else '2')
+            else:
+                full_piece = piece
 
-        # End of slide (piece in the way)
-        if piece[1] in ['q', 'r', 'b'] and occupied_bitmap[r][f] != 0:
-            still_sliding = False
+            # Set map
+            mm[r][f][piece_move_slice[full_piece]] = [c_rank, c_file]
+
+            # End of slide (piece in the way)
+            if occupied_bitmap[r][f] != 0:
+                still_sliding = False
+
+        if piece_type in ['q', 'r', 'b'] and not still_sliding:
+            i += (BOARD_LENGTH - 1) - (i % (BOARD_LENGTH - 1))
+            still_sliding = True
+        else:
+            i += 1
+            
 
 def fen_to_movemap(fen):
     """ 

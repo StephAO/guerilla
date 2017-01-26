@@ -47,7 +47,9 @@ class NeuralNet:
         self._set_hyper_params_from_file(hp_load_file)
         self._set_hyper_params(**hp)
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.variable_value = 0.01
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.variable_value = 0.001
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             self.variable_value = 0.1
@@ -60,14 +62,18 @@ class NeuralNet:
 
         # declare layer variables
         self.sess = None
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.W_state = None
+            self.W_board = None
+            self.b_state = None
+            self.b_board = None
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.W_state = None
             self.W_piece = None
             self.W_board = None
             self.b_state = None
             self.b_piece = None
             self.b_board = None
-
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
             self.W_grid = None
             self.W_rank = None
@@ -97,7 +103,9 @@ class NeuralNet:
         # Currently the order is necessary for assignment operators
         self.all_weights_biases = []
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.all_weights_biases.extend([self.W_state, self.W_board])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.all_weights_biases.extend([self.W_state, self.W_piece, self.W_board])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
             self.all_weights_biases.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
@@ -107,25 +115,34 @@ class NeuralNet:
         # Store all weights
         self.all_weights = list(self.all_weights_biases)
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.all_weights_biases.extend([self.b_state, self.b_board])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.all_weights_biases.extend([self.b_state, self.b_piece, self.b_board])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
             self.all_weights_biases.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
         self.all_weights_biases.extend(self.b_fc)
         self.all_weights_biases.append(self.b_final)
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            # subsets of weights and biases
+            self.base_weights = [self.W_state, self.W_board]
+            self.base_biases = [self.b_state, self.b_board]
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             # subsets of weights and biases
             self.base_weights = [self.W_state, self.W_piece, self.W_board]
             self.base_biases = [self.b_state, self.b_piece, self.b_board]
-
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
             # subsets of weights and biases
             self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
             self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
 
         # input placeholders
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, 48])
+            self.state_data = tf.placeholder(tf.float32, shape=[None, 15])
+            self.true_value = tf.placeholder(tf.float32, shape=[None])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.data = tf.placeholder(tf.float32, shape=[None, dh.GF_FULL_SIZE])
             self.true_value = tf.placeholder(tf.float32, shape=[None])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
@@ -134,7 +151,13 @@ class NeuralNet:
             self.true_value = tf.placeholder(tf.float32, shape=[None])
 
         # assignment placeholders
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.W_state_placeholder = tf.placeholder(tf.float32, shape=[15, 64])
+            self.W_board_placeholder = tf.placeholder(tf.float32, shape=[8 * 8 * 48, 960])
+
+            self.b_state_placeholder = tf.placeholder(tf.float32, shape=[64])
+            self.b_board_placeholder = tf.placeholder(tf.float32, shape=[960])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             # Divide first hidden layer into 3 parts to prevent overfitting
             # TODO: Currently equally divided into 3, although maybe this should be changed
             num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
@@ -145,7 +168,6 @@ class NeuralNet:
             self.b_state_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
             self.b_piece_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
             self.b_board_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
-
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
             self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
             self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
@@ -159,7 +181,10 @@ class NeuralNet:
 
         self.W_fc_placeholders = [None] * self.hp['NUM_FC']
         self.b_fc_placeholders = [None] * self.hp['NUM_FC']
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
+                                                       shape=[self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
                                                        shape=[num_hidden_subgroup * 3, self.hp['NUM_HIDDEN']])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -178,7 +203,10 @@ class NeuralNet:
 
         # same order as all weights
         self.all_placeholders = []
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.all_placeholders.extend(
+                [self.W_state_placeholder, self.W_board_placeholder])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.all_placeholders.extend(
                 [self.W_state_placeholder, self.W_piece_placeholder, self.W_board_placeholder])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -187,7 +215,10 @@ class NeuralNet:
         self.all_placeholders.extend(self.W_fc_placeholders)
         self.all_placeholders.append(self.W_final_placeholder)
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.all_placeholders.extend(
+                [self.b_state_placeholder, self.b_board_placeholder])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.all_placeholders.extend(
                 [self.b_state_placeholder, self.b_piece_placeholder, self.b_board_placeholder])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -197,7 +228,13 @@ class NeuralNet:
         self.all_placeholders.append(self.b_final_placeholder)
 
         # create assignment operators
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.W_state_assignment = self.W_state.assign(self.W_state_placeholder)
+            self.W_board_assignment = self.W_board.assign(self.W_board_placeholder)
+
+            self.b_state_assignment = self.b_state.assign(self.b_state_placeholder)
+            self.b_board_assignment = self.b_board.assign(self.b_board_placeholder)
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.W_state_assignment = self.W_state.assign(self.W_state_placeholder)
             self.W_piece_assignment = self.W_piece.assign(self.W_piece_placeholder)
             self.W_board_assignment = self.W_board.assign(self.W_board_placeholder)
@@ -218,7 +255,7 @@ class NeuralNet:
             self.b_diag_assignment = self.b_diag.assign(self.b_diag_placeholder)
 
         self.W_fc_assignments = [None] * self.hp['NUM_FC']
-        self.b_fc_assignments = [None] *self.hp['NUM_FC']
+        self.b_fc_assignments = [None] * self.hp['NUM_FC']
         for i in xrange(self.hp['NUM_FC']):
             self.W_fc_assignments[i] = (self.W_fc[i].assign(self.W_fc_placeholders[i]))
             self.b_fc_assignments[i] = (self.b_fc[i].assign(self.b_fc_placeholders[i]))
@@ -229,7 +266,10 @@ class NeuralNet:
         # same order as all weights and all placeholders
         self.all_assignments = []
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.all_assignments.extend(
+                [self.W_state_assignment, self.W_board_assignment])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.all_assignments.extend(
                 [self.W_state_assignment, self.W_piece_assignment, self.W_board_assignment])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -238,7 +278,10 @@ class NeuralNet:
         self.all_assignments.extend(self.W_fc_assignments)
         self.all_assignments.append(self.W_final_assignment)
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.all_assignments.extend(
+                [self.b_state_assignment, self.b_board_assignment])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.all_assignments.extend(
                 [self.b_state_assignment, self.b_piece_assignment, self.b_board_assignment])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -323,7 +366,13 @@ class NeuralNet:
             Initializes all weight variables to normal distribution, and all
             bias variables to a constant.
         """
-        if self.hp['NN_INPUT_TYPE'] == "giraffe":
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.W_state = self.weight_variable([15, 64])
+            self.W_board = self.weight_variable([8 * 8 * 48, 960])
+
+            self.b_state = self.bias_variable([64])
+            self.b_board = self.bias_variable([960])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
             self.W_state = self.weight_variable([dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
             self.W_piece = self.weight_variable([dh.S_IDX_ATKDEF_MAP - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
@@ -347,7 +396,9 @@ class NeuralNet:
             self.b_diag = self.bias_variable([self.hp['NUM_FEAT']])
 
         # fully connected layer 1, weights + biases
-        if self.hp['NN_INPUT_TYPE'] == "giraffe":
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            self.W_fc[0] = self.weight_variable([self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.W_fc[0] = self.weight_variable([num_hidden_subgroup * 3, self.hp['NUM_HIDDEN']])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
             self.W_fc[0] = self.weight_variable([self.conv_layer_size * self.hp['NUM_FEAT'], self.hp['NUM_HIDDEN']])
@@ -524,7 +575,9 @@ class NeuralNet:
         values_dict = pickle.load(open(pickle_path, 'rb'))
 
         weight_values = []
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            weight_values.extend([values_dict['W_state'], values_dict['W_board']])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             weight_values.extend([values_dict['W_state'], values_dict['W_piece'],
                                   values_dict['W_board']])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -533,7 +586,9 @@ class NeuralNet:
         weight_values.extend(values_dict['W_fc'])
         weight_values.append(values_dict['W_final'])
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            weight_values.extend([values_dict['b_state'], values_dict['b_board']])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             weight_values.extend([values_dict['b_state'], values_dict['b_piece'],
                                   values_dict['b_board']])
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
@@ -563,7 +618,12 @@ class NeuralNet:
         """
         weight_values = dict()
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            weight_values['W_state'], weight_values['W_board'], \
+            weight_values['b_state'], weight_values['b_board'] = \
+            self.sess.run([self.W_state,self.W_board, \
+                               self.b_state, self.b_board])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             weight_values['W_state'], weight_values['W_piece'], weight_values['W_board'], \
             weight_values['b_state'], weight_values['b_piece'], weight_values['b_board'] = \
             self.sess.run([self.W_state, self.W_piece, self.W_board, \
@@ -604,7 +664,21 @@ class NeuralNet:
 
         o_fc = [None] * self.hp['NUM_FC']
 
-        if self.hp['NN_INPUT_TYPE'] == 'giraffe':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            # Output of each subgroup
+            board_data = tf.reshape(self.data, [batch_size, 3072])
+            o_state = tf.nn.relu(tf.matmul(self.state_data, self.W_state) + self.b_state)
+            o_board = tf.nn.relu(tf.matmul(board_data, self.W_board) + self.b_board)
+
+            o_state = tf.reshape(o_state, [batch_size, 64])
+            o_board = tf.reshape(o_board, [batch_size, 960])
+
+            # Combine output of 3 subgroups
+            o_conn = tf.concat(1, [o_state, o_board])
+
+            # output of fully connected layer 1
+            o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
+        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             # Output of each subgroup
             num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
             state_data = tf.slice(self.data, [0, 0], [-1, dh.S_IDX_PIECE_LIST])
@@ -728,7 +802,10 @@ class NeuralNet:
         feed_dict = {}
         board = dh.fen_to_nn_input(fen, self.hp['NN_INPUT_TYPE'], 
                                    num_channels=self.hp['NUM_CHANNELS'])
-        if self.hp['NN_INPUT_TYPE'] == 'bitmap':
+        if self.hp['NN_INPUT_TYPE'] == 'movemap':
+            feed_dict[self.state_data] = np.array([board[0]])
+            board = board[1]
+        elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             diagonal = dh.get_diagonals(board, self.hp['NUM_CHANNELS'])
             diagonal = np.array([diagonal])
             feed_dict[self.data_diags] = diagonal

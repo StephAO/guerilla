@@ -553,9 +553,9 @@ def load_and_resume_test(nn_input_type, verbose=False):
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
-        'Stockfish Handling': stockfish_test,
-        'NSV Alignment': nsv_test
-                                    }
+        #'Stockfish Handling': stockfish_test,
+        #'NSV Alignment': nsv_test
+    }
 
     all_tests["Training Tests"] = {
         'Training': training_test,
@@ -563,10 +563,8 @@ def run_train_tests():
         'Learn Moves': learn_moves_test
     }
 
-    
-
     success = True
-    input_types = ['bitmap', 'giraffe']
+    input_types = ['movemap', 'bitmap', 'giraffe',]
     print "\nRunning Train Tests...\n"
 
     print "--- Stockfish tests ---"

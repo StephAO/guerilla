@@ -11,7 +11,7 @@ class NeuralNet:
 
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, load_file=None, hp_load_file=None, verbose=True, **hp):
+    def __init__(self, load_file=None, hp_load_file=None, seed=None, verbose=True, **hp):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -23,6 +23,8 @@ class NeuralNet:
                     The filename from which hyper parameters should be laoded from.
                     If 'None' then keyword arguments will be used (if not
                     provided, then default).
+                seed [Int]
+                    Value for the graph-level seed. If 'None', seed is not set. Default is 'None'.
                 verbose [Bool]:
                     Enables Verbose mode.
                 **hp[**kwargs]:
@@ -34,6 +36,11 @@ class NeuralNet:
         self.load_file = load_file
         self.verbose = verbose
         self.hp = {}
+
+        # set random seed
+        if seed is not None:
+            tf.set_random_seed(seed)
+
 
         if hp_load_file is None:
             hp_load_file = 'default.yaml'

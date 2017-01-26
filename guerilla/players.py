@@ -59,10 +59,10 @@ class Player:
 
 
 class Guerilla(Player):
-    def __init__(self, name, colour=None, load_file=None, hp_load_file=None, 
+    def __init__(self, name, colour=None, load_file=None, hp_load_file=None, seed=None,
                     verbose=True, **kwargs):
         super(Guerilla, self).__init__(name, colour)
-        self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, 
+        self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, seed=seed,
                             verbose=verbose, **kwargs)
         self.search = Search(self.nn.evaluate)
 

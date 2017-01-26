@@ -22,6 +22,9 @@ def search_bench(max_depth=3, num_rep=3, verbose=True):
 
     output = {}
 
+    # Random seed
+    rnd_seed = 1234
+
     # Random board
     board = chess.Board('3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24')
 
@@ -29,8 +32,8 @@ def search_bench(max_depth=3, num_rep=3, verbose=True):
         print "Each timing is the average of %d runs" % num_rep
 
     # Create Guerilla with Random weights:
-    with Guerilla('curious_george','w', verbose=False) as g:
-        for i in range(3, max_depth + 1):
+    with Guerilla('curious_george','w', verbose=True, seed=rnd_seed) as g:
+        for i in range(max_depth + 1):
             g.search.max_depth = i
 
             # Time multiple repetitions

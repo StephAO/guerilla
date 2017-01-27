@@ -41,18 +41,29 @@ class NeuralNet:
         if seed is not None:
             tf.set_random_seed(seed)
 
-
         if hp_load_file is None:
             hp_load_file = 'default.yaml'
         self._set_hyper_params_from_file(hp_load_file)
         self._set_hyper_params(**hp)
 
+        # Always list different input structures in increasing order of size
+        self.total_input_size = 0
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.variable_value = 0.01
+            self.input_sizes = [(dh.STATE_DATA_SIZE), 
+                                (dh.BOARD_LENGTH, dh.BOARD_LENGTH, 48)]
+            # Used for convolution
+            self.size_per_tile = 48
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.variable_value = 0.001
+            self.input_sizes = [(dh.STATE_DATA_SIZE), \
+                                (dh.BOARD_DATA_SIZE), (dh.PIECE_DATA_SIZE)]
+            self.hp['USE_CONV'] = False
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             self.variable_value = 0.1
+            self.input_sizes = [(dh.BOARD_LENGTH, dh.BOARD_LENGTH, 12)]
+            # Used for convolution
+            self.size_per_tile = 12
         else:
             raise NotImplementedError("Neural Net input type %s is not implemented" % (self.hp['NN_INPUT_TYPE']))
 
@@ -62,19 +73,11 @@ class NeuralNet:
 
         # declare layer variables
         self.sess = None
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_state = None
-            self.W_board = None
-            self.b_state = None
-            self.b_board = None
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.W_state = None
-            self.W_piece = None
-            self.W_board = None
-            self.b_state = None
-            self.b_piece = None
-            self.b_board = None
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
+        
+        # Weights for first layer
+        self.W_l1 = []
+        self.b_l1 = []
+        if self.hp['USE_CONV']:
             self.W_grid = None
             self.W_rank = None
             self.W_file = None
@@ -83,10 +86,23 @@ class NeuralNet:
             self.b_rank = None
             self.b_file = None
             self.b_diag = None
+            
+        # Weights for fully connected layers    
         self.W_fc = [None] * self.hp['NUM_FC']
         self.b_fc = [None] * self.hp['NUM_FC']
         self.W_final = None
         self.b_final = None
+        self.all_weights_biases = []
+
+        self.W_l1_placeholders = []
+        self.b_l1_placeholders = []
+        self.W_fc_placeholders = [None] * self.hp['NUM_FC']
+        self.b_fc_placeholders = [None] * self.hp['NUM_FC']
+        self.W_final_placeholder = None
+        self.b_final_placeholder = None
+        # all weights + biases
+        # Currently the order is necessary for assignment operators
+        self.all_placeholders = []
 
         # declare output variable
         self.pred_value = None
@@ -96,199 +112,30 @@ class NeuralNet:
 
         self.conv_layer_size = 64 + 8 + 8 + 10  # 90
 
-        # define all variables
+        # define all variables and their assignment placeholders
         self.define_tf_variables()
 
-        # all weights + biases
-        # Currently the order is necessary for assignment operators
-        self.all_weights_biases = []
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.all_weights_biases.extend([self.W_state, self.W_board])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_weights_biases.extend([self.W_state, self.W_piece, self.W_board])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.all_weights_biases.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
-        self.all_weights_biases.extend(self.W_fc)
-        self.all_weights_biases.append(self.W_final)
-
-        # Store all weights
-        self.all_weights = list(self.all_weights_biases)
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.all_weights_biases.extend([self.b_state, self.b_board])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_weights_biases.extend([self.b_state, self.b_piece, self.b_board])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.all_weights_biases.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
-        self.all_weights_biases.extend(self.b_fc)
-        self.all_weights_biases.append(self.b_final)
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            # subsets of weights and biases
-            self.base_weights = [self.W_state, self.W_board]
-            self.base_biases = [self.b_state, self.b_board]
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            # subsets of weights and biases
-            self.base_weights = [self.W_state, self.W_piece, self.W_board]
-            self.base_biases = [self.b_state, self.b_piece, self.b_board]
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            # subsets of weights and biases
-            self.base_weights = [self.W_grid, self.W_rank, self.W_file, self.W_diag]
-            self.base_biases = [self.b_grid, self.b_rank, self.b_file, self.b_diag]
-
         # input placeholders
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, 48])
-            self.state_data = tf.placeholder(tf.float32, shape=[None, 15])
-            self.true_value = tf.placeholder(tf.float32, shape=[None])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.data = tf.placeholder(tf.float32, shape=[None, dh.GF_FULL_SIZE])
-            self.true_value = tf.placeholder(tf.float32, shape=[None])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
-            self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, self.hp['NUM_CHANNELS']])
-            self.data_diags = tf.placeholder(tf.float32, shape=[None, 10, 8, self.hp['NUM_CHANNELS']])
-            self.true_value = tf.placeholder(tf.float32, shape=[None])
-
-        # assignment placeholders
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_state_placeholder = tf.placeholder(tf.float32, shape=[15, 64])
-            self.W_board_placeholder = tf.placeholder(tf.float32, shape=[8 * 8 * 48, 960])
-
-            self.b_state_placeholder = tf.placeholder(tf.float32, shape=[64])
-            self.b_board_placeholder = tf.placeholder(tf.float32, shape=[960])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            # Divide first hidden layer into 3 parts to prevent overfitting
-            # TODO: Currently equally divided into 3, although maybe this should be changed
-            num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
-            self.W_state_placeholder = tf.placeholder(tf.float32, shape=[dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_piece_placeholder = tf.placeholder(tf.float32, shape=[dh.BOARD_DATA_SIZE - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_board_placeholder = tf.placeholder(tf.float32, shape=[dh.GF_FULL_SIZE - dh.BOARD_DATA_SIZE, num_hidden_subgroup])
-
-            self.b_state_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
-            self.b_piece_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
-            self.b_board_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-            self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-            self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-            self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-
-            self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            self.b_file_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-
-        self.W_fc_placeholders = [None] * self.hp['NUM_FC']
-        self.b_fc_placeholders = [None] * self.hp['NUM_FC']
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
-                                                       shape=[self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
-                                                       shape=[num_hidden_subgroup * 3, self.hp['NUM_HIDDEN']])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.W_fc_placeholders[0] = tf.placeholder(tf.float32,
-                                                       shape=[self.conv_layer_size * self.hp['NUM_FEAT'], self.hp['NUM_HIDDEN']])
-        else:
-            self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[8 * 8 * self.hp['NUM_CHANNELS'], self.hp['NUM_HIDDEN']])
-        self.b_fc_placeholders[0] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN']])
-
-        for i in xrange(1, self.hp['NUM_FC']):
-            self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
-            self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN']])
-
-        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], 1])
-        self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
-
-        # same order as all weights
-        self.all_placeholders = []
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.all_placeholders.extend(
-                [self.W_state_placeholder, self.W_board_placeholder])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_placeholders.extend(
-                [self.W_state_placeholder, self.W_piece_placeholder, self.W_board_placeholder])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.all_placeholders.extend(
-                [self.W_grid_placeholder, self.W_rank_placeholder, self.W_file_placeholder, self.W_diag_placeholder])
-        self.all_placeholders.extend(self.W_fc_placeholders)
-        self.all_placeholders.append(self.W_final_placeholder)
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.all_placeholders.extend(
-                [self.b_state_placeholder, self.b_board_placeholder])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_placeholders.extend(
-                [self.b_state_placeholder, self.b_piece_placeholder, self.b_board_placeholder])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.all_placeholders.extend(
-                [self.b_grid_placeholder, self.b_rank_placeholder, self.b_file_placeholder, self.b_diag_placeholder])
-        self.all_placeholders.extend(self.b_fc_placeholders)
-        self.all_placeholders.append(self.b_final_placeholder)
+        self.true_value = tf.placeholder(tf.float32, shape=[None])
+        self.input_data_placeholders = []
+        for input_size in self.input_sizes:
+            self.total_input_size += float(np.prod(input_size))
+            _shape = [None] + list(input_size)
+            self.input_data_placeholders.append(tf.placeholder(
+                                                tf.float32, shape=_shape))
+        if self.hp['USE_CONV']:
+            _shape = [None, 10, 8, self.size_per_tile]
+            self.diagonal_placeholders = tf.placeholder(tf.float32, shape=_shape)
 
         # create assignment operators
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_state_assignment = self.W_state.assign(self.W_state_placeholder)
-            self.W_board_assignment = self.W_board.assign(self.W_board_placeholder)
-
-            self.b_state_assignment = self.b_state.assign(self.b_state_placeholder)
-            self.b_board_assignment = self.b_board.assign(self.b_board_placeholder)
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.W_state_assignment = self.W_state.assign(self.W_state_placeholder)
-            self.W_piece_assignment = self.W_piece.assign(self.W_piece_placeholder)
-            self.W_board_assignment = self.W_board.assign(self.W_board_placeholder)
-
-            self.b_state_assignment = self.b_state.assign(self.b_state_placeholder)
-            self.b_piece_assignment = self.b_piece.assign(self.b_piece_placeholder)
-            self.b_board_assignment = self.b_board.assign(self.b_board_placeholder)
-
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.W_grid_assignment = self.W_grid.assign(self.W_grid_placeholder)
-            self.W_rank_assignment = self.W_rank.assign(self.W_rank_placeholder)
-            self.W_file_assignment = self.W_file.assign(self.W_file_placeholder)
-            self.W_diag_assignment = self.W_diag.assign(self.W_diag_placeholder)
-
-            self.b_grid_assignment = self.b_grid.assign(self.b_grid_placeholder)
-            self.b_rank_assignment = self.b_rank.assign(self.b_rank_placeholder)
-            self.b_file_assignment = self.b_file.assign(self.b_file_placeholder)
-            self.b_diag_assignment = self.b_diag.assign(self.b_diag_placeholder)
-
-        self.W_fc_assignments = [None] * self.hp['NUM_FC']
-        self.b_fc_assignments = [None] * self.hp['NUM_FC']
-        for i in xrange(self.hp['NUM_FC']):
-            self.W_fc_assignments[i] = (self.W_fc[i].assign(self.W_fc_placeholders[i]))
-            self.b_fc_assignments[i] = (self.b_fc[i].assign(self.b_fc_placeholders[i]))
-
-        self.W_final_assignment = self.W_final.assign(self.W_final_placeholder)
-        self.b_final_assignment = self.b_final.assign(self.b_final_placeholder)
-
-        # same order as all weights and all placeholders
+        if len(self.all_weights_biases) != len(self.all_placeholders):
+            raise ValueError("There are an unequal number of weights (%d) and"
+                             "placeholders for those weights" %
+                             len(self.all_weights_biases), len(self.all_placeholders))
         self.all_assignments = []
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.all_assignments.extend(
-                [self.W_state_assignment, self.W_board_assignment])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_assignments.extend(
-                [self.W_state_assignment, self.W_piece_assignment, self.W_board_assignment])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.all_assignments.extend(
-                [self.W_grid_assignment, self.W_rank_assignment, self.W_file_assignment, self.W_diag_assignment])
-        self.all_assignments.extend(self.W_fc_assignments)
-        self.all_assignments.append(self.W_final_assignment)
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.all_assignments.extend(
-                [self.b_state_assignment, self.b_board_assignment])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.all_assignments.extend(
-                [self.b_state_assignment, self.b_piece_assignment, self.b_board_assignment])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.all_assignments.extend(
-                [self.b_grid_assignment, self.b_rank_assignment, self.b_file_assignment, self.b_diag_assignment])
-        self.all_assignments.extend(self.b_fc_assignments)
-        self.all_assignments.append(self.b_final_assignment)
+        for i in xrange(len(self.all_weights_biases)):
+            self.all_assignments.append(self.all_weights_biases[i].assign(
+                                        self.all_placeholders[i]))
 
         # create neural net graph
         self.neural_net()
@@ -364,56 +211,94 @@ class NeuralNet:
     def define_tf_variables(self):
         """
             Initializes all weight variables to normal distribution, and all
-            bias variables to a constant.
+            bias variables to a constant. Also sets weight and bias assignment
+            placeholders.
         """
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_state = self.weight_variable([15, 64])
-            self.W_board = self.weight_variable([8 * 8 * 48, 960])
-
-            self.b_state = self.bias_variable([64])
-            self.b_board = self.bias_variable([960])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
-            self.W_state = self.weight_variable([dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_piece = self.weight_variable([dh.BOARD_DATA_SIZE - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_board = self.weight_variable([dh.GF_FULL_SIZE - dh.BOARD_DATA_SIZE, num_hidden_subgroup])
-
-            self.b_state = self.bias_variable([num_hidden_subgroup])
-            self.b_piece = self.bias_variable([num_hidden_subgroup])
-            self.b_board = self.bias_variable([num_hidden_subgroup])
-
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
+        # Weight and bias assignment placeholders
+        if self.hp['USE_CONV']:
             # conv weights
-            self.W_grid = self.weight_variable([5, 5, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-            self.W_rank = self.weight_variable([1, 8, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-            self.W_file = self.weight_variable([8, 1, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
-            self.W_diag = self.weight_variable([1, 8, self.hp['NUM_CHANNELS'], self.hp['NUM_FEAT']])
+            self.W_grid = self.weight_variable([5, 5, self.size_per_tile , self.hp['NUM_FEAT']])
+            self.W_rank = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+            self.W_file = self.weight_variable([8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
+            self.W_diag = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+            self.W_l1.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
 
             # conv biases
             self.b_grid = self.bias_variable([self.hp['NUM_FEAT']])
             self.b_rank = self.bias_variable([self.hp['NUM_FEAT']])
             self.b_file = self.bias_variable([self.hp['NUM_FEAT']])
             self.b_diag = self.bias_variable([self.hp['NUM_FEAT']])
+            self.b_l1.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
 
-        # fully connected layer 1, weights + biases
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_fc[0] = self.weight_variable([self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.W_fc[0] = self.weight_variable([num_hidden_subgroup * 3, self.hp['NUM_HIDDEN']])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            self.W_fc[0] = self.weight_variable([self.conv_layer_size * self.hp['NUM_FEAT'], self.hp['NUM_HIDDEN']])
+            self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
+            self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+            self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
+            self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+            
+            self.W_l1_placeholders.extend([self.W_grid_placeholder, 
+                                           self.W_rank_placeholder, 
+                                           self.W_file_placeholder, 
+                                           self.W_diag_placeholder])
+
+            self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+            self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+            self.b_file_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+            self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+            
+            self.b_l1_placeholders.extend([self.b_grid_placeholder, 
+                                           self.b_rank_placeholder, 
+                                           self.b_file_placeholder, 
+                                           self.b_diag_placeholder])
         else:
-            self.W_fc[0] = self.weight_variable([8 * 8 * self.hp['NUM_CHANNELS'], self.hp['NUM_HIDDEN']])
-        self.b_fc[0] = self.bias_variable([self.hp['NUM_HIDDEN']])
+            nodes_left = self.hp['NUM_HIDDEN']
+            for input_size in self.input_sizes:
+                if nodes_left < self.hp['MIN_NUM_NODES']:
+                    raise ValueError("Not enough hidden nodes for the different input types")
+                ratio_of_layer = float(np.prod(input_size)) / self.total_input_size
+                num_nodes = min(self.hp['MIN_NUM_NODES'], ratio_of_layer * nodes_left)
+                nodes_left -= num_nodes
+                _shape = [np.prod(input_size), num_nodes]
+                self.W_l1.append(self.weight_variable(_shape))
+                self.W_l1_placeholders.append(tf.placeholder(
+                                              tf.float32, shape=_shape))
+                self.b_l1.append(self.bias_variable([num_nodes]))
+                self.b_l1_placeholders.append(tf.placeholder(
+                                              tf.float32, shape=[num_nodes]))
+
 
         for i in xrange(1, self.hp['NUM_FC']):
-            # fully connected layer n, weights + biases
-            self.W_fc[i] = self.weight_variable([self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
+            # fully connected layer i, weights + biases
+            if i == 0 and self.hp['USE_CONV']:
+                _shape = [self.conv_layer_size * self.hp['NUM_FEAT'], self.hp['NUM_HIDDEN']]
+                self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=_shape)
+                self.W_fc[0] = self.weight_variable(_shape)
+            else:
+                self.W_fc[i] = self.weight_variable([self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
+                self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
             self.b_fc[i] = self.bias_variable([self.hp['NUM_HIDDEN']])
+            self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN']])
 
         # Output layer
         self.W_final = self.weight_variable([self.hp['NUM_HIDDEN'], 1])
         self.b_final = self.bias_variable([1])
+        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], 1])
+        self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
+
+        # Group defined weights/biases into a set
+        self.all_weights_biases.extend(self.W_l1)
+        self.all_weights_biases.extend(self.W_fc)
+        self.all_weights_biases.append(self.W_final)
+        self.all_weights_biases.extend(self.b_l1)
+        self.all_weights_biases.extend(self.b_fc)
+        self.all_weights_biases.append(self.b_final)
+
+        #Ssame order as all weights/biases
+        self.all_placeholders.extend(self.W_l1_placeholders)
+        self.all_placeholders.extend(self.W_fc_placeholders)
+        self.all_placeholders.append(self.W_final_placeholder)
+        self.all_placeholders.extend(self.b_l1_placeholders)
+        self.all_placeholders.extend(self.b_fc_placeholders)
+        self.all_placeholders.append(self.b_final_placeholder)
 
     def _set_hyper_params_from_file(self, file):
         """
@@ -447,7 +332,7 @@ class NeuralNet:
                                   to the neural net. options are:
                                   1. "bitmap"
                                   2. "giraffe"
-                "NUM_CHANNELS" - Number of channels used in bitmap representation
+                "MIN_NUM_NODES" - Minimum number of nodes for a given input type
                 "NUM_HIDDEN" - Number of hidden nodes used in FC layers
                 "NUM_FC" - Number of fully connected (FC) layers
                            Excludes any convolutional layers
@@ -800,13 +685,12 @@ class NeuralNet:
         """
         
         feed_dict = {}
-        board = dh.fen_to_nn_input(fen, self.hp['NN_INPUT_TYPE'], 
-                                   num_channels=self.hp['NUM_CHANNELS'])
+        board = dh.fen_to_nn_input(fen, self.hp['NN_INPUT_TYPE'])
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             feed_dict[self.state_data] = np.array([board[0]])
             board = board[1]
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
-            diagonal = dh.get_diagonals(board, self.hp['NUM_CHANNELS'])
+            diagonal = dh.get_diagonals(board)
             diagonal = np.array([diagonal])
             feed_dict[self.data_diags] = diagonal
 

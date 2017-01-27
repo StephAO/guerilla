@@ -113,7 +113,7 @@ def flip_board(fen):
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
 
-def fen_to_nn_input(fen, nn_type, num_channels=None):
+def fen_to_nn_input(fen, nn_type):
     """
         Return neural net input types base on hyper parameters
 
@@ -125,9 +125,7 @@ def fen_to_nn_input(fen, nn_type, num_channels=None):
                 correct neural net inputs type
     """
     if nn_type == 'bitmap':
-        if num_channels == None:
-            raise NameError("The number of channels must be specified when using bitmap input")
-        return fen_to_bitmap(fen, num_channels)
+        return fen_to_bitmap(fen)
     elif nn_type == 'giraffe':
         return fen_to_giraffe(fen)
     elif nn_type == 'movemap':
@@ -137,7 +135,7 @@ def fen_to_nn_input(fen, nn_type, num_channels=None):
 
 
 # TODO: deal with en passant and castling
-def fen_to_bitmap(fen, num_channels):
+def fen_to_bitmap(fen):
     """
         Converts a fen string to bitmap channels for neural net.
         Always assumes that it's white's turn
@@ -162,8 +160,8 @@ def fen_to_bitmap(fen, num_channels):
     # turn = fen[1]
     # castling = fen[2]
     # en_passant = fen[3]
-
-    channels = np.zeros((BOARD_LENGTH, BOARD_LENGTH, num_channels))
+    NUM_CHANNELS = 12
+    channels = np.zeros((BOARD_LENGTH, BOARD_LENGTH, NUM_CHANNELS))
 
     c_file = 0
     c_rank = 7
@@ -300,8 +298,8 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
             map_index = (r * BOARD_LENGTH + f) * 2
             map_index += 0 if defender else 1
             board_data[map_index] = min(piece_value, board_data[map_index])
-            board_data[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
-                piece_data[map_index]
+            piece_data[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
+                board_data[map_index]
 
 
 def fen_to_giraffe(fen):
@@ -319,11 +317,11 @@ def fen_to_giraffe(fen):
         Outputs:
             State data [list(15)]:
                 Turn, Castling, num of pieces
+            Board data [list(128)]:
+                Attack and Defend maps
             Piece data [list(208)]:
                 Piece exists, placement, lowest and highest valued attacker. 
                 Slide range for sliding pieces
-            Board data [list(128)]:
-                Attack and Defend maps
     """
     piece_desc_index = {
         'q': 0,
@@ -349,24 +347,19 @@ def fen_to_giraffe(fen):
 
     # Start index for the material configuration
     START_MAT_CONF = 5
-    SLIDE_LIST_SIZE = 
+    SLIDE_LIST_SIZE = 48
     NUM_SLOTS_PER_PIECE = 5  # For piece list
     NUM_SLIDE_PIECES_PER_SIDE = 5  # queen + 2 rooks + 2 bishops
     NUM_PIECES_PER_SIDE = 16  # PER SIDE
     BLACK_SLIDE_OFFSET = NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE
 
-    # Side to Move (0)
-    # Castling Rights (1-4)
-    # Material Configuration (5-14)
-    # Piece list (15-174)
-    # Sliding list (175-222)
-    # Def/Atk map (223-350)
     state_data = [0] * STATE_DATA_SIZE
+    board_data = [999999] * (BOARD_SIZE * 2)
     piece_data = []
     for i in xrange(NUM_PIECES_PER_SIDE * 2):
         piece_data += [0, 0, 0, 999999, 999999]
-    piece_data += [0] * (BOARD_DATA_SIZE)
-    board_data = [999999] * (BOARD_SIZE * 2)  # Attack and defend maps
+    piece_data += [0] * (SLIDE_LIST_SIZE)
+    
 
     fen = fen.split(' ')
     board_str = fen[0]
@@ -470,7 +463,7 @@ def fen_to_giraffe(fen):
                             piece_values[board_to_piece_type[(c_rank, c_file)]], \
                             board_to_piece_index, piece_data, board_data)
 
-    return np.array(state_data), np.array(piece_data), np.array(board_data)
+    return np.array(state_data), np.array(board_data), np.array(piece_data)
 
 
 def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
@@ -683,7 +676,7 @@ def fen_to_movemap(fen):
     return bs, mm
 
 
-def get_diagonals(channels, num_channels):
+def get_diagonals(channels):
     """
         Retrieves and returns the diagonals from the board
 
@@ -695,8 +688,9 @@ def get_diagonals(channels, num_channels):
                 Each piece array has 10 diagonals with max size of 8 (shorter diagonals are 0 padded at the end)
                 Diagonal ordering is a3 up, a6 down, a2 up, a7 down, a1 up, a8 down, b1 up, b8 down, c1 up, c8 down
     """
-    diagonals = np.zeros((10, BOARD_LENGTH, num_channels))
-    for i in xrange(num_channels):
+    NUM_CHANNELS
+    diagonals = np.zeros((10, BOARD_LENGTH, NUM_CHANNELS))
+    for i in xrange(NUM_CHANNELS):
         index = 0
         for o in xrange(-2, 3):
             diag_up = np.diagonal(channels[:, :, i], offset=o)

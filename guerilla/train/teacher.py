@@ -578,9 +578,9 @@ class Teacher:
         elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
         elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
+            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 12))
             if self.nn.hp['USE_CONV']:
-                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
+                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, 12))
         true_values = np.zeros(self.hp['BATCH_SIZE'])
 
         for i in xrange(num_batches):
@@ -593,8 +593,7 @@ class Teacher:
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
                 nn_input = dh.fen_to_nn_input(fens[game_indices[board_num]], 
-                                               self.nn.hp['NN_INPUT_TYPE'],
-                                               self.nn.hp['NUM_CHANNELS'])
+                                               self.nn.hp['NN_INPUT_TYPE'])
                 if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
                     state_data[j] = nn_input[0]
                     boards[j] = nn_input[1]
@@ -602,7 +601,7 @@ class Teacher:
                     boards[j] = nn_input
                 elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                     boards[j] = nn_input
-                    diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
+                    diagonals[j] = dh.get_diagonals(boards[j])
                 true_values[j] = true_values_[game_indices[board_num]]
                 board_num += 1
 
@@ -647,9 +646,9 @@ class Teacher:
 
         elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
             # Configure data
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, self.nn.hp['NUM_CHANNELS']))
+            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 12))
             if self.nn.hp['USE_CONV']:
-                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.hp['NUM_CHANNELS']))
+                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, 12))
         true_values_batch = np.zeros(self.hp['BATCH_SIZE'])
 
         # Initialize Error
@@ -659,8 +658,7 @@ class Teacher:
             # set up batch
             for j in xrange(self.hp['BATCH_SIZE']):
                 nn_input = dh.fen_to_nn_input(fens[board_num], 
-                                               self.nn.hp['NN_INPUT_TYPE'],
-                                               self.nn.hp['NUM_CHANNELS'])
+                                               self.nn.hp['NN_INPUT_TYPE'])
                 if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
                     state_data[j] = nn_input[0]
                     boards[j] = nn_input[1]
@@ -668,7 +666,7 @@ class Teacher:
                     boards[j] = nn_input
                 elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
                     boards[j] = nn_input
-                    diagonals[j] = dh.get_diagonals(boards[j], self.nn.hp['NUM_CHANNELS'])
+                    diagonals[j] = dh.get_diagonals(boards[j])
                 true_values_batch[j] = true_values[board_num]
                 board_num += 1
 

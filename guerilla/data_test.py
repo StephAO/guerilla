@@ -191,7 +191,10 @@ def giraffe_input_test():
     # True = 1, False = 0
     random_fen = "3q3r/2QR1n2/1PR2p1b/1k2p3/1P6/3pN3/1PB1pKp1/3N4 w - - 0 1"
     state, piece, board = dh.fen_to_giraffe(random_fen)
-    giraffe = [].extend(state.tolist()).extend(piece.tolist()).extend(board.tolist())
+    giraffe = []
+    giraffe.extend(state.tolist())
+    giraffe.extend(piece.tolist())
+    giraffe.extend(board.tolist())
     if len(giraffe) != 351:
         print "Failure: Size of giraffe is incorrect"
         return False

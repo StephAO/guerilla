@@ -162,8 +162,8 @@ class NeuralNet:
             # TODO: Currently equally divided into 3, although maybe this should be changed
             num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
             self.W_state_placeholder = tf.placeholder(tf.float32, shape=[dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_piece_placeholder = tf.placeholder(tf.float32, shape=[dh.S_IDX_ATKDEF_MAP - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_board_placeholder = tf.placeholder(tf.float32, shape=[dh.GF_FULL_SIZE - dh.S_IDX_ATKDEF_MAP, num_hidden_subgroup])
+            self.W_piece_placeholder = tf.placeholder(tf.float32, shape=[dh.BOARD_DATA_SIZE - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
+            self.W_board_placeholder = tf.placeholder(tf.float32, shape=[dh.GF_FULL_SIZE - dh.BOARD_DATA_SIZE, num_hidden_subgroup])
 
             self.b_state_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
             self.b_piece_placeholder = tf.placeholder(tf.float32, shape=[num_hidden_subgroup])
@@ -375,8 +375,8 @@ class NeuralNet:
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
             self.W_state = self.weight_variable([dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_piece = self.weight_variable([dh.S_IDX_ATKDEF_MAP - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
-            self.W_board = self.weight_variable([dh.GF_FULL_SIZE - dh.S_IDX_ATKDEF_MAP, num_hidden_subgroup])
+            self.W_piece = self.weight_variable([dh.BOARD_DATA_SIZE - dh.S_IDX_PIECE_LIST, num_hidden_subgroup])
+            self.W_board = self.weight_variable([dh.GF_FULL_SIZE - dh.BOARD_DATA_SIZE, num_hidden_subgroup])
 
             self.b_state = self.bias_variable([num_hidden_subgroup])
             self.b_piece = self.bias_variable([num_hidden_subgroup])
@@ -682,8 +682,8 @@ class NeuralNet:
             # Output of each subgroup
             num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
             state_data = tf.slice(self.data, [0, 0], [-1, dh.S_IDX_PIECE_LIST])
-            piece_data = tf.slice(self.data, [0, dh.S_IDX_PIECE_LIST], [-1, dh.S_IDX_ATKDEF_MAP - dh.S_IDX_PIECE_LIST])
-            board_data = tf.slice(self.data, [0, dh.S_IDX_ATKDEF_MAP], [-1, dh.GF_FULL_SIZE - dh.S_IDX_ATKDEF_MAP])
+            piece_data = tf.slice(self.data, [0, dh.S_IDX_PIECE_LIST], [-1, dh.BOARD_DATA_SIZE - dh.S_IDX_PIECE_LIST])
+            board_data = tf.slice(self.data, [0, dh.BOARD_DATA_SIZE], [-1, dh.GF_FULL_SIZE - dh.BOARD_DATA_SIZE])
             o_state = tf.nn.relu(tf.matmul(state_data, self.W_state) + self.b_state)
             o_piece = tf.nn.relu(tf.matmul(piece_data, self.W_piece) + self.b_piece)
             o_board = tf.nn.relu(tf.matmul(board_data, self.W_board) + self.b_board)

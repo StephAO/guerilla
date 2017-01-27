@@ -23,8 +23,9 @@ piece_values = {
 BOARD_LENGTH = 8
 BOARD_SIZE = 64
 
-S_IDX_PIECE_LIST = 15
-S_IDX_ATKDEF_MAP = 223
+STATE_DATA_SIZE = 15
+PIECE_DATA_SIZE = 208
+BOARD_DATA_SIZE = 223
 GF_FULL_SIZE = 351
 
 crosswise_fn = [
@@ -197,7 +198,8 @@ def in_bounds(rank_idx, file_idx):
 
 
 def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
-                          board_to_piece_index, slide_index, map_base_index, gf):
+                          board_to_piece_index, slide_index, \
+                          piece_data, board_data):
     """
         Finds the range of motion of a sliding piece (Queen, Rook, or Bishop).
         Set slide range for piece for giraffe input data structure.
@@ -218,33 +220,19 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                 maps rank, file to index of piece in piece list of giraffe input
             slide_index[int]:
                 index of pieces slide list of giraffe input
-            map_base_index[int]:
-                index of start of attack/defend maps in giraffe input
-            gf[list]:
-                giraffe input
+            piece_data[list]:
+                piece data input
+            board_data[list]:
+                board data input
     """
     # rank (left, right), file (down, up), '/' diag (down-left, up-right) , '\' diag (up-left, down-right)
     still_sliding = [True] * 8 if piece == 'q' else [True] * 4
 
-    crosswise = [
-        lambda x: np.array([0, -x - 1]),  # left
-        lambda x: np.array([0, +x + 1]),  # right
-        lambda x: np.array([-x - 1, 0]),  # down
-        lambda x: np.array([+x + 1, 0])  # up
-    ]
-
-    diagonals = [
-        lambda x: np.array([-x - 1, -x - 1]),  # down left
-        lambda x: np.array([+x + 1, +x + 1]),  # up right
-        lambda x: np.array([+x + 1, -x - 1]),  # up left
-        lambda x: np.array([-x - 1, +x + 1])  # down right
-    ]
-
     directions = []
     if (piece == 'q' or piece == 'r'):
-        directions += crosswise
+        directions += crosswise_fn
     if (piece == 'q' or piece == 'b'):
-        directions += diagonals
+        directions += diagonals_fn
 
     pos = np.array([c_rank, c_file])
 
@@ -257,23 +245,23 @@ def check_range_of_motion(c_rank, c_file, piece, occupied_bitmap, piece_value, \
             if still_sliding[i] \
                     and (not in_bounds(r, f) or occupied_bitmap[r][f] != 0):
                 still_sliding[i] = False
-                gf[slide_index + i] = offset
+                piece_data[slide_index + i] = offset
                 # If stopped by a piece, set defender/attacker map
                 if in_bounds(r, f):
                     defender = (occupied_bitmap[c_rank][c_file] \
                                 == occupied_bitmap[r][f])
-                    map_index = map_base_index + (r * BOARD_LENGTH + f) * 2
+                    map_index = (r * BOARD_LENGTH + f) * 2
                     map_index += 0 if defender else 1
-                    gf[map_index] = min(piece_value, gf[map_index])
-                    gf[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
-                        gf[map_index]
+                    board_data[map_index] = min(piece_value, board_data[map_index])
+                    piece_data[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
+                        board_data[map_index]
 
             if not any(still_sliding):
                 break
 
 
 def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
-                    board_to_piece_index, map_base_index, gf):
+                    board_to_piece_index, piece_data, board_data):
     """
         Updates attack defend maps for non sliding pieces.
 
@@ -290,10 +278,10 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
                 piece value
             board_to_piece_index[dict]:
                 maps rank, file to index of piece in piece list of giraffe input
-            map_base_index[int]:
-                index of start of attack/defend maps in giraffe input
-            gf[list]:
-                giraffe input
+            piece_data[list]:
+                piece data input
+            board_data[list]:
+                board data input
     """
 
     white = (occupied_bitmap[c_rank][c_file] == 1)
@@ -309,11 +297,11 @@ def set_att_def_map(c_rank, c_file, piece, occupied_bitmap, piece_value, \
         if in_bounds(r, f) and occupied_bitmap[r][f] != 0:
             defender = (occupied_bitmap[c_rank][c_file] \
                         == occupied_bitmap[r][f])  # True if defending
-            map_index = map_base_index + (r * BOARD_LENGTH + f) * 2
+            map_index = (r * BOARD_LENGTH + f) * 2
             map_index += 0 if defender else 1
-            gf[map_index] = min(piece_value, gf[map_index])
-            gf[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
-                gf[map_index]
+            board_data[map_index] = min(piece_value, board_data[map_index])
+            board_data[board_to_piece_index[(r, f)] + (3 if defender else 4)] = \
+                piece_data[map_index]
 
 
 def fen_to_giraffe(fen):
@@ -321,17 +309,21 @@ def fen_to_giraffe(fen):
         Converts a fen string to giraffe input list for neural net.
         Giraffe input list is based on Matthew Lai's giraffe model.
         He describes his input on page 17 of https://arxiv.org/pdf/1509.01549v1.pdf.
+        Due to insufficient information, ours version of giraffe is not identical
+        to his (his lenght is 363, while ours is 351).
 
         Inputs:
             fen[string]:
                 fen string describing current state. 
 
-        Output:
-            gf[ndarray]:
-                Consists of a list of length 351 comprised of 3 main parts
-                1. State data (0-14). Turn, Castling, num of pieces
-                2. Piece data (15-174). Piece exists, placement, lowest and highest valued attacker
-                3. Board data (174-351). Slide range for sliding pieces. Attack and Defend maps
+        Outputs:
+            State data [list(15)]:
+                Turn, Castling, num of pieces
+            Piece data [list(208)]:
+                Piece exists, placement, lowest and highest valued attacker. 
+                Slide range for sliding pieces
+            Board data [list(128)]:
+                Attack and Defend maps
     """
     piece_desc_index = {
         'q': 0,
@@ -343,20 +335,21 @@ def fen_to_giraffe(fen):
     }
 
     piece_index_to_slide_index = {
-        15: 175,
-        20: 183,
-        25: 187,
-        30: 191,
-        35: 195,
-        95: 199,
-        100: 207,
-        105: 211,
-        110: 215,
-        115: 219,
+        0: 160,
+        5: 168,
+        10: 172,
+        15: 176,
+        20: 180,
+        80: 184,
+        85: 192,
+        90: 196,
+        95: 200,
+        100: 204,
     }
 
-    S_IDX_PIECES_NUM = 5
-    S_IDX_SLIDE_LIST = 175
+    # Start index for the material configuration
+    START_MAT_CONF = 5
+    SLIDE_LIST_SIZE = 
     NUM_SLOTS_PER_PIECE = 5  # For piece list
     NUM_SLIDE_PIECES_PER_SIDE = 5  # queen + 2 rooks + 2 bishops
     NUM_PIECES_PER_SIDE = 16  # PER SIDE
@@ -367,12 +360,13 @@ def fen_to_giraffe(fen):
     # Material Configuration (5-14)
     # Piece list (15-174)
     # Sliding list (175-222)
-    # Def/Atk map (223-250)
-    gf = [0] * S_IDX_PIECE_LIST
+    # Def/Atk map (223-350)
+    state_data = [0] * STATE_DATA_SIZE
+    piece_data = []
     for i in xrange(NUM_PIECES_PER_SIDE * 2):
-        gf += [0, 0, 0, 999999, 999999]
-    gf += [0] * (S_IDX_ATKDEF_MAP - S_IDX_SLIDE_LIST)
-    gf += [999999] * (BOARD_SIZE * 2)  # Attack and defend maps
+        piece_data += [0, 0, 0, 999999, 999999]
+    piece_data += [0] * (BOARD_DATA_SIZE)
+    board_data = [999999] * (BOARD_SIZE * 2)  # Attack and defend maps
 
     fen = fen.split(' ')
     board_str = fen[0]
@@ -383,17 +377,17 @@ def fen_to_giraffe(fen):
     # Used for sliding and attack/defense maps
     # +1 if white piece, -1 if black piece, 0 o/w
     occupied_bitmap = [[0] * BOARD_LENGTH for _ in range(BOARD_LENGTH)]
-    board_to_piece_index = {}  # Key: Coordinate, Value: Piece location in gf
+    board_to_piece_index = {}  # Key: Coordinate, Value: Piece location in piece_list
     board_to_piece_type = {}  # Key: Coordinate, Value: Piece type
 
     # Slide to move
-    gf[0] = 1 if (turn == 'w') else 0
+    state_data[0] = 1 if (turn == 'w') else 0
 
     # Castling rights
-    gf[1] = 1 if ('Q' in castling) else 0
-    gf[2] = 1 if ('K' in castling) else 0
-    gf[3] = 1 if ('q' in castling) else 0
-    gf[4] = 1 if ('k' in castling) else 0
+    state_data[1] = 1 if ('Q' in castling) else 0
+    state_data[2] = 1 if ('K' in castling) else 0
+    state_data[3] = 1 if ('q' in castling) else 0
+    state_data[4] = 1 if ('k' in castling) else 0
 
     # Iterate through ranks starting from rank 1
     ranks = board_str.split('/')
@@ -410,19 +404,18 @@ def fen_to_giraffe(fen):
 
                 # Update material configuration
                 if char != 'k':
-                    gf[S_IDX_PIECES_NUM + (0 if white else 5) \
+                    state_data[START_MAT_CONF + (0 if white else 5) \
                        + piece_indices[char]] += 1
 
-                # Get the current gf index based on piece type and color (5 entries per piece)
-                curr_index = S_IDX_PIECE_LIST \
-                             + (0 if white else BLACK_SLIDE_OFFSET) \
+                # Get the current piece data index based on piece type and color (5 entries per piece)
+                curr_index = (0 if white else BLACK_SLIDE_OFFSET) \
                              + piece_desc_index[char] * NUM_SLOTS_PER_PIECE
 
                 # print "piece: %s, white: %d, index: %d" % (char, white, curr_index)
-                # Increment gf index if slot is already filled with an identical piece
+                # Increment piece data index if slot is already filled with an identical piece
                 count = 1
                 too_many_pieces = False
-                while gf[curr_index] == 1:
+                while piece_data[curr_index] == 1:
                     count += 1
                     if char == 'k':
                         start_num_pieces = 1
@@ -442,11 +435,11 @@ def fen_to_giraffe(fen):
                 if too_many_pieces:
                     continue
                 # Mark piece as present
-                gf[curr_index] = 1
+                piece_data[curr_index] = 1
 
                 # Mark location
-                gf[curr_index + 1] = c_rank
-                gf[curr_index + 2] = c_file  # TODO: Maybe normalize coordinates? They are normalized in Giraffe
+                piece_data[curr_index + 1] = c_rank
+                piece_data[curr_index + 2] = c_file  # TODO: Maybe normalize coordinates? They are normalized in Giraffe
                 board_to_piece_index[(c_rank, c_file)] = curr_index
                 board_to_piece_type[(c_rank, c_file)] = char
                 # set occupied bitmap
@@ -454,31 +447,30 @@ def fen_to_giraffe(fen):
             c_file += 1  # Increment file
 
     # Iterate through piece lists.
-    for i in xrange(S_IDX_PIECE_LIST, S_IDX_SLIDE_LIST, NUM_SLOTS_PER_PIECE):
+    for i in xrange(NUM_PIECES_PER_SIDE * 2):
+        idx = i * NUM_SLOTS_PER_PIECE
         # If piece is not present, skip
-        if gf[i] == 0:
+        if piece_data[idx] == 0:
             continue
 
         # Fetch coordinate
-        c_rank, c_file = gf[i + 1: i + 3]
-        if 0 <= i - S_IDX_PIECE_LIST < \
-                        NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE or \
-                                0 <= i - (S_IDX_PIECE_LIST + NUM_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE) \
-                        < NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE:
-            # if piece is queen, rook, or bishop then populate range of motion information and attack + defend map
+        c_rank, c_file = piece_data[idx + 1: idx + 3]
+        if idx < NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE or \
+           0 <= idx - (BLACK_SLIDE_OFFSET) < NUM_SLIDE_PIECES_PER_SIDE * NUM_SLOTS_PER_PIECE:
+            # if piece is queen, rook, or bishop (sliding piece) then populate range of motion information and attack + defend map
             check_range_of_motion(c_rank, c_file, \
                                   board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                                   piece_values[board_to_piece_type[(c_rank, c_file)]], \
-                                  board_to_piece_index, piece_index_to_slide_index[i], \
-                                  S_IDX_ATKDEF_MAP, gf)
+                                  board_to_piece_index, piece_index_to_slide_index[idx], \
+                                  piece_data, board_data)
         else:
             # if not then just populate attack and defend map
             set_att_def_map(c_rank, c_file, \
                             board_to_piece_type[(c_rank, c_file)], occupied_bitmap, \
                             piece_values[board_to_piece_type[(c_rank, c_file)]], \
-                            board_to_piece_index, S_IDX_ATKDEF_MAP, gf)
+                            board_to_piece_index, piece_data, board_data)
 
-    return np.array(gf)
+    return np.array(state_data), np.array(piece_data), np.array(board_data)
 
 
 def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):

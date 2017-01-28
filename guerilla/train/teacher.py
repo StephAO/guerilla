@@ -884,6 +884,8 @@ class Teacher:
         # turn pruning for search off
         self.guerilla.search.reci_prune = False
 
+        # TODO: Double check logic here, the estimator J should always output the reward for the same player.
+
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",

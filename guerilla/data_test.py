@@ -87,7 +87,7 @@ def diag_input_test():
 
     success = True
     for i in range(len(fens)):
-        actual = dh.get_diagonals(dh.fen_to_bitmap(fens[i], 12), 12)
+        actual = dh.get_diagonals(dh.fen_to_bitmap(fens[i])[0], 12)
         if not np.array_equal(corr[i], actual):
             print "Failed converting fen to diagonals:"
             print fens[i]
@@ -165,7 +165,7 @@ def bitmap_input_test():
 
     success = True
     for i in range(len(fens)):
-        actual = dh.fen_to_bitmap(fens[i], 12)
+        actual = dh.fen_to_bitmap(fens[i])[0]
         if not np.array_equal(corr[i], actual):
             print "Failed converting fen to channels:"
             print fens[i]
@@ -190,7 +190,7 @@ def giraffe_input_test():
     # White = 1, Black = 0
     # True = 1, False = 0
     random_fen = "3q3r/2QR1n2/1PR2p1b/1k2p3/1P6/3pN3/1PB1pKp1/3N4 w - - 0 1"
-    state, piece, board = dh.fen_to_giraffe(random_fen)
+    state, board, piece = dh.fen_to_giraffe(random_fen)
     giraffe = []
     giraffe.extend(state.tolist())
     giraffe.extend(piece.tolist())

@@ -561,7 +561,53 @@ class Teacher:
 
         return
 
-    def weight_update_bootstrap(self, fens, true_values_, game_indices, train_step):
+    def get_nn_input_shapes(self):
+        """ Generate shapes of nn input types """
+        input_data = []
+        diagonals = None
+        for input_size in self.nn.input_sizes:
+            _shape = [self.hp['BATCH_SIZE']] + list(input_size)
+            input_data.append(np.zeros(_shape))
+
+            if input_size[0:2] == (8,8) and self.nn.hp['USE_CONV']:
+                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.size_per_tile))
+        true_values = np.zeros(self.hp['BATCH_SIZE'])
+        return input_data, diagonals, true_values
+
+    def get_batch_feed_dict(self, input_data, diagonals, true_values, \
+                                  _true_values, fens, board_num, game_indices):
+        """ 
+            Generate batch feed dict. 
+            Note: true values with a _ prefix contains values, without it is just
+                  the true values struct
+        """
+        for j in xrange(self.hp['BATCH_SIZE']):
+            nn_input_data = dh.fen_to_nn_input(fens[game_indices[board_num]], 
+                                           self.nn.hp['NN_INPUT_TYPE'])
+
+            for k in xrange(len(nn_input_data)):
+                input_data[k][j] = nn_input_data[k]
+                if np.shape(input_data[k][j])[0:2] == (8,8) and self.nn.hp['USE_CONV']:
+                    diagonals[j] = dh.get_diagonals(input_data[k][j],
+                                                    self.nn.size_per_tile)
+
+            true_values[j] = _true_values[game_indices[board_num]]
+            board_num += 1
+
+        _feed_dict = {self.nn.true_value: true_values,
+                      self.nn.keep_prob: self.hp['KEEP_PROB']}
+
+        if len(input_data) != len(self.nn.input_data_placeholders):
+            raise ValueError("The length of input data(%d) does not equal the " \
+                             "length of input data place holders(%s)" % \
+                             len(input_data), len(input_data_placeholders))
+        for j in xrange(len(input_data)):
+            _feed_dict[self.nn.input_data_placeholders[j]] = input_data[j]
+        if self.nn.hp['USE_CONV']:
+            _feed_dict[self.nn.diagonal_placeholder] = diagonals
+        return _feed_dict, board_num
+
+    def weight_update_bootstrap(self, fens, _true_values, game_indices, train_step):
         """ Weight update for multiple batches"""
 
         if len(game_indices) % self.hp['BATCH_SIZE'] != 0:
@@ -571,17 +617,8 @@ class Teacher:
         num_batches = int(len(game_indices) / self.hp['BATCH_SIZE'])
 
         board_num = 0
-        if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
-            # Configure data
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 48))
-            state_data = np.zeros((self.hp['BATCH_SIZE'], 15))
-        elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
-            boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
-        elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 12))
-            if self.nn.hp['USE_CONV']:
-                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, 12))
-        true_values = np.zeros(self.hp['BATCH_SIZE'])
+
+        input_data, diagonals, true_values = self.get_nn_input_shapes()
 
         for i in xrange(num_batches):
             # if training time is up, save state
@@ -590,33 +627,16 @@ class Teacher:
                     print "Bootstrap Timeout: Saving state and quitting"
                 return True, {'game_indices': game_indices[(i * self.hp['BATCH_SIZE']):]}
 
-            # set up batch
-            for j in xrange(self.hp['BATCH_SIZE']):
-                nn_input = dh.fen_to_nn_input(fens[game_indices[board_num]], 
-                                               self.nn.hp['NN_INPUT_TYPE'])
-                if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
-                    state_data[j] = nn_input[0]
-                    boards[j] = nn_input[1]
-                elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
-                    boards[j] = nn_input
-                elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
-                    boards[j] = nn_input
-                    diagonals[j] = dh.get_diagonals(boards[j])
-                true_values[j] = true_values_[game_indices[board_num]]
-                board_num += 1
-
-            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values,
-                          self.nn.keep_prob: self.hp['KEEP_PROB']}
-            if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
-                _feed_dict[self.nn.state_data] = state_data
-            elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
-                _feed_dict[self.nn.data_diags] = diagonals
+            _feed_dict, board_num = \
+                self.get_batch_feed_dict(input_data, diagonals, true_values, 
+                                         _true_values, fens, board_num, 
+                                         game_indices)
             # train batch
             self.nn.sess.run([train_step], feed_dict=_feed_dict)
 
         return False, {}
 
-    def evaluate_bootstrap(self, fens, true_values):
+    def evaluate_bootstrap(self, fens, _true_values):
         """
             Evaluate neural net
 
@@ -636,46 +656,16 @@ class Teacher:
 
         board_num = 0
 
-        if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
-            # Configure data
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 48))
-            state_data = np.zeros((self.hp['BATCH_SIZE'], 15))
-        elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
-            # Configure data
-            boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
-
-        elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
-            # Configure data
-            boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 12))
-            if self.nn.hp['USE_CONV']:
-                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, 12))
-        true_values_batch = np.zeros(self.hp['BATCH_SIZE'])
+        input_data, diagonals, true_values = self.get_nn_input_shapes()
 
         # Initialize Error
         error = 0
 
         for i in xrange(num_batches):
-            # set up batch
-            for j in xrange(self.hp['BATCH_SIZE']):
-                nn_input = dh.fen_to_nn_input(fens[board_num], 
-                                               self.nn.hp['NN_INPUT_TYPE'])
-                if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
-                    state_data[j] = nn_input[0]
-                    boards[j] = nn_input[1]
-                elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
-                    boards[j] = nn_input
-                elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
-                    boards[j] = nn_input
-                    diagonals[j] = dh.get_diagonals(boards[j])
-                true_values_batch[j] = true_values[board_num]
-                board_num += 1
-
-            _feed_dict = {self.nn.data: boards, self.nn.true_value: true_values_batch}
-            if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
-                _feed_dict[self.nn.state_data] = state_data
-            elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.nn.hp['USE_CONV']:
-                _feed_dict[self.nn.data_diags] = diagonals
-
+            _feed_dict, board_num = \
+                self.get_batch_feed_dict(input_data, diagonals, true_values, 
+                                         _true_values, fens, board_num,
+                                         range(len(fens)))
             # Get batch loss
             error += self.nn.sess.run(self.nn.MSE, feed_dict=_feed_dict)
 

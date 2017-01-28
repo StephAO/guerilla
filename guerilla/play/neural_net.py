@@ -47,17 +47,21 @@ class NeuralNet:
         self._set_hyper_params(**hp)
 
         # Always list different input structures in increasing order of size
+        # All input sizes must be tuples. If it's a single value, use (x,)
+        # Currently, only single one of the inputs can be used for convolution
+        # The nn_input_type must have a function in data_handler named:
+        # fen_to_<nn_input_type>
         self.total_input_size = 0
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.variable_value = 0.01
-            self.input_sizes = [(dh.STATE_DATA_SIZE), 
+            self.input_sizes = [(dh.STATE_DATA_SIZE,), 
                                 (dh.BOARD_LENGTH, dh.BOARD_LENGTH, 48)]
             # Used for convolution
             self.size_per_tile = 48
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.variable_value = 0.001
-            self.input_sizes = [(dh.STATE_DATA_SIZE), \
-                                (dh.BOARD_DATA_SIZE), (dh.PIECE_DATA_SIZE)]
+            self.input_sizes = [(dh.STATE_DATA_SIZE,), \
+                                (dh.BOARD_DATA_SIZE,), (dh.PIECE_DATA_SIZE,)]
             self.hp['USE_CONV'] = False
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             self.variable_value = 0.1
@@ -92,6 +96,7 @@ class NeuralNet:
         self.b_fc = [None] * self.hp['NUM_FC']
         self.W_final = None
         self.b_final = None
+        self.all_weights = None
         self.all_weights_biases = []
 
         self.W_l1_placeholders = []
@@ -112,20 +117,21 @@ class NeuralNet:
 
         self.conv_layer_size = 64 + 8 + 8 + 10  # 90
 
-        # define all variables and their assignment placeholders
-        self.define_tf_variables()
-
         # input placeholders
         self.true_value = tf.placeholder(tf.float32, shape=[None])
         self.input_data_placeholders = []
         for input_size in self.input_sizes:
             self.total_input_size += float(np.prod(input_size))
             _shape = [None] + list(input_size)
+
             self.input_data_placeholders.append(tf.placeholder(
                                                 tf.float32, shape=_shape))
-        if self.hp['USE_CONV']:
-            _shape = [None, 10, 8, self.size_per_tile]
-            self.diagonal_placeholders = tf.placeholder(tf.float32, shape=_shape)
+            if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
+                _shape = [None, 10, 8, self.size_per_tile]
+                self.diagonal_placeholder = tf.placeholder(tf.float32, shape=_shape)
+
+        # define all variables and their assignment placeholders
+        self.define_tf_variables()
 
         # create assignment operators
         if len(self.all_weights_biases) != len(self.all_placeholders):
@@ -214,67 +220,71 @@ class NeuralNet:
             bias variables to a constant. Also sets weight and bias assignment
             placeholders.
         """
-        # Weight and bias assignment placeholders
-        if self.hp['USE_CONV']:
-            # conv weights
-            self.W_grid = self.weight_variable([5, 5, self.size_per_tile , self.hp['NUM_FEAT']])
-            self.W_rank = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-            self.W_file = self.weight_variable([8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
-            self.W_diag = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-            self.W_l1.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
+        self.weight_2nd_dim = []
+        nodes_left = self.hp['NUM_HIDDEN']
+        for input_size in self.input_sizes:
+            # Weight and bias assignment placeholders
+            if input_size[0:2] == (8,8) and self.hp['USE_CONV']:
+                # conv weights
+                self.W_grid = self.weight_variable([5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_rank = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_file = self.weight_variable([8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_diag = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_l1.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
 
-            # conv biases
-            self.b_grid = self.bias_variable([self.hp['NUM_FEAT']])
-            self.b_rank = self.bias_variable([self.hp['NUM_FEAT']])
-            self.b_file = self.bias_variable([self.hp['NUM_FEAT']])
-            self.b_diag = self.bias_variable([self.hp['NUM_FEAT']])
-            self.b_l1.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
+                # conv biases
+                self.b_grid = self.bias_variable([self.hp['NUM_FEAT']])
+                self.b_rank = self.bias_variable([self.hp['NUM_FEAT']])
+                self.b_file = self.bias_variable([self.hp['NUM_FEAT']])
+                self.b_diag = self.bias_variable([self.hp['NUM_FEAT']])
+                self.b_l1.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
 
-            self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
-            self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-            self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
-            self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-            
-            self.W_l1_placeholders.extend([self.W_grid_placeholder, 
-                                           self.W_rank_placeholder, 
-                                           self.W_file_placeholder, 
-                                           self.W_diag_placeholder])
+                self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_l1_placeholders.extend([self.W_grid_placeholder, 
+                                               self.W_rank_placeholder, 
+                                               self.W_file_placeholder, 
+                                               self.W_diag_placeholder])
 
-            self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            self.b_file_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-            
-            self.b_l1_placeholders.extend([self.b_grid_placeholder, 
-                                           self.b_rank_placeholder, 
-                                           self.b_file_placeholder, 
-                                           self.b_diag_placeholder])
-        else:
-            nodes_left = self.hp['NUM_HIDDEN']
-            for input_size in self.input_sizes:
+                self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+                self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+                self.b_file_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+                self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
+                self.b_l1_placeholders.extend([self.b_grid_placeholder, 
+                                               self.b_rank_placeholder, 
+                                               self.b_file_placeholder, 
+                                               self.b_diag_placeholder])
+                nodes_used = self.conv_layer_size * self.hp['NUM_FEAT']
+                nodes_left -= nodes_used
+                self.weight_2nd_dim.append(nodes_used)
+            else:
+
                 if nodes_left < self.hp['MIN_NUM_NODES']:
                     raise ValueError("Not enough hidden nodes for the different input types")
                 ratio_of_layer = float(np.prod(input_size)) / self.total_input_size
-                num_nodes = min(self.hp['MIN_NUM_NODES'], ratio_of_layer * nodes_left)
+                num_nodes = int(max(self.hp['MIN_NUM_NODES'], ratio_of_layer * nodes_left))
                 nodes_left -= num_nodes
-                _shape = [np.prod(input_size), num_nodes]
+                _shape = [int(np.prod(input_size)), int(num_nodes)]
                 self.W_l1.append(self.weight_variable(_shape))
                 self.W_l1_placeholders.append(tf.placeholder(
                                               tf.float32, shape=_shape))
                 self.b_l1.append(self.bias_variable([num_nodes]))
                 self.b_l1_placeholders.append(tf.placeholder(
                                               tf.float32, shape=[num_nodes]))
+                self.weight_2nd_dim.append(num_nodes)
 
-
+        _shape = [np.sum(self.weight_2nd_dim), self.hp['NUM_HIDDEN']]
+        self.W_fc[0] = self.weight_variable(_shape)
+        self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=_shape)
+        self.b_fc[0] = self.weight_variable([self.hp['NUM_HIDDEN']])
+        self.b_fc_placeholders[0] = tf.placeholder(tf.float32, shape=self.hp['NUM_HIDDEN'])
         for i in xrange(1, self.hp['NUM_FC']):
             # fully connected layer i, weights + biases
-            if i == 0 and self.hp['USE_CONV']:
-                _shape = [self.conv_layer_size * self.hp['NUM_FEAT'], self.hp['NUM_HIDDEN']]
-                self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=_shape)
-                self.W_fc[0] = self.weight_variable(_shape)
-            else:
-                self.W_fc[i] = self.weight_variable([self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
-                self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']])
+            _shape = [self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']]
+            self.W_fc[i] = self.weight_variable(_shape)
+            self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=_shape)
             self.b_fc[i] = self.bias_variable([self.hp['NUM_HIDDEN']])
             self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN']])
 
@@ -288,6 +298,7 @@ class NeuralNet:
         self.all_weights_biases.extend(self.W_l1)
         self.all_weights_biases.extend(self.W_fc)
         self.all_weights_biases.append(self.W_final)
+        self.all_weights = list(self.all_weights_biases)
         self.all_weights_biases.extend(self.b_l1)
         self.all_weights_biases.extend(self.b_fc)
         self.all_weights_biases.append(self.b_final)
@@ -362,7 +373,9 @@ class NeuralNet:
         """
 
         if training_mode not in NeuralNet.training_modes:
-            raise ValueError("Invalid training mode input! Please refer to NeuralNet.training_modes for valid inputs.")
+            raise ValueError("Invalid training mode input!" \
+                             " Please refer to NeuralNet.training_modes " \
+                             "for valid inputs.")
 
         # Regularization Term
         regularization = sum(map(tf.nn.l2_loss, self.all_weights))*reg_const
@@ -460,25 +473,11 @@ class NeuralNet:
         values_dict = pickle.load(open(pickle_path, 'rb'))
 
         weight_values = []
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            weight_values.extend([values_dict['W_state'], values_dict['W_board']])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            weight_values.extend([values_dict['W_state'], values_dict['W_piece'],
-                                  values_dict['W_board']])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            weight_values.extend([values_dict['W_grid'], values_dict['W_rank'],
-                                  values_dict['W_file'], values_dict['W_diag']])
+        
+        weight_values.extend(values_dict['W_l1'])
         weight_values.extend(values_dict['W_fc'])
         weight_values.append(values_dict['W_final'])
-
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            weight_values.extend([values_dict['b_state'], values_dict['b_board']])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            weight_values.extend([values_dict['b_state'], values_dict['b_piece'],
-                                  values_dict['b_board']])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            weight_values.extend([values_dict['b_grid'], values_dict['b_rank'],
-                                  values_dict['b_file'], values_dict['b_diag']])
+        weight_values.extend(values_dict['b_l1'])
         weight_values.extend(values_dict['b_fc'])
         weight_values.append(values_dict['b_final'])
 
@@ -503,39 +502,31 @@ class NeuralNet:
         """
         weight_values = dict()
 
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            weight_values['W_state'], weight_values['W_board'], \
-            weight_values['b_state'], weight_values['b_board'] = \
-            self.sess.run([self.W_state,self.W_board, \
-                               self.b_state, self.b_board])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            weight_values['W_state'], weight_values['W_piece'], weight_values['W_board'], \
-            weight_values['b_state'], weight_values['b_piece'], weight_values['b_board'] = \
-            self.sess.run([self.W_state, self.W_piece, self.W_board, \
-                               self.b_state, self.b_piece, self.b_board])
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            weight_values['W_grid'], weight_values['W_rank'], weight_values['W_file'], \
-            weight_values['W_diag'], \
-            weight_values['b_grid'], weight_values['b_rank'], weight_values['b_file'], \
-            weight_values['b_diag'] = \
-                self.sess.run([self.W_grid, self.W_rank, self.W_file, self.W_diag,
-                               self.b_grid, self.b_rank, self.b_file, self.b_diag])
+        # Set up dict entries for first layer
+        weight_values['W_l1'] = [None] * len(self.W_l1)
+        weight_values['b_l1'] = [None] * len(self.b_l1)
+        # Get layer 1 weight values
+        result = self.sess.run(self.W_l1 + self.b_l1)
+        # Assign layer 1 weight values
+        for i in range(len(self.W_l1)):
+            weight_values['W_l1'][i] = result[i]
+            weight_values['b_l1'][i] = result[len(self.W_l1) + i]
 
         # Set up dict entries for fully-connected layers
         weight_values['W_fc'] = [None] * len(self.W_fc)
         weight_values['b_fc'] = [None] * len(self.b_fc)
-
-        # Get weight values
-        result = self.sess.run(self.W_fc + self.b_fc + [self.W_final, self.b_final])
-
-        # Assign fully connected layers
+        # Get fully connected layer weight values
+        result = self.sess.run(self.W_fc + self.b_fc)
+        # Assign fully connected layer weight values
         for i in range(len(self.W_fc)):
             weight_values['W_fc'][i] = result[i]
             weight_values['b_fc'][i] = result[len(self.W_fc) + i]
 
-        # Assign final layer
-        weight_values['W_final'] = result[-2]
-        weight_values['b_final'] = result[-1]
+        # Get final layer weight values
+        result = self.sess.run([self.W_final, self.b_final])
+        # Assign final layer weight values
+        weight_values['W_final'] = result[0]
+        weight_values['b_final'] = result[1]
 
         return weight_values
 
@@ -545,70 +536,58 @@ class NeuralNet:
             Sets member variable 'pred_value' to the tensor representing the
             output of neural net.
         """
-        batch_size = tf.shape(self.data)[0]
+        batch_size = tf.shape(self.input_data_placeholders[0])[0]
 
         o_fc = [None] * self.hp['NUM_FC']
+        o_l1 = []
+        W_i = 0 # Weight index
+        b_i = 0 # bias index
+        for i, input_size in enumerate(self.input_sizes):
+            # convolve layer if you can and desired
+            if input_size[0:2] == (8,8) and self.hp['USE_CONV']:
+                o_grid = tf.nn.relu(self.conv5x5_grid(
+                    self.input_data_placeholders[i], self.W_grid) \
+                    + self.b_grid)
+                o_rank = tf.nn.relu(self.conv8x1_line(
+                    self.input_data_placeholders[i], self.W_rank) \
+                    + self.b_rank)
+                o_file = tf.nn.relu(self.conv8x1_line(
+                    self.input_data_placeholders[i], self.W_file) \
+                    + self.b_file)
+                o_diag = tf.nn.relu(self.conv8x1_line(
+                    self.diagonal_placeholder, self.W_diag) \
+                    + self.b_diag)
+                W_i += 4
+                b_i += 4
 
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            # Output of each subgroup
-            board_data = tf.reshape(self.data, [batch_size, 3072])
-            o_state = tf.nn.relu(tf.matmul(self.state_data, self.W_state) + self.b_state)
-            o_board = tf.nn.relu(tf.matmul(board_data, self.W_board) + self.b_board)
+                o_grid = tf.reshape(o_grid, [batch_size, 64 * self.hp['NUM_FEAT']])
+                o_rank = tf.reshape(o_rank, [batch_size, 8 * self.hp['NUM_FEAT']])
+                o_file = tf.reshape(o_file, [batch_size, 8 * self.hp['NUM_FEAT']])
+                o_diag = tf.reshape(o_diag, [batch_size, 10 * self.hp['NUM_FEAT']])
 
-            o_state = tf.reshape(o_state, [batch_size, 64])
-            o_board = tf.reshape(o_board, [batch_size, 960])
+                # output of convolutional layer
+                o_l1.append(tf.concat(1, [o_grid, o_rank, o_file, o_diag]))
+            else:
+                _input_shape = [batch_size, np.prod(input_size)]
+                _input = tf.reshape(self.input_data_placeholders[i], _input_shape)
+                output = tf.nn.relu(tf.matmul(_input, self.W_l1[W_i]) \
+                                       + self.b_l1[b_i])
+                _shape = [batch_size, self.weight_2nd_dim[i]]
+                output = tf.reshape(output, _shape)
+                W_i += 1
+                b_i += 1
 
-            # Combine output of 3 subgroups
-            o_conn = tf.concat(1, [o_state, o_board])
-
-            # output of fully connected layer 1
-            o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
-        elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            # Output of each subgroup
-            num_hidden_subgroup = int(self.hp['NUM_HIDDEN']/3)
-            state_data = tf.slice(self.data, [0, 0], [-1, dh.S_IDX_PIECE_LIST])
-            piece_data = tf.slice(self.data, [0, dh.S_IDX_PIECE_LIST], [-1, dh.BOARD_DATA_SIZE - dh.S_IDX_PIECE_LIST])
-            board_data = tf.slice(self.data, [0, dh.BOARD_DATA_SIZE], [-1, dh.GF_FULL_SIZE - dh.BOARD_DATA_SIZE])
-            o_state = tf.nn.relu(tf.matmul(state_data, self.W_state) + self.b_state)
-            o_piece = tf.nn.relu(tf.matmul(piece_data, self.W_piece) + self.b_piece)
-            o_board = tf.nn.relu(tf.matmul(board_data, self.W_board) + self.b_board)
-
-            o_state = tf.reshape(o_state, [batch_size, num_hidden_subgroup])
-            o_piece = tf.reshape(o_piece, [batch_size, num_hidden_subgroup])
-            o_board = tf.reshape(o_board, [batch_size, num_hidden_subgroup])
-
-            # Combine output of 3 subgroups
-            o_conn = tf.concat(1, [o_state, o_piece, o_board])
-
-            # output of fully connected layer 1
-            o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
-            
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap' and self.hp['USE_CONV']:
-            o_grid = tf.nn.relu(self.conv5x5_grid(self.data, self.W_grid) + self.b_grid)
-            o_rank = tf.nn.relu(self.conv8x1_line(self.data, self.W_rank) + self.b_rank)
-            o_file = tf.nn.relu(self.conv8x1_line(self.data, self.W_file) + self.b_file)
-            o_diag = tf.nn.relu(self.conv8x1_line(self.data_diags, self.W_diag) + self.b_diag)
-
-            o_grid = tf.reshape(o_grid, [batch_size, 64 * self.hp['NUM_FEAT']])
-            o_rank = tf.reshape(o_rank, [batch_size, 8 * self.hp['NUM_FEAT']])
-            o_file = tf.reshape(o_file, [batch_size, 8 * self.hp['NUM_FEAT']])
-            o_diag = tf.reshape(o_diag, [batch_size, 10 * self.hp['NUM_FEAT']])
-
-            # output of convolutional layer
-            o_conn = tf.concat(1, [o_grid, o_rank, o_file, o_diag])
-
-            # output of fully connected layer 1
-            o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
-
-        else:
-            data = tf.reshape(self.data, [batch_size, 64 * self.hp['NUM_CHANNELS']])
-            # output of fully connected layer 1
-            o_fc[0] = tf.nn.relu(tf.matmul(data, self.W_fc[0]) + self.b_fc[0])
-
+                o_l1.append(output)
+        # output of first layer
+        o_conn = tf.concat(1, o_l1)
+        # output of fully connected layers
+        o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
         for i in xrange(1, self.hp['NUM_FC']):
             # output of fully connected layer n
             # Includes dropout
-            o_fc[i] = tf.nn.dropout(tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i]), self.keep_prob)
+            o_fc[i] = tf.nn.dropout(tf.nn.relu(
+                tf.matmul(o_fc[i - 1], self.W_fc[i]) \
+                + self.b_fc[i]), self.keep_prob)
 
         # final_output
         self.pred_value = tf.sigmoid(tf.matmul(o_fc[-1], self.W_final) + self.b_final)
@@ -633,7 +612,10 @@ class NeuralNet:
                 weight_vals [List]
                     List of values with which to update weights. Must be in desired order.
         """
-        assert len(weight_vals) == len(self.all_weights_biases)
+        if len(weight_vals) != len(self.all_weights_biases):
+            raise ValueError("Error: There are an uneven number of " \
+                             "weights(%d) and weight values(%d)" % \
+                             (len(self.all_weights_biases), len(weight_vals)))
 
         # match value to placeholders
         placeholder_dict = dict()
@@ -683,19 +665,18 @@ class NeuralNet:
                 feed_dict [Dictionary]
                     Formatted input for neural net.
         """
-        
         feed_dict = {}
-        board = dh.fen_to_nn_input(fen, self.hp['NN_INPUT_TYPE'])
-        if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            feed_dict[self.state_data] = np.array([board[0]])
-            board = board[1]
-        elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
-            diagonal = dh.get_diagonals(board)
-            diagonal = np.array([diagonal])
-            feed_dict[self.data_diags] = diagonal
-
-        board = np.array([board])
-        feed_dict[self.data] = board
+        input_data = dh.fen_to_nn_input(fen, self.hp['NN_INPUT_TYPE'])
+        if len(input_data) != len(self.input_data_placeholders):
+            raise ValueError("The length of input data(%d) does not equal the " \
+                             "length of input data place holders(%d)" % \
+                             len(input_data), len(input_data_placeholders))
+        for i in xrange(len(input_data)):
+            feed_dict[self.input_data_placeholders[i]] = np.array([input_data[i]])
+            if np.shape(input_data[i])[0:2] == (8, 8) and self.hp['USE_CONV']:
+                diagonal = dh.get_diagonals(input_data[i], self.size_per_tile)
+                diagonal = np.array([diagonal])
+                feed_dict[self.diagonal_placeholder] = diagonal
 
         return feed_dict
 

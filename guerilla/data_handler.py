@@ -24,8 +24,8 @@ BOARD_LENGTH = 8
 BOARD_SIZE = 64
 
 STATE_DATA_SIZE = 15
+BOARD_DATA_SIZE = 128
 PIECE_DATA_SIZE = 208
-BOARD_DATA_SIZE = 223
 GF_FULL_SIZE = 351
 
 crosswise_fn = [
@@ -121,17 +121,14 @@ def fen_to_nn_input(fen, nn_type):
             fen[string]:
                 fen of board to be converted
         Outputs:
-            nn_input_type[varies]:
+            nn_input[varies]:
                 correct neural net inputs type
     """
-    if nn_type == 'bitmap':
-        return fen_to_bitmap(fen)
-    elif nn_type == 'giraffe':
-        return fen_to_giraffe(fen)
-    elif nn_type == 'movemap':
-        return fen_to_movemap(fen)
-    else:
-        raise NotImplementedError("Error: Unsupported Neural Net input type.")
+    try:
+        nn_input = globals()['fen_to_' + nn_type](fen)
+    except:
+        raise NotImplementedError("Error: No fen_to_%s function exists." % (nn_type))
+    return nn_input
 
 
 # TODO: deal with en passant and castling
@@ -186,7 +183,7 @@ def fen_to_bitmap(fen):
         c_file += 1
         if c_rank == 0 and c_file == 8:
             break
-    return channels
+    return (channels,)
 
 
 def in_bounds(rank_idx, file_idx):
@@ -676,7 +673,7 @@ def fen_to_movemap(fen):
     return bs, mm
 
 
-def get_diagonals(channels):
+def get_diagonals(channels, size_per_tile):
     """
         Retrieves and returns the diagonals from the board
 
@@ -688,9 +685,8 @@ def get_diagonals(channels):
                 Each piece array has 10 diagonals with max size of 8 (shorter diagonals are 0 padded at the end)
                 Diagonal ordering is a3 up, a6 down, a2 up, a7 down, a1 up, a8 down, b1 up, b8 down, c1 up, c8 down
     """
-    NUM_CHANNELS
-    diagonals = np.zeros((10, BOARD_LENGTH, NUM_CHANNELS))
-    for i in xrange(NUM_CHANNELS):
+    diagonals = np.zeros((10, BOARD_LENGTH, size_per_tile))
+    for i in xrange(size_per_tile):
         index = 0
         for o in xrange(-2, 3):
             diag_up = np.diagonal(channels[:, :, i], offset=o)

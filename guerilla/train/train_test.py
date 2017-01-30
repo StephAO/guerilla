@@ -148,70 +148,73 @@ def training_test(nn_input_type, verbose=False):
     Runs training in variety of fashions.
     Checks crashing, decrease in cost over epochs, consistent output, and memory usage.
     """
-    success = True
     # Set hyper params for mini-test
-    
+    full_success = True
     for t_m in nn.NeuralNet.training_modes:
-        error_msg = ""
-        try:
-            with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
-                g.search.max_depth = 1
+        for use_conv in [True,False]:
+            success = True
+            error_msg = ""
+            try:
+                with Guerilla('Harambe', 'w', verbose=verbose, 
+                    NN_INPUT_TYPE=nn_input_type, USE_CONV=use_conv) as g:
+                    g.search.max_depth = 1
 
-                t = Teacher(g, training_mode=t_m, test=True, verbose=verbose, 
-                            hp_load_file='training_test.yaml')
-                if t_m == 'adagrad':
-                    t.set_hyper_params(LEARNING_RATE=0.00001)
-                elif t_m == 'adadelta':
-                    continue  # TODO remove when adadelta is fully implemented
-                    t.set_hyper_params(LEARNING_RATE=0.00001)
-                elif t_m == 'bootstrap':
-                    t.set_hyper_params(LEARNING_RATE=0.00001)
+                    t = Teacher(g, training_mode=t_m, test=True, verbose=verbose, 
+                                hp_load_file='training_test.yaml')
+                    if t_m == 'adagrad':
+                        t.set_hyper_params(LEARNING_RATE=0.00001)
+                    elif t_m == 'adadelta':
+                        continue  # TODO remove when adadelta is fully implemented
+                        t.set_hyper_params(LEARNING_RATE=0.00001)
+                    elif t_m == 'bootstrap':
+                        t.set_hyper_params(LEARNING_RATE=0.00001)
 
-                t.set_bootstrap_params(num_bootstrap=400)  # 488037
-                t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
-                t.set_sp_params(num_selfplay=1, max_length=3)
-                t.sts_on = False
-                t.sts_interval = 100
+                    t.set_bootstrap_params(num_bootstrap=100500)  # 488037
+                    t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
+                    t.set_sp_params(num_selfplay=1, max_length=3)
+                    t.sts_on = False
+                    t.sts_interval = 100
 
-                pre_heap_size = hpy().heap().size
-                t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay'], training_time=60)
-                post_heap_size = hpy().heap().size
+                    pre_heap_size = hpy().heap().size
+                    t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay'], training_time=60)
+                    post_heap_size = hpy().heap().size
 
-                loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
-                # Wrong number of losses
-                if len(loss['train_loss']) != t.hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != t.hp['NUM_EPOCHS'] + 1:
-                    error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
-                                 "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d\n" % \
-                                 (t.hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
-                    success = False
-                # Training loss went up
-                if loss['train_loss'][0] <= loss['train_loss'][-1]:
-                    error_msg += "Bootstrap training loss went up. Losses:\n%s\n" % (loss['train_loss'])
-                    success = False
-                # Validation loss went up
-                if loss['loss'][0] <= loss['loss'][-1]:
-                    error_msg += "Bootstrap validation loss went up. Losses:\n%s\n" % (loss['loss'])
-                    success = False
-                # Memory usage increased significantly
-                if float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size) > 0.01:
-                    success = False
-                    error_msg += "Memory increasing significantly when running training.\n" \
-                                 "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%\n" \
-                                 % (pre_heap_size, post_heap_size,
-                                    100. * float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size))
-        # Training failed
-        except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            error_msg += "The following error occured during the training:" \
-                         "\n  type:\n    %s\n\n  Error msg:\n    %s\n\n  traceback:\n    %s\n" % \
-                         (str(exc_type).split('.')[1][:-2], exc_value, \
-                          '\n    '.join(''.join(traceback.format_tb(exc_traceback)).split('\n')))
-            success = False
+                    loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
+                    # Wrong number of losses
+                    if len(loss['train_loss']) != t.hp['NUM_EPOCHS'] + 1 or len(loss['loss']) != t.hp['NUM_EPOCHS'] + 1:
+                        error_msg += "Some bootstrap epochs are missing training or validation losses.\n" \
+                                     "Number of epochs: %d,  Number of training losses: %d, Number of validation losses: %d\n" % \
+                                     (t.hp['NUM_EPOCHS'], len(loss['train_loss']), len(loss['loss']))
+                        success = False
+                    # Training loss went up
+                    if loss['train_loss'][0] <= loss['train_loss'][-1]:
+                        error_msg += "Bootstrap training loss went up. Losses:\n%s\n" % (loss['train_loss'])
+                        success = False
+                    # Validation loss went up
+                    if loss['loss'][0] <= loss['loss'][-1]:
+                        error_msg += "Bootstrap validation loss went up. Losses:\n%s\n" % (loss['loss'])
+                        success = False
+                    # Memory usage increased significantly
+                    if float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size) > 0.01:
+                        success = False
+                        error_msg += "Memory increasing significantly when running training.\n" \
+                                     "Starting heap size: %d bytes, Ending heap size: %d bytes. Increase of %f %%\n" \
+                                     % (pre_heap_size, post_heap_size,
+                                        100. * float(abs(post_heap_size - pre_heap_size)) / float(pre_heap_size))
+            # Training failed
+            except Exception:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                error_msg += "The following error occured during the training:" \
+                             "\n  type:\n    %s\n\n  Error msg:\n    %s\n\n  traceback:\n    %s\n" % \
+                             (str(exc_type).split('.')[1][:-2], exc_value, \
+                              '\n    '.join(''.join(traceback.format_tb(exc_traceback)).split('\n')))
+                success = False
 
-        if not success:
-            print "Training with type %s fails:\n%s" % (t_m, error_msg)
+            if not success:
+                print "Training with type %s with use conv set to %s fails:\n%s" % (t_m, use_conv, error_msg)
+                full_success = False
 
-    return success
+    return full_success
 
 def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     """
@@ -559,12 +562,12 @@ def run_train_tests():
 
     all_tests["Training Tests"] = {
         'Training': training_test,
-        'Load and Resume': load_and_resume_test,
-        'Learn Moves': learn_moves_test
+        #'Load and Resume': load_and_resume_test,
+        #'Learn Moves': learn_moves_test
     }
 
     success = True
-    input_types = ['movemap', 'bitmap', 'giraffe',]
+    input_types = ['movemap', 'bitmap', 'giraffe']
     print "\nRunning Train Tests...\n"
 
     print "--- Stockfish tests ---"

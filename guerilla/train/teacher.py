@@ -483,6 +483,8 @@ class Teacher:
         """
 
         train_check_spacing = (len(fens) - self.hp['VALIDATION_SIZE']) / self.hp['TRAIN_CHECK_SIZE']
+        if (len(fens) - self.hp['VALIDATION_SIZE']) % self.hp['TRAIN_CHECK_SIZE'] != 0:
+            raise ValueError("Error: Train check spacing is going to cause issues")
 
         train_fens = fens[:(-1) * self.hp['VALIDATION_SIZE']]  # fens to train on
         valid_fens = fens[(-1) * self.hp['VALIDATION_SIZE']:]  # fens to check convergence on
@@ -1075,15 +1077,39 @@ def main():
     with Guerilla('Harambe', 'w') as g:
         g.search.max_depth = 2
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=10000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=80000)  # 488037
         t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         t.checkpoint_interval = None
         t.run(['train_bootstrap'], training_time=run_time)
-        print eval_sts(g)
+        print "Without conv layer", eval_sts(g)
         # t.run(['load_and_resume'], training_time=28000)
+
+    with Guerilla('Harambe', 'w', USE_CONV=True) as g:
+        g.search.max_depth = 2
+        t = Teacher(g, training_mode='adagrad')
+        t.set_bootstrap_params(num_bootstrap=80000)  # 488037
+        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
+        t.set_sp_params(num_selfplay=10, max_length=12)
+        t.sts_on = False
+        t.sts_interval = 100
+        t.checkpoint_interval = None
+        t.run(['train_bootstrap'], training_time=run_time)
+        print "With conv layer", eval_sts(g)
+
+    with Guerilla('Harambe', 'w', NN_INPUT_TYPE='giraffe') as g:
+        g.search.max_depth = 2
+        t = Teacher(g, training_mode='adagrad')
+        t.set_bootstrap_params(num_bootstrap=80000)  # 488037
+        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
+        t.set_sp_params(num_selfplay=10, max_length=12)
+        t.sts_on = False
+        t.sts_interval = 100
+        t.checkpoint_interval = None
+        t.run(['train_bootstrap'], training_time=run_time)
+        print "Giraffe", eval_sts(g)
 
 
 if __name__ == '__main__':

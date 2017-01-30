@@ -1,5 +1,5 @@
 "NN_INPUT_TYPE" : "movemap"
-"USE_CONV" : true
+"USE_CONV" : false
 "NUM_FC" : 3
 "NUM_HIDDEN" : 1024
 "NUM_FEAT" : 10

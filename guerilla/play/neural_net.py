@@ -260,7 +260,6 @@ class NeuralNet:
                 nodes_left -= nodes_used
                 self.weight_2nd_dim.append(nodes_used)
             else:
-
                 if nodes_left < self.hp['MIN_NUM_NODES']:
                     raise ValueError("Not enough hidden nodes for the different input types")
                 ratio_of_layer = float(np.prod(input_size)) / self.total_input_size

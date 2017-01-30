@@ -114,9 +114,9 @@ class Teacher:
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
         # Build unique file modifier which demarks final output files from this session
-        self.file_modifier = "_%s_%s_%s_%sFC.p" % (time.strftime("%m%d-%H%M"),
+        self.file_modifier = "_%s_%s%s_%sFC.p" % (time.strftime("%m%d-%H%M"),
                                                    self.nn.hp['NN_INPUT_TYPE'],
-                                                   'conv' if \
+                                                   '_conv' if \
                                                    (self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' \
                                                    and self.guerilla.nn.hp['USE_CONV']) 
                                                    else '',

@@ -140,7 +140,7 @@ class NeuralNet:
         # input placeholders
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.data = tf.placeholder(tf.float32, shape=[None, 8, 8, 48])
-            self.state_data = tf.placeholder(tf.float32, shape=[None, 15])
+            self.state_data = tf.placeholder(tf.float32, shape=[None, 14])
             self.true_value = tf.placeholder(tf.float32, shape=[None])
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.data = tf.placeholder(tf.float32, shape=[None, dh.GF_FULL_SIZE])
@@ -152,7 +152,7 @@ class NeuralNet:
 
         # assignment placeholders
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_state_placeholder = tf.placeholder(tf.float32, shape=[15, 64])
+            self.W_state_placeholder = tf.placeholder(tf.float32, shape=[14, 64])
             self.W_board_placeholder = tf.placeholder(tf.float32, shape=[8 * 8 * 48, 960])
 
             self.b_state_placeholder = tf.placeholder(tf.float32, shape=[64])
@@ -367,7 +367,7 @@ class NeuralNet:
             bias variables to a constant.
         """
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.W_state = self.weight_variable([15, 64])
+            self.W_state = self.weight_variable([14, 64])
             self.W_board = self.weight_variable([8 * 8 * 48, 960])
 
             self.b_state = self.bias_variable([64])

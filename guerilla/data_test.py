@@ -373,11 +373,11 @@ def move_map_input_test():
 
     success = True
 
-    if board_state.shape != (15,):
+    if board_state.shape != (14,):
         print "Failure: shape of board info is incorrect"
         success = False 
 
-    if not (board_state == np.array([1,0,0,0,0,0,3,1,1,3,1,0,2,1,1])).all():
+    if not (board_state == np.array([0,0,0,0,0,3,1,1,3,1,0,2,1,1])).all():
         print "Failure: Info of board_state is incorrect"
         success = False 
 

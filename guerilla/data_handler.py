@@ -553,10 +553,9 @@ def fen_to_movemap(fen):
         Order for pieces attacking is 
         wq, wr*2, wb, wn*2, wp*2, wk, bq, br*2, bb*2, bn, bp*2, bk
 
-        Board state is based on Giraffe and is an array of size 15:
-            [0] Side to Move
-            [1 - 4] Castling Rights
-            [5-14] Number of each type of pieces
+        Board state is based on Giraffe and is an array of size 14:
+            [0 - 3] Castling Rights
+            [4 - 13] Number of each type of pieces
 
         Inputs:
             fen[String]:
@@ -568,15 +567,14 @@ def fen_to_movemap(fen):
             mm [Numpy.Array]
                 Move map information.
     """
-    bs = np.zeros((15))
+    bs = np.zeros((14))
     mm = np.zeros((BOARD_LENGTH, BOARD_LENGTH, 48))
 
     # Start index for the material configuration
-    START_MAT_CONF = 5
+    START_MAT_CONF = 4
 
     fen = fen.split(' ')
     board_str = fen[0]
-    turn = fen[1]
     castling = fen[2]
 
     piece_type_index = {
@@ -630,14 +628,11 @@ def fen_to_movemap(fen):
         'bk': 1
     }
 
-    # Slide to move
-    bs[0] = 1 if (turn == 'w') else 0
-
     # Castling rights
-    bs[1] = 1 if ('Q' in castling) else 0
-    bs[2] = 1 if ('K' in castling) else 0
-    bs[3] = 1 if ('q' in castling) else 0
-    bs[4] = 1 if ('k' in castling) else 0
+    bs[0] = 1 if ('Q' in castling) else 0
+    bs[1] = 1 if ('K' in castling) else 0
+    bs[2] = 1 if ('q' in castling) else 0
+    bs[3] = 1 if ('k' in castling) else 0
 
     occupied_bitmap = [[0] * BOARD_LENGTH for _ in range(BOARD_LENGTH)]
 

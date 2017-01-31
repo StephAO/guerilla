@@ -95,16 +95,31 @@ def checkmate_search_test():
     Tests that checkmates are working.
     """
 
-    s = Search(eval_fn=(lambda x: 1), search_mode='complementmax')
-    white_wins = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
-    black_wins = chess.Board('8/8/8/8/8/2k5/1p6/rK6 w - - 0 1')
-    result, _, _ = s.run(white_wins)
+    s = Search(eval_fn=(lambda x: 0.5), max_depth = 1,search_mode='complementmax')
+
+    # Checkmates on this turn
+    black_loses = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
+    white_loses = chess.Board('8/8/8/8/8/2k5/1p6/rK6 w - - 0 1')
+    result, _, _ = s.run(black_loses)
     if result != 0:
-        print "Checkmate Search Test failed, invalid result for white checkmate."
+        print "Checkmate Search Test failed, invalid result for black checkmate."
         return False
-    result, _, _ = s.run(black_wins)
+    result, _, _ = s.run(white_loses)
     if result != 0:
-        print "Checkmate search test failed, invalid result for black checkmate."
+        print "Checkmate search test failed, invalid result for white checkmate."
+        return False
+
+    # Checkmates on next turn
+    white_wins_next = chess.Board('6k1/R4ppp/8/8/8/8/8/4K3 w - - 0 1')
+    black_wins_next = chess.Board('8/8/8/8/8/2k5/rp6/1K6 b - - 0 1')
+
+    result,move, _ = s.run(white_wins_next)
+    if result!= 1 and str(move) != 'a7a8':
+        print "Checkmate Search test failed, invalid result for white checkmating black."
+        return False
+    result,move, _ = s.run(white_wins_next)
+    if result!= 1 and str(move) != 'a2a1':
+        print "Checkmate Search test failed, invalid result for black checkmating white."
         return False
 
     return True

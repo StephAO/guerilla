@@ -574,7 +574,7 @@ class Teacher:
         if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
             # Configure data
             boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 48))
-            state_data = np.zeros((self.hp['BATCH_SIZE'], 15))
+            state_data = np.zeros((self.hp['BATCH_SIZE'], 14))
         elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
         elif self.nn.hp['NN_INPUT_TYPE'] == 'bitmap':
@@ -640,7 +640,7 @@ class Teacher:
         if self.nn.hp['NN_INPUT_TYPE'] == 'movemap':
             # Configure data
             boards = np.zeros((self.hp['BATCH_SIZE'], 8, 8, 48))
-            state_data = np.zeros((self.hp['BATCH_SIZE'], 15))
+            state_data = np.zeros((self.hp['BATCH_SIZE'], 14))
         elif self.nn.hp['NN_INPUT_TYPE'] == 'giraffe':
             # Configure data
             boards = np.zeros((self.hp['BATCH_SIZE'], dh.GF_FULL_SIZE))
@@ -876,6 +876,7 @@ class Teacher:
             Inputs:
                 Game [List]
                     A game consists of a sequential list of board states. Each board state is a FEN.
+                    FENs are alternating white's turn / black's turn.
         """
 
         num_boards = len(game)
@@ -884,28 +885,32 @@ class Teacher:
         # turn pruning for search off
         self.guerilla.search.reci_prune = False
 
-        # TODO: Double check logic here, the estimator J should always output the reward for the same player.
-
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
-        for i, board in enumerate(game):
-            value, _, board_fen = self.guerilla.search.run(chess.Board(board))
+        for i, root_board in enumerate(game):
+            # Output value is P(winning of current player)
+            value, _, leaf_board = self.guerilla.search.run(chess.Board(root_board))
 
-            # Get values and gradients for white plays next
-            if dh.white_is_next(board_fen):
+            # Modify value so that it represents P(white winning)
+            if dh.white_is_next(root_board):
                 game_info[i]['value'] = value
-                game_info[i]['gradient'] = self.nn.get_all_weights_gradient(board_fen)
             else:
-                # value is probability of WHITE winning
                 game_info[i]['value'] = 1 - value
 
+            # Get gradient of prediction on leaf board
+            if dh.white_is_next(leaf_board):
+                game_info[i]['gradient'] = self.nn.get_all_weights_gradient(leaf_board)
+            else:
                 # Get NEGATIVE gradient of a flipped board
                 # Explanation:
-                #   Flipped board = Black -> White, so now white plays next (as required by NN)
-                #   Gradient of flipped board = Gradient of what used to be black
-                #   Desired gradient = Gradient of what was originally white = - Gradient of flipped board
-                game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(board_fen))]
+                #   P(white win | board) = 1 - P(black win | board)
+                #   P(white win | board) = P(black win | flip(board))
+                #   Thus:
+                #   Grad(P(white win | board )) = Grad(1 - P(black win | board))
+                #                                   = - Grad(P(black win | board))
+                #                                                                = - Grad(P(white win | flip(board)))
+                game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))]
 
         # turn pruning for search back on
         self.guerilla.search.reci_prune = True

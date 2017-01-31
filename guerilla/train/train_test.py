@@ -334,7 +334,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     hp['VALIDATION_SIZE'] = 30
     hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.00005
-    hp['LOSS_THRESHOLD'] = 0.001
+    hp['LOSS_THRESHOLD'] = float("-inf") # so that convergence threshold is never met
 
     # Probability value Constants (0 <= x <= 1)
     high_value = 0.9
@@ -553,8 +553,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
-        #'Stockfish Handling': stockfish_test,
-        #'NSV Alignment': nsv_test
+        'Stockfish Handling': stockfish_test,
+        'NSV Alignment': nsv_test
     }
 
     all_tests["Training Tests"] = {

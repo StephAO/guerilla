@@ -633,8 +633,8 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
-        #'Stockfish Handling': stockfish_test,
-        #'NSV Alignment': nsv_test
+        'Stockfish Handling': stockfish_test,
+        'NSV Alignment': nsv_test
     }
 
     all_tests["Training Tests"] = {

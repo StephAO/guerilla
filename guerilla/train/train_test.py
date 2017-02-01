@@ -550,6 +550,83 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
     return success
 
+
+def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
+    """
+    Tests that TD training moves two sequential board states closer together in value.
+    Note: Only tests TD, not TD-Leaf.
+        Input:
+            num_iter [Int] (Optional)
+                Number of iterations of TD training which are performed.
+            dec_thresh [Float] (Optional)
+                Minimum percent change required for the training to be a success. As a fraction. 0 <= dec_thresh < 1.
+            verbose [Boolean] (Optional)
+                Turn Verbose Mode on and off.
+        Output:
+            Result [Boolean]
+                True if test passed, False if test failed.
+    """
+
+    err_msg = ""
+    success = True
+
+    # Select two very different fens -> so the initial scores are very different
+    fens = ['r5k1/pp1rppbp/2n2np1/2pq1b2/6P1/1P2PN2/PB1PBP1P/RNQ2RK1 w - - 1 11',
+            'r1bqk2r/1p3pbp/p2p1np1/4p3/2BPP3/2p5/PP2NPPP/R1BQK2R b KQkq - 0 11']
+
+    for td_training_mode in ['gradient_descent', 'adagrad']:
+
+        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type, seed=123) as g:
+            g.search.max_depth = 0 # Standard temporal difference
+
+            # Due to differences in initialization distribution
+            if td_training_mode == 'gradient_descent':
+                if nn_input_type == 'bitmap':
+                    td_lrn_rate = 0.001
+                else:
+                    td_lrn_rate = 0.1
+            else:
+                if nn_input_type == 'bitmap':
+                    td_lrn_rate = 0.000001
+                else:
+                    td_lrn_rate = 0.00001
+
+            t = Teacher(g, TD_LRN_RATE = td_lrn_rate, td_training_mode = td_training_mode, verbose=verbose)
+            if td_training_mode == 'gradient_descent':
+                t.td_batch_size = 1
+            elif td_training_mode == 'adagrad':
+                t.reset_adagrad()
+                t.td_batch_size = 5
+            else:
+                raise NotImplementedError("TD Convergence Test for this training mode has not yet been implemented!")
+
+            first = second = init_diff = 0
+            for i in range(num_iter):
+                first = g.nn.evaluate(fens[0])
+                second = 1 - g.nn.evaluate(dh.flip_board(fens[1]))
+
+                # store initial evaluations
+                if i == 0:
+                    init_diff = abs(first - second)
+
+                if verbose:
+                    print "%d,%f,%f,%f" % (i, first, second, abs(first - second))
+
+                # run td leaf
+                t.td_leaf(fens)
+
+            final_diff = abs(first - second)
+            perc_change = 1 - final_diff/init_diff
+            if perc_change < dec_thresh:
+                err_msg += "Convergence failure on training mode %s: " % td_training_mode
+                err_msg += "Initial Diff: %f Final Diff: %f Percent Change: %f" % (init_diff, final_diff, perc_change)
+                success = False
+
+    if not success:
+        print "TD Convergence Test Failed: \n%s" % err_msg
+
+    return success
+
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {

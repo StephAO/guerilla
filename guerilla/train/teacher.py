@@ -8,7 +8,6 @@ from operator import add
 
 import chess
 import chess.pgn
-import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from pkg_resources import resource_filename
@@ -29,7 +28,9 @@ class Teacher:
         'load_and_resume'
     ]
 
-    def __init__(self, _guerilla, hp_load_file=None, training_mode=None, 
+    def __init__(self, _guerilla, hp_load_file=None,
+                 bootstrap_training_mode='adagrad',
+                 td_training_mode = 'gradient_descent',
                  test=False, verbose=True, **hp):
         """
             Initialize teacher, sets member variables.
@@ -37,8 +38,10 @@ class Teacher:
             Inputs:
                 _guerilla [Guerilla]:
                     Guerilla to train
-                training_mode [String]:
-                    Training mode to be used. Defaults to Adagrad.
+                bootstrap_training_mode [String]:
+                    Training mode to be used for bootstrap. Defaults to Adagrad.
+                td_training_mode [String]:
+                    Training mode to be used for TD. Defaults to gradient descent.
                 test [Bool]:
                     Set to true if its a test. If true, doesn't save weights.
                 verbose [Bool]:
@@ -77,9 +80,10 @@ class Teacher:
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
         self.td_end_length = 12  # How many moves are included in endgame training
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
+        self.td_training_mode = td_training_mode # Training mode to use for TD training
         self.td_w_update = None
         self.td_fen_index = 0
-        self.td_batch_size = 50
+        self.td_batch_size = 5
 
         self.hp = {}
         if hp_load_file is None:
@@ -87,17 +91,16 @@ class Teacher:
         self.set_hyper_params_from_file(hp_load_file)
         self.set_hyper_params(**hp)
 
-        if training_mode is None:
-            training_mode = 'adagrad'
-        self.training_mode = training_mode
+        self.training_mode = bootstrap_training_mode
         self.train_step = self.nn.init_training(self.training_mode, learning_rate = self.hp['LEARNING_RATE'],
                                                 reg_const = self.hp['REGULARIZATION_CONST'], loss_fn = self.nn.MSE,
                                                 decay_rate= self.hp['DECAY_RATE'])
 
         if self.verbose:
-            print "Training neural net using %s." % self.training_mode
+            print "Bootstrap training neural net using %s." % self.training_mode
+            print "TD training neural net using %s." % self.td_training_mode
 
-        if self.training_mode == 'adagrad':
+        if self.td_training_mode == 'adagrad':
             self.td_adagrad_acc = None
             self.weight_shapes = []
             for weight in self.nn.all_weights_biases:
@@ -324,7 +327,7 @@ class Teacher:
                                   'full_length': self.td_full_length,
                                   'batch_size': self.td_batch_size,
                                   }
-        if self.training_mode == 'adagrad':
+        if self.td_training_mode == 'adagrad':
             state['adagrad'] = {'w_update': self.td_w_update,
                                 'fen_index': self.td_fen_index,
                                 'adagrad_acc': self.td_adagrad_acc}
@@ -372,7 +375,7 @@ class Teacher:
         self.set_sp_params(**state.pop('sp_param'))
 
         # Load adagrad params
-        if self.training_mode == 'adagrad':
+        if self.td_training_mode == 'adagrad':
             self.td_w_update = state['adagrad']['w_update']
             self.td_fen_index = state['adagrad']['fen_index']
             self.td_adagrad_acc = state['adagrad']['adagrad_acc']
@@ -781,7 +784,7 @@ class Teacher:
             sts_scores = []
 
         self.td_fen_index = 0
-        if self.training_mode == 'adagrad':
+        if self.td_training_mode == 'adagrad':
             self.reset_adagrad()
 
         for i in xrange(start_idx, len(game_indices)):
@@ -858,12 +861,12 @@ class Teacher:
         Note: The plurality of gradients is a function of the number nodes not the number of actual gradients.
         """
         avg_gradients = [grad / self.td_batch_size for grad in self.td_w_update]
-        if self.training_mode == 'adagrad':
+        if self.td_training_mode == 'adagrad':
             self.td_adagrad_acc = map(add, self.td_adagrad_acc, [grad ** 2 for grad in avg_gradients])
             learning_rates = [self.hp['TD_LRN_RATE'] / (np.sqrt(grad) + 1.0e-8) for grad in self.td_adagrad_acc]
-        elif self.training_mode == 'adadelta':
+        elif self.td_training_mode == 'adadelta':
             raise NotImplementedError("TD leaf adadelta training has not yet been implemented")
-        elif self.training_mode == 'gradient_descent':
+        elif self.td_training_mode == 'gradient_descent':
             learning_rates = [self.hp['TD_LRN_RATE']] * len(avg_gradients)
         else:
             raise NotImplementedError("Unrecognized training type")
@@ -977,7 +980,7 @@ class Teacher:
             sts_scores = []
 
         self.td_fen_index = 0
-        if self.training_mode == 'adagrad':
+        if self.td_training_mode == 'adagrad':
             self.reset_adagrad()
 
         for i in xrange(start_idx, len(game_indices)):
@@ -1043,37 +1046,6 @@ class Teacher:
         print "Scores: " + ",".join(map(str, score_out))
 
 
-def direction_test():
-    with Guerilla('Harambe', 'w', load_file='weights_train_bootstrap_20160930-193556.p') as g:
-        g.search.max_depth = 0
-        t = Teacher(g)
-        board = chess.Board()
-
-        # num_vars
-        num_fen = 2
-        num_td = 100
-
-        # Build fens
-        fens = [None] * num_fen
-        for i in range(num_fen):
-            fens[i] = board.fen()
-            board.push(list(board.legal_moves)[0])
-
-        # print initial evaluations
-        for i in range(num_td):
-            curr_vals = []
-            for j in range(num_fen / 2):
-                curr_vals.append(g.nn.evaluate(fens[2 * j]))
-                curr_vals.append(1 - g.nn.evaluate(dh.flip_board(fens[2 * j + 1])))
-
-            a = curr_vals[0]
-            b = curr_vals[1]
-            print "%d,%f,%f,%f" % (i, a, b, abs(b - a))
-
-            # run td leaf
-            t.td_leaf(fens)
-
-
 def main():
     run_time = 0
     if len(sys.argv) >= 2:
@@ -1095,14 +1067,13 @@ def main():
         g.search.max_depth = 2
         t = Teacher(g, training_mode='adagrad')
         t.set_bootstrap_params(num_bootstrap=10000)  # 488037
-        t.set_td_params(num_end=5, num_full=12, randomize=False, end_length=2, full_length=12)
+        t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         t.checkpoint_interval = None
         t.run(['train_bootstrap'], training_time=run_time)
         print eval_sts(g)
-        # t.run(['load_and_resume'], training_time=28000)
 
 
 if __name__ == '__main__':

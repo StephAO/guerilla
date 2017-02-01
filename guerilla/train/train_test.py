@@ -169,7 +169,7 @@ def training_test(nn_input_type, verbose=False):
                     elif t_m == 'bootstrap':
                         t.set_hyper_params(LEARNING_RATE=0.00001)
 
-                    t.set_bootstrap_params(num_bootstrap=100500)  # 488037
+                    t.set_bootstrap_params(num_bootstrap=10500)  # 488037
                     t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
                     t.set_sp_params(num_selfplay=1, max_length=3)
                     t.sts_on = False
@@ -556,14 +556,14 @@ def load_and_resume_test(nn_input_type, verbose=False):
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
-        #'Stockfish Handling': stockfish_test,
-        #'NSV Alignment': nsv_test
+        'Stockfish Handling': stockfish_test,
+        'NSV Alignment': nsv_test
     }
 
     all_tests["Training Tests"] = {
         'Training': training_test,
-        #'Load and Resume': load_and_resume_test,
-        #'Learn Moves': learn_moves_test
+        'Load and Resume': load_and_resume_test,
+        'Learn Moves': learn_moves_test
     }
 
     success = True

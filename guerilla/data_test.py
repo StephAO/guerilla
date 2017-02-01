@@ -193,31 +193,29 @@ def giraffe_input_test():
     state, board, piece = dh.fen_to_giraffe(random_fen)
     giraffe = []
     giraffe.extend(state.tolist())
+    giraffe.append(None) # hacky way to fix removing turn to move
     giraffe.extend(piece.tolist())
     giraffe.extend(board.tolist())
     if len(giraffe) != 351:
         print "Failure: Size of giraffe is incorrect"
         return False
-    if giraffe[0] != 1: # White's turn
-        print "Failure: Turn description is incorrect"
-        return False
-    if giraffe[1] != 0 or giraffe[2] != 0 \
-        or giraffe[3] != 0 or giraffe[4] != 0: # Castling options
+    if giraffe[0] != 0 or giraffe[1] != 0 \
+        or giraffe[2] != 0 or giraffe[3] != 0: # Castling options
         print "Failure: Castling description is incorrect"
         return False
     # Order is always queens, rooks, bishops, knigths, pawns
-    if giraffe[5] != 1 \
-        or giraffe[6] != 2 \
-        or giraffe[7] != 1 \
-        or giraffe[8] != 2 \
-        or giraffe[9] != 3: # White pieces count
+    if giraffe[4] != 1 \
+        or giraffe[5] != 2 \
+        or giraffe[6] != 1 \
+        or giraffe[7] != 2 \
+        or giraffe[8] != 3: # White pieces count
         print "Failure: White piece count is incorrect"
         return False
-    if giraffe[10] != 1 \
+    if giraffe[9] != 1 \
+        or giraffe[10] != 1 \
         or giraffe[11] != 1 \
         or giraffe[12] != 1 \
-        or giraffe[13] != 1 \
-        or giraffe[14] != 5: # Black piece count
+        or giraffe[13] != 5: # Black piece count
         print "Failure: Black piece count is incorrect"
         return False
     # exists, rank, file, lowest valued defender, lowest valued attacker
@@ -377,11 +375,11 @@ def move_map_input_test():
 
     success = True
 
-    if board_state.shape != (15,):
+    if board_state.shape != (14,):
         print "Failure: shape of board info is incorrect"
         success = False 
 
-    if not (board_state == np.array([1,0,0,0,0,0,3,1,1,3,1,0,2,1,1])).all():
+    if not (board_state == np.array([0,0,0,0,0,3,1,1,3,1,0,2,1,1])).all():
         print "Failure: Info of board_state is incorrect"
         success = False 
 

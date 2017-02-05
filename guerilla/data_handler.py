@@ -28,6 +28,9 @@ BOARD_DATA_SIZE = 128
 PIECE_DATA_SIZE = 208
 GF_FULL_SIZE = 350
 
+MOVEMAP_TILE_SIZE = 48
+BITMAP_TILE_SIZE = 12
+
 crosswise_fn = [
     lambda x: np.array([0, -x - 1]),  # left
     lambda x: np.array([0, +x + 1]),  # right
@@ -157,8 +160,7 @@ def fen_to_bitmap(fen):
     # turn = fen[1]
     # castling = fen[2]
     # en_passant = fen[3]
-    NUM_CHANNELS = 12
-    channels = np.zeros((BOARD_LENGTH, BOARD_LENGTH, NUM_CHANNELS))
+    channels = np.zeros((BOARD_LENGTH, BOARD_LENGTH, BITMAP_TILE_SIZE))
 
     c_file = 0
     c_rank = 7
@@ -547,7 +549,7 @@ def fen_to_movemap(fen):
                 Move map information.
     """
     bs = np.zeros((14))
-    mm = np.zeros((BOARD_LENGTH, BOARD_LENGTH, 48))
+    mm = np.zeros((BOARD_LENGTH, BOARD_LENGTH, MOVEMAP_TILE_SIZE))
 
     # Start index for the material configuration
     START_MAT_CONF = 4

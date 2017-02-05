@@ -55,9 +55,9 @@ class NeuralNet:
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.variable_value = 0.01
             self.input_sizes = [(dh.STATE_DATA_SIZE,), 
-                                (dh.BOARD_LENGTH, dh.BOARD_LENGTH, 48)]
+                                (dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE)]
             # Used for convolution
-            self.size_per_tile = 48
+            self.size_per_tile = dh.MOVEMAP_TILE_SIZE
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.variable_value = 0.001
             self.input_sizes = [(dh.STATE_DATA_SIZE,), \
@@ -65,9 +65,9 @@ class NeuralNet:
             self.hp['USE_CONV'] = False
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             self.variable_value = 0.1
-            self.input_sizes = [(dh.BOARD_LENGTH, dh.BOARD_LENGTH, 12)]
+            self.input_sizes = [(dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.BITMAP_TILE_SIZE)]
             # Used for convolution
-            self.size_per_tile = 12
+            self.size_per_tile = dh.BITMAP_TILE_SIZE
         else:
             raise NotImplementedError("Neural Net input type %s is not implemented" % (self.hp['NN_INPUT_TYPE']))
 

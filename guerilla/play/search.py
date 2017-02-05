@@ -306,9 +306,9 @@ def k_top(arr, k, key=None):
         key = lambda x: x
 
     # quickselect -> also partitions
-    quickselect(arr, 0, len(arr) - 1, len(arr) - k, key = key)
+    quickselect(arr, 0, len(arr) - 1, len(arr) - k, key=key)
 
-    return arr[k:]
+    return arr[-k:]
 
 def quickselect(arr, left, right, k, key=None):
     #TODO: Test
@@ -341,7 +341,7 @@ def quickselect(arr, left, right, k, key=None):
         pivot_idx = random.randint(left, right)
         pivot_idx = partition(arr, left, right, pivot_idx, key=key)
         if k == pivot_idx:
-            return arr[k]
+            return arr[k] 
         elif k < pivot_idx:
             right = pivot_idx - 1
         else:

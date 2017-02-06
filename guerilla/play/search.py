@@ -12,14 +12,13 @@ class Search:
     Implements game tree search.
     """
 
+    search_modes = ['complementmax', 'rank_prune']
+
     def __init__(self, leaf_eval, inner_eval=None, max_depth=2, search_mode="complementmax"):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
-        self.search_opts = {"complementmax": self.complementmax,
-                            "rank_prune": self.rank_prune,
-                            "montecarlo": self.monte_carlo}
 
-        if search_mode not in self.search_opts:
+        if search_mode not in Search.search_modes:
             raise NotImplementedError("Invalid Search option!")
         self.search_mode = search_mode
 
@@ -32,7 +31,10 @@ class Search:
 
         # Rank Prune Parameters
         self.inner_eval = inner_eval if inner_eval is not None else leaf_eval
-        self.perc_prune = 0.5
+        self.prune_perc = 0.5
+        self.time_limit = 10
+        self.buff_time = 5
+        self.limit_depth = False
 
     def run(self, board):
         """
@@ -49,7 +51,12 @@ class Search:
                     FEN of the board of the leaf node which yielded the highest value.
         """
 
-        return self.search_opts[self.search_mode](board)
+        if self.search_mode == 'complementmax':
+            return self.complementmax(board)
+        elif self.search_mode == 'rank_prune':
+            return self.rank_prune(board)
+        else:
+            raise NotImplementedError("Invalid Search option!")
 
     def monte_carlo(self, board, search_time):
         start_time = time.clock()
@@ -136,21 +143,22 @@ class Search:
         # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
         return best_score, best_move, best_leaf
 
+
     # ---------- RANK PRUNE METHODS
 
-    def rank_prune(self, root_board, time_limit=10, buff_time=0.5):
+    def rank_prune(self, root_board, time_limit=None, limit_depth=None):
         """
             BFS-based search function which does breadth first evaluation of boards. Every child is evaluated using the
-            'inner_eval' function. The children are then ranked and 'perc_prune' are pruned. The non-pruned children
+            'inner_eval' function. The children are then ranked and 'prune_perc' are pruned. The non-pruned children
             are iteratively expanded upon and have their score updated based on this expansion. When time runs out
             leaf nodes are evaluated using 'leaf_eval' function.
             Inputs:
                 root_board [chess.Board]:
                     current state of board
                 time_limit [Float] (Optional)
-                    Maximum search time.
-                buff_time [Float] (Optional)
-                    Buffer time allocated to finding the global maximum once the search tree has been built.
+                    Maximum search time. If not specified, uses the class default.
+                limit_depth [Boolean] (Optional)
+                    If True then rank_prune depth is limited by self.max_depth. If False there is not depth limit.
             Outputs:
                 best_score [float]:
                     Score achieved by best move
@@ -159,12 +167,18 @@ class Search:
                 best_leaf [String]
                     FEN of the board of the leaf node which yielded the highest value.
         """
-        #TODO: Test
+
+        if time_limit is None:
+            time_limit = self.time_limit
+
+        if limit_depth is None:
+            limit_depth = self.limit_depth
 
         # Start timing
         start_time = time.time()
 
-        root = SearchNode(root_board.fen(), 0, self.inner_eval(root_board.fen()))
+        root = SearchNode(root_board.fen(), 0,
+                          self.score_board(root_board, eval_fn=self.inner_eval))  # Note: store unflipped fen
 
         # Evaluation Queue. Holds SearchNode
         queue = Queue.Queue()
@@ -187,10 +201,14 @@ class Search:
                 curr_depth = curr_node.depth
 
                 # Check if have time to finish, if not then switch to leaf_eval
-                time_left = time_limit - (time.time() - start_time) - buff_time
+                time_left = time_limit - (time.time() - start_time) - self.buff_time
                 if time_left < expand_time*queue.qsize():
                     print "Running out of time on depth %d" % curr_depth
                     is_leaf = True
+
+            # If depth limited and maximum depth is reached, skip expansion
+            if limit_depth and curr_depth == self.max_depth:
+                continue
 
             # If first layer then time it
             if first_expand:
@@ -209,20 +227,15 @@ class Search:
                 # Evaluate board using evaluation function or use cache if possible, but always replace with leaf eval
                 if fen not in cache or is_leaf:
                     # Check if draw or checkmate, otherwise evaluate
-                    if board.is_checkmate():
-                        cache[fen] = self.lose_value
-                    elif board.can_claim_draw() or board.is_stalemate():
-                        cache[fen] = self.draw_value
-                    else:
-                        # Evaluate, flip if necessary
-                        cache[fen] = self.leaf_eval(fen) if is_leaf else self.inner_eval(fen)
+                    cache[fen] = self.score_board(board, eval_fn=self.leaf_eval if is_leaf else self.inner_eval)
 
-                # Add as child
-                curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, cache[fen]))
+                # Note: Store unflipped fen
+                curr_node.add_child(move, SearchNode(board.fen(), curr_node.depth + 1, cache[fen]))
 
                 # Check if time-out
-                if time.time() - start_time + buff_time > time_limit:
+                if time.time() - start_time + self.buff_time > time_limit:
                     # clear queue and break
+                    print "Running out of time on depth %d. Queue size %d " % (curr_depth, queue.size())
                     queue = Queue.Queue()
                     break
 
@@ -236,10 +249,14 @@ class Search:
 
             # Expand if not on last layer
             if not is_leaf:
-                # Prune children
-                # TODO: Maybe this is better done in place
-                top_ranked = k_top(curr_node.get_child_nodes(), int(len(curr_node.children)*self.perc_prune),
-                                                  key=lambda x:x.value)
+                # Prune children if necessary
+                if len(curr_node.children) > 1:
+                    # TODO: Maybe this is better done in place
+                    top_ranked = k_top(curr_node.get_child_nodes(),
+                                       int(len(curr_node.children) * (1 - self.prune_perc)),
+                                       key=lambda x: x.value)
+                else:
+                    top_ranked = curr_node.get_child_nodes()
 
                 # Queue non-pruned children
                 for child in top_ranked:
@@ -248,6 +265,34 @@ class Search:
 
         # Minimax on game tree
         return minimaxtree(root)
+
+    def score_board(self, board, eval_fn):
+        """
+        Scores a board using the provided evaluation function, the lose value and the draw value.
+        Input:
+            board [chess.Board]
+                Board to be scored
+            eval_fn [Function]
+                Function by which the board is evaluated if its not a checkmate, stalemate or draw.
+        Output:
+            value [Float]
+                Board value.
+        """
+
+        # Flip board if necessary
+        fen = board.fen()
+        if dh.black_is_next(fen):
+            fen = dh.flip_board(fen)
+
+        # score
+        if board.is_checkmate():
+            return self.lose_value
+        elif board.can_claim_draw() or board.is_stalemate():
+            return self.draw_value
+        else:
+            # Evaluate
+            return eval_fn(fen)
+
 
 class SearchNode:
     def __init__(self, fen, depth, value):
@@ -285,7 +330,6 @@ class SearchNode:
         return "Node{%s, %d, %f, %d children}" % (self.fen, self.depth, self.value, len(self.children))
 
 def k_top(arr, k, key=None):
-    # TODO: Test
     """
     Selects the k-highest valued elements from the input list. i.e. k = 1 would yield the maximum element.
     Uses quickselect.
@@ -311,9 +355,8 @@ def k_top(arr, k, key=None):
     return arr[-k:]
 
 def quickselect(arr, left, right, k, key=None):
-    #TODO: Test
     """
-    Return the k-th smallest valued element from the input list.
+    Return the array with the k-th smallest valued element at the k-th index.
     Based on: https://en.wikipedia.org/wiki/Quickselect
     Input:
         arr [List]
@@ -413,7 +456,7 @@ def minimaxtree(root, a=1.0):
     best_leaf = None
 
     # Check if leaf
-    if root.children == []:
+    if not root.children:
         return root.value, None, root.fen
 
     else:

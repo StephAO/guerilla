@@ -77,7 +77,7 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        #'Search': search_bench,
+        'Search': search_bench,
         'Data Processing': data_processing_bench,
         'Evaluation' : nn_evaluation_bench
     }

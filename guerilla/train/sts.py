@@ -54,12 +54,14 @@ def eval_sts(player, mode="strategy", step_size=1):
         score = 0
         max_score = 0
         length = len(epds)
+        count = 0
         print "STS: Scoring %s EPDS. Progress: " % length,
         print_perc = 5  # percent to print at
         for i, epd in enumerate(epds):
             if i % step_size != 0:
                 continue
             # Print info
+            count += 1
             if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
                 print "%d%% " % (i / (length / 100.0)),
 
@@ -80,6 +82,8 @@ def eval_sts(player, mode="strategy", step_size=1):
         # append
         scores.append(score)
         max_scores.append(max_score)
+
+    print "Evaluated on %d positions" % (count)
 
     return scores, max_scores
 

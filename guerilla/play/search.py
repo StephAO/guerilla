@@ -28,14 +28,23 @@ class Search:
         self.cache = {}
 
     @abstractmethod
-    def condition(self, depth):
-        # TODO: Maybe consider making this more general? For example what if depth isn't the only condition in the future. Maybe use **kwargs
+    def set_evaluation_function(self, **kwargs):
+        """
+        Sets the evaluation function to use
+        Inputs:
+            kwargs[dict]:
+                necessary data to make decision (changes based on search type)
+        """
+        raise NotImplementedError("You should never see this")
+
+    @abstractmethod
+    def evaluation_condition(self, **kwargs):
         """
         Set condition for determining whether a given node should be evaluated.
         Returns True if the node should be evaluated.
         Inputs:
-            board[chess.Board]:
-                current state of the board
+            kwargs[dict]:
+                necessary data to make decision (changes based on search type)
         Output:
             [Boolean]
                 Whether the board should be evaluated or not.
@@ -59,8 +68,25 @@ class Search:
         """
         raise NotImplementedError("You should never see this")
 
-    def check_conditions(self, board, depth):
-        # TODO: Function description
+    def check_conditions(self, board, **kwargs):
+        """ 
+        Check current state of board, and decided whether or not to evaluate
+        the given board.
+        Inputs:
+            board[chess.Board]:
+                current board
+            depth[int]:
+                current depth
+            kwargs[dict]:
+                necessary data for evaluation condition and selection
+        Outputs:
+            best_score [float]:
+                Score achieved by best move
+            best_move [chess.Move]:
+                Best move to play
+            best_leaf [String]
+                FEN of the board of the leaf node which yielded the highest value.
+        """
         fen = unflipped_fen = board.fen()
         if dh.black_is_next(fen):
             fen = dh.flip_board(fen)
@@ -69,8 +95,9 @@ class Search:
             return self.lose_value, None, unflipped_fen
         elif board.can_claim_draw() or board.is_stalemate():
             return self.draw_value, None, unflipped_fen
-        elif self.condition(depth):
+        elif self.evaluation_condition(**kwargs):
             # Check for self.cache hit
+            self.set_evaluation_function(**kwargs)
             if fen not in self.cache:
                 self.cache_hits += 1
                 self.cache[fen] = self.evaluation_function(fen)
@@ -100,8 +127,12 @@ class Complementmax(Search):
         self.max_depth = max_depth
         self.reci_prune = True
 
-    def condition(self, depth):
-        return depth == self.max_depth
+    def evaluation_condition(self, **kwargs):
+        return kwargs['depth'] == self.max_depth
+
+    def set_evaluation_function(self, **kwargs):
+        """ Evaluation function is always leaf_eval set in __init__"""
+        return
 
     def run(self, board, time_limit=None, clear_cache=False):
         if clear_cache:
@@ -132,7 +163,7 @@ class Complementmax(Search):
         best_move = None
         best_leaf = None
 
-        end = self.check_conditions(board, depth)
+        end = self.check_conditions(board, depth=depth)
         if end is not None:
             return end
         else:
@@ -164,11 +195,10 @@ class Complementmax(Search):
     def __str__(self):
         return "Complementmax"
 
-
 # RANK PRUNE
 class RankPrune(Search):
-    def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.5,
-                 time_limit=10, buff_time=5, limit_depth=False, max_depth=3):
+    def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.75,
+                 time_limit=10, buff_time=0.1, limit_depth=False, max_depth=3, verbose=True):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
         super(RankPrune, self).__init__(leaf_eval)
@@ -182,18 +212,16 @@ class RankPrune(Search):
         self.limit_depth = limit_depth
         self.max_depth = max_depth
         self.leaf_layer = False
+        self.verbose = verbose
 
-    def condition(self, depth):
-        # TODO: Perhaps this should return the evaluatoin function? I don't think it should set it, its confusing.
-        # TODO (continued): It's also confusing because this doesn't do what the abstract method implies it does.
-        # TODO (continued): Here what it really does is set the evaluation function, not check if it SHOULD be evaluated.
-        # TODO: Suggestion: split 'condition' into 'condition' and 'evaluation_selector'
+    def evaluation_condition(self, **kwargs):
+        return True
 
-        if self.leaf_layer or (self.limit_depth and depth == self.max_depth):
+    def set_evaluation_function(self, **kwargs):
+        if self.leaf_layer or (self.limit_depth and kwargs['depth'] == self.max_depth):
             self.evaluation_function = self.leaf_eval
         else:
             self.evaluation_function = self.branch_eval
-        return True
 
     def run(self, board, time_limit=None, clear_cache=False):
         """
@@ -217,12 +245,12 @@ class RankPrune(Search):
                     FEN of the board of the leaf node which yielded the highest value.
         """
 
+        if time_limit is None:
+            time_limit = self.time_limit
+
         if time_limit <= self.buff_time:
             raise ValueError("Rank-Prune Error: Time limit (%d) <= buffer time (%d). "
                              "Please increase time limit or reduce buffer time." % (time_limit, self.buff_time))
-
-        if time_limit is None:
-            time_limit = self.time_limit
 
         if clear_cache:
             self.cache = {}
@@ -230,7 +258,7 @@ class RankPrune(Search):
         # Start timing
         start_time = time.time()
 
-        score, _, fen = self.check_conditions(board, 0)
+        score, _, fen = self.check_conditions(board, depth=0)
 
         root = SearchNode(fen, 0, score)  # Note: store unflipped fen
 
@@ -254,7 +282,8 @@ class RankPrune(Search):
                 # Check if have time to finish, if not then switch to leaf_eval
                 time_left = time_limit - (time.time() - start_time) - self.buff_time
                 if time_left < expand_time * queue.qsize():
-                    print "Running out of time on depth %d" % curr_depth
+                    if self.verbose:
+                        print "Running out of time on depth %d" % curr_depth
                     self.leaf_layer = True
 
             # If depth is limited and maximum depth is reached, skip expansion
@@ -269,14 +298,15 @@ class RankPrune(Search):
             for move in board.legal_moves:
                 # play move
                 board.push(move)
-                score, _, fen = self.check_conditions(board, curr_depth)
+                score, _, fen = self.check_conditions(board, depth=curr_depth)
                 # Note: Store unflipped fen
                 curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, score))
 
                 # Check if time-out
                 if time.time() - start_time + self.buff_time > time_limit:
                     # clear queue and break
-                    print "Running out of time on depth %d. Queue size %d " % (curr_depth, queue.qsize())
+                    if self.verbose:
+                        print "Running out of time on depth %d. Queue size %d " % (curr_depth, queue.qsize())
                     queue = Queue.Queue()
                     break
 
@@ -417,7 +447,6 @@ def quickselect(arr, left, right, k, key=None):
 
 
 def partition(arr, left, right, pivot_idx, key=None):
-    # TODO: Test
     """
     Partitions array inplace into two parts, those smaller than pivot, and those larger.
     Based on partition pseudo-code from: https://en.wikipedia.org/wiki/Quickselect

@@ -1053,8 +1053,11 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', 'w') as g:
+    with Guerilla('Harambe', 'rankprune', colour='w', load_file="w_30k_movemap_3FC.p") as g:
         g.search.max_depth = 2
+        # start_time = time.time()
+        # print eval_sts(g, step_size=10)
+        # print time.time() - start_time
         t = Teacher(g, training_mode='adagrad')
         t.set_bootstrap_params(num_bootstrap=10000)  # 488037
         t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)

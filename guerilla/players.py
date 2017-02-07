@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from guerilla.play.neural_net import NeuralNet
-from guerilla.play.search import Search
+from guerilla.play.search import Complementmax, RankPrune
 import chess
 import random
 import os
@@ -59,12 +59,18 @@ class Player:
 
 
 class Guerilla(Player):
-    def __init__(self, name, colour=None, load_file=None, hp_load_file=None, seed=None,
-                    verbose=True, **kwargs):
+
+    search_types = {
+                    "complementmax" : Complementmax,
+                    "rankprune"     : RankPrune
+                    }
+
+    def __init__(self, name, search_type, colour=None, load_file=None, 
+                    hp_load_file=None, seed=None, verbose=True, **kwargs):
         super(Guerilla, self).__init__(name, colour)
         self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, seed=seed,
                             verbose=verbose, **kwargs)
-        self.search = Search(self.nn.evaluate)
+        self.search = Guerilla.search_types[search_type](self.nn.evaluate)
 
     def __enter__(self):
         self.nn.start_session()

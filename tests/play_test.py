@@ -188,7 +188,7 @@ def rank_prune_test():
     return True
 
 
-def search_timing_test(min_time=5, max_time=20, time_step=5):
+def search_timing_test(min_time=10, max_time=20, time_step=5):
     """
     Tests that Rank-Prune searching abides by the input time limit.
     Input:
@@ -209,7 +209,7 @@ def search_timing_test(min_time=5, max_time=20, time_step=5):
         start_time = time.time()
         search.run(board, time_limit=t)
         end_time = time.time()
-        if start_time - end_time > t:
+        if end_time - start_time > t:
             print "Error: time allowed: %f, time taken: %f" % (float(t), start_time - end_time)
     return True
 

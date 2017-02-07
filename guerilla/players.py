@@ -65,7 +65,7 @@ class Guerilla(Player):
                     "rankprune"     : RankPrune
                     }
 
-    def __init__(self, name, search_type, colour=None, load_file=None, 
+    def __init__(self, name, colour=None, search_type='rankprune', load_file=None, 
                     hp_load_file=None, seed=None, verbose=True, **kwargs):
         super(Guerilla, self).__init__(name, colour)
         self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, seed=seed,

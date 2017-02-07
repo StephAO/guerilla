@@ -1053,7 +1053,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', 'rankprune', colour='w', load_file="w_30k_movemap_3FC.p") as g:
+    with Guerilla('Harambe', colour='w', load_file="w_30k_movemap_3FC.p") as g:
         g.search.max_depth = 2
         # start_time = time.time()
         # print eval_sts(g, step_size=10)

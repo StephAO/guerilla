@@ -188,16 +188,28 @@ def rank_prune_test():
     return True
 
 
-def search_timing_test():
-    search = RankPrune(lambda x: random.random(), prune_perc=0.9)
-    board = chess.Board(fen="2bq2R1/3P1PP1/3k3P/pP6/7N/NP1B3p/p1pQn2p/3nB2K w - - 0 1")
-    success = True
-    for t in xrange(5, 21, 5):
+def search_timing_test(min_time=5, max_time=20, time_step=5):
+    """
+    Tests that Rank-Prune searching abides by the input time limit.
+    Input:
+        min_time [Int] (Optional)
+            Minimum search time to test.
+        max_time [Int] (Optional)
+            Maximum search time to test. (Inclusive)
+        time_step [Int] (Optional)
+            Time step size between min_time and max_time where tests are run.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+    search = RankPrune(leaf_eval=lambda x: random.random(), prune_perc=0.9)
+    board = chess.Board(fen="2bq2R1/3P1PP1/3k3P/pP6/7N/NP1B3p/p1pQn2p/3nB2K w - - 0 1")  # Random FEN
+
+    for t in xrange(min_time, max_time + 1, time_step):
         start_time = time.time()
         search.run(board, time_limit=t)
         end_time = time.time()
         if start_time - end_time > t:
-            success = False
             print "Error: time allowed: %f, time taken: %f" % (float(t), start_time - end_time)
     return True
 

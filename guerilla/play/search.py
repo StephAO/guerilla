@@ -3,6 +3,7 @@ import time
 import Queue
 import chess
 import random
+import math
 
 import guerilla.data_handler as dh
 
@@ -216,6 +217,10 @@ class RankPrune(Search):
                     FEN of the board of the leaf node which yielded the highest value.
         """
 
+        if time_limit <= self.buff_time:
+            raise ValueError("Rank-Prune Error: Time limit (%d) <= buffer time (%d). "
+                             "Please increase time limit or reduce buffer time." % (time_limit, self.buff_time))
+
         if time_limit is None:
             time_limit = self.time_limit
 
@@ -252,7 +257,7 @@ class RankPrune(Search):
                     print "Running out of time on depth %d" % curr_depth
                     self.leaf_layer = True
 
-            # If depth limited and maximum depth is reached, skip expansion
+            # If depth is limited and maximum depth is reached, skip expansion
             if self.limit_depth and curr_depth == self.max_depth:
                 continue
 
@@ -289,7 +294,7 @@ class RankPrune(Search):
                 if len(curr_node.children) > 1:
                     # TODO: Maybe this is better done in place
                     top_ranked = k_top(curr_node.get_child_nodes(),
-                                       int(len(curr_node.children) * (1 - self.prune_perc)),
+                                       int(math.ceil(len(curr_node.children) * (1 - self.prune_perc) + 1)),
                                        key=lambda x: x.value)
                 else:
                     top_ranked = curr_node.get_child_nodes()
@@ -355,6 +360,9 @@ def k_top(arr, k, key=None):
         output [List]
             k-highest valued items.
     """
+    if k <= 0:
+        raise ValueError("K-Top error: %d is an invalid value for k, k must be > 0." % k)
+
     if len(arr) < k:
         return arr
 

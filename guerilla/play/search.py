@@ -265,7 +265,7 @@ class RankPrune(Search):
                     to_eval = queue.qsize() + len(board.legal_moves) - i  # Number of nodes to leaf_eval if stopped now
                     if not self.leaf_mode and time_left <= to_eval * self.leaf_estimate:
                         # clear queue and break
-                        # print "Running out of time on depth %d. Queue size %d " % (curr_node.depth, queue.qsize())
+                        # print "Running out of time on depth %d. Queue size %d " % (curr_node.depth + 1, queue.qsize())
                         self.leaf_mode = True
 
                     # play move

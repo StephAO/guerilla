@@ -6,6 +6,7 @@ import random
 
 import guerilla.data_handler as dh
 
+
 class Search:
     __metaclass__ = ABCMeta
 
@@ -27,12 +28,16 @@ class Search:
 
     @abstractmethod
     def condition(self, depth):
+        # TODO: Maybe consider making this more general? For example what if depth isn't the only condition in the future. Maybe use **kwargs
         """ 
-        Set evaluation method. 
-        Return true to evaluate, false to return None.
+        Set condition for determining whether a given node should be evaluated.
+        Returns True if the node should be evaluated.
         Inputs:
             board[chess.Board]:
                 current state of the board
+        Output:
+            [Boolean]
+                Whether the board should be evaluated or not.
         """
         raise NotImplementedError("You should never see this")
 
@@ -54,6 +59,7 @@ class Search:
         raise NotImplementedError("You should never see this")
 
     def check_conditions(self, board, depth):
+        # TODO: Function description
         fen = unflipped_fen = board.fen()
         if dh.black_is_next(fen):
             fen = dh.flip_board(fen)
@@ -77,6 +83,7 @@ class Search:
     @abstractmethod
     def __str__(self):
         raise NotImplementedError("You should never see this")
+
 
 class Complementmax(Search):
     """
@@ -123,7 +130,7 @@ class Complementmax(Search):
         best_score = 0.0
         best_move = None
         best_leaf = None
-        
+
         end = self.check_conditions(board, depth)
         if end is not None:
             return end
@@ -159,9 +166,8 @@ class Complementmax(Search):
 
 # RANK PRUNE
 class RankPrune(Search):
-
-    def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.5, 
-                       time_limit=10, buff_time=5, limit_depth=False, max_depth=3):
+    def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.5,
+                 time_limit=10, buff_time=5, limit_depth=False, max_depth=3):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
         super(RankPrune, self).__init__(leaf_eval)
@@ -177,6 +183,11 @@ class RankPrune(Search):
         self.leaf_layer = False
 
     def condition(self, depth):
+        # TODO: Perhaps this should return the evaluatoin function? I don't think it should set it, its confusing.
+        # TODO (continued): It's also confusing because this doesn't do what the abstract method implies it does.
+        # TODO (continued): Here what it really does is set the evaluation function, not check if it SHOULD be evaluated.
+        # TODO: Suggestion: split 'condition' into 'condition' and 'evaluation_selector'
+
         if self.leaf_layer or (self.limit_depth and depth == self.max_depth):
             self.evaluation_function = self.leaf_eval
         else:
@@ -224,8 +235,8 @@ class RankPrune(Search):
 
         curr_depth = None
         expand_start = None
-        expand_time = 1.0 # Conservative initial estimate -> updated later
-        first_expand = True # should maybe be a running average instead of just using the first time
+        expand_time = 1.0  # Conservative initial estimate -> updated later
+        first_expand = True  # should maybe be a running average instead of just using the first time
         self.leaf_layer = False
         while not queue.empty():
             curr_node = queue.get()
@@ -237,7 +248,7 @@ class RankPrune(Search):
 
                 # Check if have time to finish, if not then switch to leaf_eval
                 time_left = time_limit - (time.time() - start_time) - self.buff_time
-                if time_left < expand_time*queue.qsize():
+                if time_left < expand_time * queue.qsize():
                     print "Running out of time on depth %d" % curr_depth
                     self.leaf_layer = True
 
@@ -292,6 +303,7 @@ class RankPrune(Search):
     def __str__(self):
         return "RankPrune"
 
+
 class SearchNode:
     def __init__(self, fen, depth, value):
         """
@@ -314,7 +326,7 @@ class SearchNode:
         self.children = {}
 
     def add_child(self, move, child):
-        assert(isinstance(child, SearchNode))
+        assert (isinstance(child, SearchNode))
 
         self.children[move] = child
 
@@ -355,6 +367,7 @@ def k_top(arr, k, key=None):
 
     return arr[-k:]
 
+
 def quickselect(arr, left, right, k, key=None):
     """
     Return the array with the k-th smallest valued element at the k-th index.
@@ -385,7 +398,7 @@ def quickselect(arr, left, right, k, key=None):
         pivot_idx = random.randint(left, right)
         pivot_idx = partition(arr, left, right, pivot_idx, key=key)
         if k == pivot_idx:
-            return arr[k] 
+            return arr[k]
         elif k < pivot_idx:
             right = pivot_idx - 1
         else:
@@ -432,6 +445,7 @@ def partition(arr, left, right, pivot_idx, key=None):
     # Return pivot location
     return store_idx
 
+
 def minimaxtree(root, a=1.0):
     """
         Recursive function to find for best move in a game tree using minimax with alpha-beta pruning.
@@ -450,7 +464,7 @@ def minimaxtree(root, a=1.0):
             best_leaf [String]
                 FEN of the board of the leaf node which yielded the highest value.
     """
-    assert(isinstance(root,SearchNode))
+    assert (isinstance(root, SearchNode))
 
     best_score = 0.0
     best_move = None
@@ -466,7 +480,7 @@ def minimaxtree(root, a=1.0):
             # Take reciprocal of score since alternating levels
             score = 1 - score
             if score >= best_score:
-                best_score, best_move, best_leaf = score, move , leaf_board
+                best_score, best_move, best_leaf = score, move, leaf_board
 
             # best_score is my current lower bound
             # a is the upper bound of what's useful to search

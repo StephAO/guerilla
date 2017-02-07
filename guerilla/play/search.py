@@ -168,7 +168,7 @@ class Complementmax(Search):
 # RANK PRUNE
 class RankPrune(Search):
     def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.5,
-                 time_limit=10, buff_time=5, limit_depth=False, max_depth=3):
+                 time_limit=10, buff_time=3, limit_depth=False, max_depth=3):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
         super(RankPrune, self).__init__(leaf_eval)
@@ -181,7 +181,14 @@ class RankPrune(Search):
         self.buff_time = buff_time
         self.limit_depth = limit_depth
         self.max_depth = max_depth
-        self.leaf_layer = False
+        self.leaf_mode = False
+
+        # Generate an estimate of calling the leaf_eval function.
+        start = time.time()
+        num_estimate = 10
+        for _ in range(num_estimate):
+            self.leaf_eval(chess.Board().fen())
+        self.leaf_estimate = (time.time() - start) / num_estimate
 
     def condition(self, depth):
         # TODO: Perhaps this should return the evaluatoin function? I don't think it should set it, its confusing.
@@ -189,7 +196,7 @@ class RankPrune(Search):
         # TODO (continued): Here what it really does is set the evaluation function, not check if it SHOULD be evaluated.
         # TODO: Suggestion: split 'condition' into 'condition' and 'evaluation_selector'
 
-        if self.leaf_layer or (self.limit_depth and depth == self.max_depth):
+        if self.leaf_mode or (self.limit_depth and depth == self.max_depth):
             self.evaluation_function = self.leaf_eval
         else:
             self.evaluation_function = self.branch_eval
@@ -216,13 +223,12 @@ class RankPrune(Search):
                 best_leaf [String]
                     FEN of the board of the leaf node which yielded the highest value.
         """
+        if time_limit is None:
+            time_limit = self.time_limit
 
         if time_limit <= self.buff_time:
             raise ValueError("Rank-Prune Error: Time limit (%d) <= buffer time (%d). "
                              "Please increase time limit or reduce buffer time." % (time_limit, self.buff_time))
-
-        if time_limit is None:
-            time_limit = self.time_limit
 
         if clear_cache:
             self.cache = {}
@@ -238,69 +244,52 @@ class RankPrune(Search):
         queue = Queue.Queue()
         queue.put(root)
 
-        curr_depth = None
-        expand_start = None
-        expand_time = 1.0  # Conservative initial estimate -> updated later
-        first_expand = True  # should maybe be a running average instead of just using the first time
-        self.leaf_layer = False
+        self.leaf_mode = False
         while not queue.empty():
             curr_node = queue.get()
             board = chess.Board(curr_node.fen)
 
-            # Check if reached a new depth, update if necessary
-            if curr_depth is None or curr_depth != curr_node.depth:
-                curr_depth = curr_node.depth
-
-                # Check if have time to finish, if not then switch to leaf_eval
-                time_left = time_limit - (time.time() - start_time) - self.buff_time
-                if time_left < expand_time * queue.qsize():
-                    print "Running out of time on depth %d" % curr_depth
-                    self.leaf_layer = True
-
             # If depth is limited and maximum depth is reached, skip expansion
-            if self.limit_depth and curr_depth == self.max_depth:
+            if self.limit_depth and curr_node.depth == self.max_depth:
                 continue
 
-            # If first layer then time it
-            if first_expand:
-                expand_start = time.time()
+            if self.leaf_mode:
+                # Re-evaluate node with leaf_eval
+                curr_node.value = self.check_conditions(board, curr_node.depth)[0]
+            else:
+                # Evaluate all children
+                for i, move in enumerate(board.legal_moves):
 
-            # Evaluate all children
-            for move in board.legal_moves:
-                # play move
-                board.push(move)
-                score, _, fen = self.check_conditions(board, curr_depth)
-                # Note: Store unflipped fen
-                curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, score))
+                    # Check if time-out
+                    time_left = time_limit - self.buff_time - (time.time() - start_time)
+                    to_eval = queue.qsize() + len(board.legal_moves) - i  # Number of nodes to leaf_eval if stopped now
+                    if not self.leaf_mode and time_left <= to_eval * self.leaf_estimate:
+                        # clear queue and break
+                        # print "Running out of time on depth %d. Queue size %d " % (curr_node.depth, queue.qsize())
+                        self.leaf_mode = True
 
-                # Check if time-out
-                if time.time() - start_time + self.buff_time > time_limit:
-                    # clear queue and break
-                    print "Running out of time on depth %d. Queue size %d " % (curr_depth, queue.qsize())
-                    queue = Queue.Queue()
-                    break
+                    # play move
+                    board.push(move)
+                    score, _, fen = self.check_conditions(board, curr_node.depth)
+                    # Note: Store unflipped fen
+                    curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, score))
 
-                # Undo move
-                board.pop()
+                    # Undo move
+                    board.pop()
 
-            # Save timing of first layer
-            if first_expand:
-                expand_time = time.time() - expand_start
-                first_expand = False
-
-            # Expand if not on last layer
-            if not self.leaf_layer:
-                # Prune children if necessary
-                if len(curr_node.children) > 1:
-                    # TODO: Maybe this is better done in place
-                    top_ranked = k_top(curr_node.get_child_nodes(),
-                                       int(math.ceil(len(curr_node.children) * (1 - self.prune_perc) + 1)),
-                                       key=lambda x: x.value)
-                else:
-                    top_ranked = curr_node.get_child_nodes()
-                # Queue non-pruned children
-                for child in top_ranked:
-                    queue.put(child)
+                # Expand if didn't time out
+                if not self.leaf_mode:
+                    # Prune children if necessary
+                    if len(curr_node.children) > 1:
+                        # TODO: Maybe this is better done in place
+                        top_ranked = k_top(curr_node.get_child_nodes(),
+                                           int(math.ceil(len(curr_node.children) * (1 - self.prune_perc) + 1)),
+                                           key=lambda x: x.value)
+                    else:
+                        top_ranked = curr_node.get_child_nodes()
+                    # Queue non-pruned children
+                    for child in top_ranked:
+                        queue.put(child)
 
         # Minimax on game tree
         return minimaxtree(root)

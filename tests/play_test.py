@@ -188,7 +188,7 @@ def rank_prune_test():
     return True
 
 
-def search_timing_test(min_time=5, max_time=20, time_step=5):
+def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
     """
     Tests that Rank-Prune searching abides by the input time limit.
     Input:
@@ -198,6 +198,8 @@ def search_timing_test(min_time=5, max_time=20, time_step=5):
             Maximum search time to test. (Inclusive)
         time_step [Int] (Optional)
             Time step size between min_time and max_time where tests are run.
+        verbose [Boolean] (Optional)
+            Turn Verbose mode On or Off.
     Output:
         Result [Boolean]
             True if test passed, False if test failed.
@@ -208,9 +210,11 @@ def search_timing_test(min_time=5, max_time=20, time_step=5):
     for t in xrange(min_time, max_time + 1, time_step):
         start_time = time.time()
         search.run(board, time_limit=t)
-        end_time = time.time()
-        if start_time - end_time > t:
-            print "Error: time allowed: %f, time taken: %f" % (float(t), start_time - end_time)
+        time_taken = time.time() - start_time
+        if verbose:
+            print "Timing Test: Time Limit %f. Time Taken %f." % (float(t), time_taken)
+        if time_taken > t:
+            print "Error: time allowed: %f, time taken: %f" % (float(t), time_taken)
     return True
 
 
@@ -400,6 +404,9 @@ def basic_test_eval(fen):
         return 0.7
     # Root
     elif board_state == "8/p7/1p6/8/8/1P6/P7/8":
+        return 0.5
+    # Start board, used for timing:
+    elif board_state == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR":
         return 0.5
     else:
         raise RuntimeError("This definitely should not happen! Invalid board: %s" % board_state)

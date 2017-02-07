@@ -11,7 +11,7 @@ sts_strat_files = ['activity_of_king', 'advancement_of_abc_pawns', 'advancement_
 
 sts_piece_files = ['pawn', 'bishop', 'rook', 'knight', 'queen', 'king']
 
-def eval_sts(player, mode="strategy"):
+def eval_sts(player, mode="strategy", step_size=1):
     """
     Evaluates the given player using the strategic test suite. Returns a score and a maximum score.
         Inputs:
@@ -22,6 +22,9 @@ def eval_sts(player, mode="strategy"):
                     "strategy": runs all strategic tests
                     "pieces" : runs all piece tests
                     other: specific EPD file
+            step_size [int]:
+                Number of positions to skip each eval. 
+                If 1, run all positions. If 10, run every 10th position
         Outputs:
             scores [List of Integers]
                 List of scores the player received on the each test mode. Same order as input.
@@ -54,6 +57,8 @@ def eval_sts(player, mode="strategy"):
         print "STS: Scoring %s EPDS. Progress: " % length,
         print_perc = 5  # percent to print at
         for i, epd in enumerate(epds):
+            if i % step_size != 0:
+                continue
             # Print info
             if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
                 print "%d%% " % (i / (length / 100.0)),

@@ -1,5 +1,7 @@
 # Play Unit tests
 import os
+import time
+import random
 
 import chess
 import numpy as np
@@ -187,11 +189,20 @@ def rank_prune_test():
 
 
 def search_timing_test():
-    # TODO
+    search = RankPrune(lambda x: random.random(), prune_perc=0.9)
+    board = chess.Board(fen="2bq2R1/3P1PP1/3k3P/pP6/7N/NP1B3p/p1pQn2p/3nB2K w - - 0 1")
+    success = True
+    for t in xrange(5, 21, 5):
+        start_time = time.time()
+        search.run(board, time_limit=t)
+        end_time = time.time()
+        if start_time - end_time > t:
+            success = False
+            print "Error: time allowed: %f, time taken: %f" % (float(t), start_time - end_time)
     return True
 
 
-def basic_search_test(search_modes=None):
+def basic_search_test():
     """ Tests that search functions properly when playing white and black.
         Input:
             search_modes [String or List of Strings] (Optional)
@@ -201,10 +212,8 @@ def basic_search_test(search_modes=None):
                 True if test passed, False if test failed.
                 """
 
-    if search_modes is None:
-        search_modes = Search.search_modes
-    elif not isinstance(search_modes, list):
-        search_modes = list(search_modes)
+    search_modes = [Complementmax(basic_test_eval, max_depth=1), 
+                    RankPrune(basic_test_eval, prune_perc=0, time_limit=10, limit_depth=True, max_depth=1)]
 
     success = True
 
@@ -218,24 +227,18 @@ def basic_search_test(search_modes=None):
         for search_mode in search_modes:
             board = chess.Board(fen=fen_str)
             # Can't run deeper due to restricted evaluation function.
-            shallow = Search(basic_test_eval, max_depth=1, search_mode=search_mode)
 
-            # Set Rank Prune parameters
-            shallow.prune_perc = 0
-            shallow.time_limit = 10
-            shallow.limit_depth = True
-
-            score, move, _ = shallow.run(board)
+            score, move, _ = search_mode.run(board)
             exp_score, exp_move = expected[i]
             if (score != exp_score) or (str(move) != exp_move):
                 print "%s White Search Test Failed. Expected [Score, Move]: [0.6, b3b4] got: [%.1f, %s]" % \
-                      (search_mode.capitalize(), score, move)
+                      (str(search_mode).capitalize(), score, move)
                 success = False
 
     return success
 
 
-def checkmate_search_test(search_modes=None):
+def checkmate_search_test():
     """
     Tests that checkmates are working.
     Input:
@@ -246,20 +249,12 @@ def checkmate_search_test(search_modes=None):
             True if test passed, False if test failed.
     """
 
-    if search_modes is None:
-        search_modes = Search.search_modes
-    elif not isinstance(search_modes, list):
-        search_modes = list(search_modes)
+    search_modes = [Complementmax((lambda x: 0.5), max_depth=1), 
+                    RankPrune((lambda x: 0.5), prune_perc=0, time_limit=10, limit_depth=True, max_depth=2)]
 
     success = True
 
-    for search_mode in search_modes:
-        s = Search((lambda x: 0.5), max_depth=1, search_mode=search_mode)
-
-        # Set Rank Prune parameters
-        s.prune_perc = 0
-        s.time_limit = 10
-        s.limit_depth = True
+    for s in search_modes:
 
         # Checkmates on this turn
         black_loses = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
@@ -299,7 +294,7 @@ def complementmax_test():
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
-    shallow = Search(minimax_test_eval, max_depth=3, search_mode='complementmax')
+    shallow = Complementmax(minimax_test_eval, max_depth=3)
     score, move, _ = shallow.run(board)
     if (score == 0.6) and (str(move) == "b3b4"):
         return True
@@ -379,17 +374,18 @@ def run_play_tests():
     all_tests = {}
 
     all_tests["Search Tests"] = {
-        'Basic Search': basic_search_test,
-         'Checkmate Search': checkmate_search_test,
-        'Complementmax Search': complementmax_test,
-        'Rank-Prune Search': rank_prune_test,
-        'Top k-items': k_top_test,
-        'Partition': partition_test,
-        'Quickselect': quickselect_test
+        # 'Basic Search': basic_search_test,
+        # 'Checkmate Search': checkmate_search_test,
+        # 'Complementmax Search': complementmax_test,
+        # 'Rank-Prune Search': rank_prune_test,
+        # 'Top k-items': k_top_test,
+        # 'Partition': partition_test,
+        # 'Quickselect': quickselect_test,
+        'Search Time' : search_timing_test
         }
 
     all_tests["Neural Net Tests"] = {
-        'Weight Save and Load': save_load_weights_test
+        #'Weight Save and Load': save_load_weights_test
     }
 
     success = True

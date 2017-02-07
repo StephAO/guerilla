@@ -1,7 +1,24 @@
+""" Used for monte carlo, which was never completed, and might never be """
+
 import chess
 import random
 import Queue
 import time
+
+
+def monte_carlo(self, board, search_time):
+        start_time = time.clock()
+        while time.clock - start_time < search_time:
+            # On first expansion, generate all children - not sure if this is the right way to do this but i'm tired, double check later
+            if mc_node.root is None:
+                Node(None, board.fen(), 0)
+                Node.root.expand(-1)
+
+            node = Node.select()
+            new_nodes = node.expand()
+            for n in new_nodes:
+                n.simulate()
+                n.backpropagate()
 
 class Node:
     """ 

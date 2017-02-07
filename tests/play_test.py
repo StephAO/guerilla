@@ -1,5 +1,6 @@
 # Play Unit tests
 import os
+import sys
 
 import chess
 import numpy as np
@@ -139,7 +140,7 @@ def partition_test(num_test=5, seed=12345):
         return success
 
 
-def quickselect_test(num_test=5, seed=12345):
+def quickselect_test(num_test=10, seed=12345):
     """
     Tests the quickselect function used in Rank-Prune searching.
     Input:
@@ -153,10 +154,9 @@ def quickselect_test(num_test=5, seed=12345):
     """
 
     np.random.seed(seed)
-    success = True
 
     for _ in range(num_test):
-        arr_len = np.random.randint(0, 20)
+        arr_len = np.random.randint(1, 20)
         rnd_arr = np.random.randint(0, 100, arr_len)
         k = np.random.randint(0, arr_len)
 
@@ -189,6 +189,68 @@ def rank_prune_test():
 def search_timing_test():
     # TODO
     return True
+
+
+def minimaxtree_test():
+    """
+    Tests the minimaxtree function. Tests that correct output is generated and pruning is done.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+
+    root_fen = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+    max_depth = 3
+
+    # list of fens which should not be reached since they should be pruned
+    pruned_fens = ["8/8/1p6/p7/1P6/P7/8/8",  # a2a3 -> a7a5 -> b3b4
+                   "8/8/1p6/pP6/8/8/P7/8",  # b3b4 -> a7a5 -> b4b5
+                   "8/8/1p6/p7/1P6/P7/8/8",  # b3b4 -> a7a5 -> a2a3
+                   "8/8/1p6/p7/PP6/8/8/8",  # b3b4 -> a7a5 -> a2a4
+                   "8/8/1p6/p7/PP6/8/8/8"  # a2a4 -> a7a5 ->b3b4
+                   ]
+
+    pruned_flipped = map(lambda x: dh.flip_board(x + ' w ---- - 0 1').split(' ')[0], pruned_fens)
+
+    # Built SearchNode tree based on this root_fen and the corresponding minimax_basic_eval()
+
+    root = SearchNode(root_fen, 0, random.random())
+
+    depth = 1
+    stack = [root]
+    while stack != []:
+        curr_node = stack.pop()
+
+        board = chess.Board(curr_node.fen)
+        for move in board.legal_moves:
+            board.push(move)
+            new_node = SearchNode(board.fen(), curr_node.depth + 1, random.random())
+
+            fen = new_node.fen
+            if dh.black_is_next(fen):
+                fen = dh.flip_board(fen)
+
+            # Check if max depth
+            if new_node.depth == max_depth:
+                new_node.value = minimax_test_eval(fen) if fen.split(' ')[0] not in pruned_flipped else 0
+            else:
+                stack.append(new_node)
+
+            curr_node.add_child(move, new_node)
+            board.pop()
+
+    try:
+        score, move, fen = minimaxtree(root, forbidden_fens=pruned_fens)
+    except RuntimeError as e:
+        print e
+        return False
+
+    if (score == 0.6) and (str(move) == "b3b4") and (fen == "8/8/pp6/8/1P6/P7/8/8 b - - 0 2"):
+        return True
+    else:
+        print "Mimimaxree Test Failed: Expected [Score, Move]: [6, b3b4, 8/8/pp6/8/1P6/P7/8/8 b - - 0 2]" \
+              " got: [%.1f, %s, %s]" % (score, move, fen)
+        return False
 
 
 def basic_search_test(search_modes=None):
@@ -300,11 +362,12 @@ def complementmax_test():
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
     shallow = Search(minimax_test_eval, max_depth=3, search_mode='complementmax')
-    score, move, _ = shallow.run(board)
-    if (score == 0.6) and (str(move) == "b3b4"):
+    score, move, fen = shallow.run(board)
+    if (score == 0.6) and (str(move) == "b3b4") and (fen == "8/8/pp6/8/1P6/P7/8/8 b - - 0 2"):
         return True
     else:
-        print "Mimimax Test failed: Expected [Score, Move]: [6, b3b4] got: [%.1f, %s]" % (score, move)
+        print "ComplementMax Test Failed: Expected [Score, Move]: [6, b3b4, 8/8/pp6/8/1P6/P7/8/8 b - - 0 2]" \
+              " got: [%.1f, %s, %s]" % (score, move, fen)
         return False
 
 
@@ -371,7 +434,7 @@ def minimax_test_eval(fen):
     elif board_state == "8/8/pp6/P7/8/1P6/8/8":
         score = 0.1
     else:
-        raise RuntimeError("This definitely should not happen! Invalid board.")
+        raise RuntimeError("This definitely should not happen! Invalid board: %s" % board_state)
 
     return 1 - score
 
@@ -380,12 +443,13 @@ def run_play_tests():
 
     all_tests["Search Tests"] = {
         'Basic Search': basic_search_test,
-         'Checkmate Search': checkmate_search_test,
+        'Checkmate Search': checkmate_search_test,
         'Complementmax Search': complementmax_test,
         'Rank-Prune Search': rank_prune_test,
         'Top k-items': k_top_test,
         'Partition': partition_test,
-        'Quickselect': quickselect_test
+        'Quickselect': quickselect_test,
+        'MinimaxTree': minimaxtree_test
         }
 
     all_tests["Neural Net Tests"] = {

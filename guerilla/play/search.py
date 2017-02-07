@@ -108,14 +108,14 @@ class Search:
         elif board.can_claim_draw() or board.is_stalemate():
             return self.draw_value, None, board.fen()
         elif depth == self.max_depth:
-            fen = leaf_board = board.fen()
+            fen = leaf_fen = board.fen()
             if dh.black_is_next(fen):
                 fen = dh.flip_board(fen)
 
             # Check for cache hit
             if fen not in cache:
                 cache[fen] = self.leaf_eval(fen)
-            return cache[fen], None, leaf_board
+            return cache[fen], None, leaf_fen
 
         else:
             for move in board.legal_moves:
@@ -357,6 +357,7 @@ def k_top(arr, k, key=None):
 def quickselect(arr, left, right, k, key=None):
     """
     Return the array with the k-th smallest valued element at the k-th index.
+    Note that this requires left <= k <= right.
     Based on: https://en.wikipedia.org/wiki/Quickselect
     Input:
         arr [List]
@@ -374,6 +375,8 @@ def quickselect(arr, left, right, k, key=None):
             k-highest valued items.
     """
 
+    assert (left <= k <= right)
+
     if key is None:
         key = lambda x: x
 
@@ -384,7 +387,7 @@ def quickselect(arr, left, right, k, key=None):
         pivot_idx = random.randint(left, right)
         pivot_idx = partition(arr, left, right, pivot_idx, key=key)
         if k == pivot_idx:
-            return arr[k] 
+            return arr[k]
         elif k < pivot_idx:
             right = pivot_idx - 1
         else:
@@ -431,7 +434,8 @@ def partition(arr, left, right, pivot_idx, key=None):
     # Return pivot location
     return store_idx
 
-def minimaxtree(root, a=1.0):
+
+def minimaxtree(root, a=1.0, forbidden_fens=None):
     """
         Recursive function to find for best move in a game tree using minimax with alpha-beta pruning.
         Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -441,6 +445,9 @@ def minimaxtree(root, a=1.0):
                 current state of board
             a [float]:
                 lower bound of layer above, upper bound of current layer (because of alternating signs)
+            forbidden_fens [List of Strings] (Optional)
+                List of FENs. An error is thrown if a node is reached which has one of these FENs. Used for testing.
+                Default is to have no fens forbidden.
         Outputs:
             best_score [float]:
                 Score achieved by best move
@@ -455,13 +462,17 @@ def minimaxtree(root, a=1.0):
     best_move = None
     best_leaf = None
 
+    # check if forbidden fen
+    if forbidden_fens and root.fen in forbidden_fens:
+        raise RuntimeError("Minimaxtree Error: Forbidden FEN %s reached!" % root.fen)
+
     # Check if leaf
     if not root.children:
         return root.value, None, root.fen
 
     else:
         for move, child in root.children.iteritems():
-            score, next_move, leaf_board = minimaxtree(child, 1 - best_score)
+            score, next_move, leaf_board = minimaxtree(child, 1 - best_score, forbidden_fens=forbidden_fens)
             # Take reciprocal of score since alternating levels
             score = 1 - score
             if score >= best_score:

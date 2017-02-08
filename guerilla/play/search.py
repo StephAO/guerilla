@@ -24,13 +24,13 @@ class Search:
         self.draw_value = 0.5
         self.cache_hits = 0
         self.cache_miss = 0
-        # cache: Key is FEN, Value is Score
+        # cache: Key is FEN of board (where white plays next), Value is Score
         self.cache = {}
 
     @abstractmethod
     def _set_evaluation_function(self, **kwargs):
         """
-        Sets the evaluation function to use
+        Sets the evaluation function to use.
         Inputs:
             kwargs[dict]:
                 necessary data to make decision (changes based on search type)
@@ -48,6 +48,20 @@ class Search:
         Output:
             [Boolean]
                 Whether the board should be evaluated or not.
+        """
+        raise NotImplementedError("You should never see this")
+
+    @abstractmethod
+    def _cache_condition(self, **kwargs):
+        """
+        Condition for determining whether the cache should be used.
+        Returns True if the cache hsould be used.
+        Inputs:
+            kwargs[dict]:
+                necessary data to make decision (changes based on search type)
+        Output:
+            [Boolean]
+                Whether the cache should be used or not.
         """
         raise NotImplementedError("You should never see this")
 
@@ -98,14 +112,19 @@ class Search:
         elif self._evaluation_condition(**kwargs):
             # Check for self.cache hit
             self._set_evaluation_function(**kwargs)
-            if True:  # fen not in self.cache:
-                # TODO: For rank-prune fix caching so only leaf values cache.
-                self.cache_miss += 1
-                self.cache[fen] = self.evaluation_function(fen)
+            if self._cache_condition(**kwargs):
+                # Use cache
+                key = dh.strip_fen(fen)
+                if key not in self.cache:
+                    self.cache_miss += 1
+                    self.cache[key] = self.evaluation_function(fen)
+                else:
+                    self.cache_hits += 1
+                score = self.cache[key]
             else:
-                self.cache_hits += 1
+                score = self.evaluation_function(fen)
 
-            return self.cache[fen], None, unflipped_fen
+            return score, None, unflipped_fen
         else:
             return None
 
@@ -120,7 +139,7 @@ class Complementmax(Search):
     """
 
     def __init__(self, leaf_eval, max_depth=2):
-        # Evaluation function must yield a score between 0 and 1.
+        # Evaluation function must yield a value between 0 and 1.
         # Search options
         super(Complementmax, self).__init__(leaf_eval)
 
@@ -134,6 +153,10 @@ class Complementmax(Search):
     def _set_evaluation_function(self, **kwargs):
         """ Evaluation function is always leaf_eval set in __init__"""
         return
+
+    def _cache_condition(self, **kwargs):
+        """Always use cache."""
+        return True
 
     def run(self, board, time_limit=None, clear_cache=False):
         if clear_cache:
@@ -225,6 +248,10 @@ class RankPrune(Search):
             self.evaluation_function = self.leaf_eval
         else:
             self.evaluation_function = self.branch_eval
+
+    def _cache_condition(self, **kwargs):
+        """ Only use cache if leaf node. """
+        return self.leaf_mode
 
     def run(self, board, time_limit=None, clear_cache=False, return_root=False):
         """

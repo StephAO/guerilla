@@ -730,6 +730,31 @@ def black_is_next(fen):
     return not white_is_next(fen)
 
 
+def strip_fen(fen, keep_idxs=0):
+    """
+    Splits the input fen by space character, joins by a space the items noted by keep_idxs and returns as a string.
+    Inputs:
+        fen [String]
+            Chess board FEN.
+        keep_idxs [List of Ints] (Optional)
+            Parts of the fen to keep once it has been split. By default keeps only the board state (index 0).
+            Order of recombined list is order of keep_idxs.
+    Output:
+        [String]
+            Stripped fen.
+    """
+
+    if not isinstance(keep_idxs, list):
+        keep_idxs = [keep_idxs]
+
+    if any([x > 5 for x in keep_idxs]):
+        raise ValueError('All keep_idxs must be <= 5')
+
+    fen_split = fen.split(' ')
+
+    return (' ').join([fen_split[i] for i in keep_idxs])
+
+
 def diff_dict_helper(old_dict, new_dict):
     """
     Compares two dictionaries of numpy.arrays. Useful for comparing weights and training variables.

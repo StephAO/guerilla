@@ -236,11 +236,11 @@ def branch_test_eval(fen):
     if player != 'w':
         raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
 
-    if board_state == dh.flip_board('8/p7/1p6/8/8/PP6/8/8 w - - 0 2').split(' ')[0]:  # a2a3
+    if board_state == dh.strip_fen(dh.flip_board('8/p7/1p6/8/8/PP6/8/8 w - - 0 2')):  # a2a3
         return 0.9
-    elif board_state == dh.flip_board('8/p7/1p6/8/1P6/8/P7/8 w - - 0 2').split(' ')[0]:  # b3b4
+    elif board_state == dh.strip_fen(dh.flip_board('8/p7/1p6/8/1P6/8/P7/8 w - - 0 2')):  # b3b4
         return 0.8
-    elif board_state == dh.flip_board('8/p7/1p6/8/P7/1P6/8/8 w - - 0 2').split(' ')[0]:  # a2a4 (pruned children)
+    elif board_state == dh.strip_fen(dh.flip_board('8/p7/1p6/8/P7/1P6/8/8 w - - 0 2')):  # a2a4 (pruned children)
         return 0.7
     elif board_state == '8/p7/8/1p6/8/PP6/8/8':  # a2a3 -> b6b5
         return 0.5
@@ -310,7 +310,7 @@ def minimaxtree_test():
                    "8/8/1p6/p7/PP6/8/8/8"  # a2a4 -> a7a5 ->b3b4
                    ]
 
-    pruned_flipped = map(lambda x: dh.flip_board(x + ' w ---- - 0 1').split(' ')[0], pruned_fens)
+    pruned_flipped = map(lambda x: dh.strip_fen(dh.flip_board(x + ' w ---- - 0 1')), pruned_fens)
 
     # Built SearchNode tree based on this root_fen and the corresponding minimax_basic_eval()
 
@@ -332,7 +332,7 @@ def minimaxtree_test():
 
             # Check if max depth
             if new_node.depth == max_depth:
-                new_node.value = minimax_test_eval(fen) if fen.split(' ')[0] not in pruned_flipped else 0
+                new_node.value = minimax_test_eval(fen) if dh.strip_fen(fen) not in pruned_flipped else 0
             else:
                 stack.append(new_node)
 
@@ -462,11 +462,11 @@ def basic_test_eval(fen):
         raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
 
     # from white plays next
-    if board_state == dh.flip_board("8/p7/1p6/8/8/PP6/8/8 w KQkq - 0 1").split(' ')[0]:  # a2a3
+    if board_state == dh.strip_fen(dh.flip_board("8/p7/1p6/8/8/PP6/8/8 w KQkq - 0 1")):  # a2a3
         return 0.5
-    elif board_state == dh.flip_board("8/p7/1p6/8/1P6/8/P7/8 w KQkq - 0 1").split(' ')[0]:  # b3b4
+    elif board_state == dh.strip_fen(dh.flip_board("8/p7/1p6/8/1P6/8/P7/8 w KQkq - 0 1")):  # b3b4
         return 0.4
-    elif board_state == dh.flip_board("8/p7/1p6/8/P7/1P6/8/8 w KQkq - 0 1").split(' ')[0]:  # a2a4
+    elif board_state == dh.strip_fen(dh.flip_board("8/p7/1p6/8/P7/1P6/8/8 w KQkq - 0 1")):  # a2a4
         return 0.7
     # from black plays next
     elif board_state == "8/8/pp6/8/8/1P6/P7/8":  # b7b6
@@ -494,7 +494,7 @@ def minimax_test_eval(fen):
     if player != 'w':
         raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
 
-    board_state = dh.flip_board(fen).split(' ')[0]
+    board_state = dh.strip_fen(dh.flip_board(fen))
 
     if board_state == "8/p7/8/1p6/P7/1P6/8/8":
         score = 0.5

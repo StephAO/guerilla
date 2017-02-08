@@ -159,7 +159,9 @@ def training_test(nn_input_type, verbose=False):
                     NN_INPUT_TYPE=nn_input_type, USE_CONV=use_conv) as g:
                     g.search.max_depth = 1
 
-                    t = Teacher(g, training_mode=t_m, test=True, verbose=verbose, 
+                    t = Teacher(g, bootstrap_training_mode=t_m,
+                                td_training_mode=t_m,
+                                test=True, verbose=verbose,
                                 hp_load_file='training_test.yaml')
                     if t_m == 'adagrad':
                         t.set_hyper_params(LEARNING_RATE=0.00001)
@@ -176,7 +178,8 @@ def training_test(nn_input_type, verbose=False):
                     t.sts_interval = 100
 
                     pre_heap_size = hpy().heap().size
-                    t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay'], training_time=60)
+                    # No timeout
+                    t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay'], training_time=None)
                     post_heap_size = hpy().heap().size
 
                     loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
@@ -297,7 +300,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     with Guerilla('Harambe', 'w', NN_INPUT_TYPE=nn_input_type) as g:
         g.search.max_depth = 1
         # Train
-        t = Teacher(g, training_mode='adagrad')
+        t = Teacher(g, bootstrap_training_mode='adagrad')
         t.set_hyper_params(**hp)
         t.train_bootstrap(fens, values)
 
@@ -395,7 +398,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
         with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
             g.search.max_depth = 1
             # Train
-            t = Teacher(g, training_mode='gradient_descent', verbose=verbose)
+            t = Teacher(g, bootstrap_training_mode='gradient_descent', verbose=verbose)
             t.set_hyper_params(**hp)
             t.train_bootstrap(fens, values)
 

@@ -58,7 +58,7 @@ def data_processing_bench():
     for input_type in input_types:
         start_time = time.time()
         for _ in xrange(1000):
-            dh.fen_to_nn_input(fen, input_type, 12)
+            dh.fen_to_nn_input(fen, input_type)
         print '1000 iterations of fen to %s took %f seconds' % \
               (input_type, time.time() - start_time)
         

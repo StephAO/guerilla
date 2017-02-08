@@ -28,7 +28,7 @@ class Search:
         self.cache = {}
 
     @abstractmethod
-    def set_evaluation_function(self, **kwargs):
+    def _set_evaluation_function(self, **kwargs):
         """
         Sets the evaluation function to use
         Inputs:
@@ -38,9 +38,9 @@ class Search:
         raise NotImplementedError("You should never see this")
 
     @abstractmethod
-    def evaluation_condition(self, **kwargs):
+    def _evaluation_condition(self, **kwargs):
         """
-        Set condition for determining whether a given node should be evaluated.
+        Condition for determining whether a given node should be evaluated.
         Returns True if the node should be evaluated.
         Inputs:
             kwargs[dict]:
@@ -95,14 +95,15 @@ class Search:
             return self.lose_value, None, unflipped_fen
         elif board.can_claim_draw() or board.is_stalemate():
             return self.draw_value, None, unflipped_fen
-        elif self.evaluation_condition(**kwargs):
+        elif self._evaluation_condition(**kwargs):
             # Check for self.cache hit
-            self.set_evaluation_function(**kwargs)
-            if fen not in self.cache:
-                self.cache_hits += 1
+            self._set_evaluation_function(**kwargs)
+            if True:  # fen not in self.cache:
+                # TODO: For rank-prune fix caching so only leaf values cache.
+                self.cache_miss += 1
                 self.cache[fen] = self.evaluation_function(fen)
             else:
-                self.cache_miss += 1
+                self.cache_hits += 1
 
             return self.cache[fen], None, unflipped_fen
         else:
@@ -127,10 +128,10 @@ class Complementmax(Search):
         self.max_depth = max_depth
         self.reci_prune = True
 
-    def evaluation_condition(self, **kwargs):
+    def _evaluation_condition(self, **kwargs):
         return kwargs['depth'] == self.max_depth
 
-    def set_evaluation_function(self, **kwargs):
+    def _set_evaluation_function(self, **kwargs):
         """ Evaluation function is always leaf_eval set in __init__"""
         return
 
@@ -214,24 +215,18 @@ class RankPrune(Search):
         self.max_depth = max_depth
         self.leaf_mode = False
         self.verbose = verbose
+        self.leaf_estimate = None
 
-        # Generate an estimate of calling the leaf_eval function.
-        start = time.time()
-        num_estimate = 10
-        for _ in range(num_estimate):
-            self.leaf_eval(chess.Board().fen())
-        self.leaf_estimate = (time.time() - start) / num_estimate
-
-    def evaluation_condition(self, **kwargs):
+    def _evaluation_condition(self, **kwargs):
         return True
 
-    def set_evaluation_function(self, **kwargs):
+    def _set_evaluation_function(self, **kwargs):
         if self.leaf_mode or (self.limit_depth and kwargs['depth'] == self.max_depth):
             self.evaluation_function = self.leaf_eval
         else:
             self.evaluation_function = self.branch_eval
 
-    def run(self, board, time_limit=None, clear_cache=False):
+    def run(self, board, time_limit=None, clear_cache=False, return_root=False):
         """
             BFS-based search function which does breadth first evaluation of boards. Every child is evaluated using the
             'inner_eval' function. The children are then ranked and 'prune_perc' are pruned. The non-pruned children
@@ -244,6 +239,9 @@ class RankPrune(Search):
                     Maximum search time. If not specified, uses the class default.
                 limit_depth [Boolean] (Optional)
                     If True then rank_prune depth is limited by self.max_depth. If False there is not depth limit.
+                    Used for testing.
+                return_root [Boolean] (Optional)
+                    If True then the function also returns the root SearchNode. False by default. Used for testing.
             Outputs:
                 best_score [float]:
                     Score achieved by best move
@@ -251,6 +249,8 @@ class RankPrune(Search):
                     Best move to play
                 best_leaf [String]
                     FEN of the board of the leaf node which yielded the highest value.
+                root [SearchNode] (Optional)
+                    Root node of the search tree. Gets returned if return_root is True.
         """
         if time_limit is None:
             time_limit = self.time_limit
@@ -258,6 +258,15 @@ class RankPrune(Search):
         if time_limit <= self.buff_time:
             raise ValueError("Rank-Prune Error: Time limit (%d) <= buffer time (%d). "
                              "Please increase time limit or reduce buffer time." % (time_limit, self.buff_time))
+
+        # Generate a leaf estimate on first call to run
+        if self.leaf_estimate is None:
+            # Generate an estimate of calling the leaf_eval function.
+            num_estimate = 5
+            start = time.time()
+            for _ in range(num_estimate):
+                self.leaf_eval(chess.Board().fen())
+            self.leaf_estimate = (time.time() - start) / num_estimate
 
         if clear_cache:
             self.cache = {}
@@ -299,7 +308,7 @@ class RankPrune(Search):
 
                     # play move
                     board.push(move)
-                    score, _, fen = self.check_conditions(board, depth=curr_node.depth)
+                    score, _, fen = self.check_conditions(board, depth=curr_node.depth + 1)
                     # Note: Store unflipped fen
                     curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, score))
 
@@ -312,7 +321,7 @@ class RankPrune(Search):
                     if len(curr_node.children) > 1:
                         # TODO: Maybe this is better done in place
                         top_ranked = k_top(curr_node.get_child_nodes(),
-                                           int(math.ceil(len(curr_node.children) * (1 - self.prune_perc) + 1)),
+                                           int(math.ceil(len(curr_node.children) * (1 - self.prune_perc))),
                                            key=lambda x: x.value)
                     else:
                         top_ranked = curr_node.get_child_nodes()
@@ -321,7 +330,12 @@ class RankPrune(Search):
                         queue.put(child)
 
         # Minimax on game tree
-        return minimaxtree(root)
+        output = minimaxtree(root)
+
+        if return_root:
+            return output + (root,)
+
+        return output
 
     def __str__(self):
         return "RankPrune"

@@ -3,6 +3,7 @@ import os
 import random
 import sys
 import time
+import Queue
 
 import chess
 import numpy as np
@@ -176,17 +177,87 @@ def quickselect_test(num_test=10, seed=12345):
 def rank_prune_test():
     """
     Tests Rank-Prune Searching. This includes:
-        (1) The correct number of nodes is pruned at each level.
-        (2) The correct tree is generated.
-        (3) The nodes are evaluated with the correct evaluation function (leaf VS inner).
+        (1) The correct nodes are pruned at each level.
+        (2) The nodes are evaluated with the correct evaluation function (leaf VS inner).
+        (3) The correct number of nodes are traversed.
         (4) The correct move is chosen.
     Output:
         Result [Boolean]
             True if test passed, False if test failed.
     """
-    # TODO
-    return True
 
+    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+
+    board = chess.Board(fen=fen_str)
+    # Can't run deeper due to restricted evaluatoin function.
+    search = RankPrune(leaf_eval=minimax_test_eval, branch_eval=branch_test_eval,
+                       prune_perc=0.5, max_depth=3, limit_depth=True)
+    score, move, leaf_fen, root = search.run(board, time_limit=float("inf"), return_root=True)
+
+    # Check that there are the correct number of nodes at every level and they contain the right values.
+    queue = Queue.Queue()
+    queue.put(root)
+    depth_count = [0] * 4
+    while queue.qsize() > 0:
+        curr_node = queue.get()
+        depth_count[curr_node.depth] += 1
+
+        # Compare value to correct evaluation function
+        fen = curr_node.fen if dh.white_is_next(curr_node.fen) else dh.flip_board(curr_node.fen)
+        if curr_node.depth == 3 and minimax_test_eval(fen) != curr_node.value:
+            print "Rank Prune Test Failed! Was expecting leaf value %f for %s" % (minimax_test_eval(fen), curr_node)
+            return False
+        elif curr_node.depth < 3 and branch_test_eval(fen) != curr_node.value:
+            print "Rank Prune Test Failed! Was expecting inner value %f for %s" % (branch_test_eval(fen), curr_node)
+            return False
+
+        for child in curr_node.get_child_nodes():
+            queue.put(child)
+
+    if depth_count != [1, 3, 6, 9]:
+        print "Rank Prune Test Failed! Was expecting depth counts of %s, got %s" % (str([1, 3, 6, 9]), depth_count)
+        return False
+
+    # Check result
+    if (score == 0.6) and (str(move) == "b3b4") and (leaf_fen == "8/8/pp6/8/1P6/P7/8/8 b - - 0 2"):
+        return True
+    else:
+        print "Rank Prune Test Failed: Expected [Score, Move]: [0.6, b3b4, 8/8/pp6/8/1P6/P7/8/8 b - - 0 2]" \
+              " got: [%.1f, %s, %s]" % (score, move, leaf_fen)
+        return False
+
+
+def branch_test_eval(fen):
+    """
+    Branch evaluation function used by Rank Prune test.
+    """
+
+    board_state, player, _, _, _, _ = fen.split(' ')
+    if player != 'w':
+        raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
+
+    if board_state == dh.flip_board('8/p7/1p6/8/8/PP6/8/8 w - - 0 2').split(' ')[0]:  # a2a3
+        return 0.9
+    elif board_state == dh.flip_board('8/p7/1p6/8/1P6/8/P7/8 w - - 0 2').split(' ')[0]:  # b3b4
+        return 0.8
+    elif board_state == dh.flip_board('8/p7/1p6/8/P7/1P6/8/8 w - - 0 2').split(' ')[0]:  # a2a4 (pruned children)
+        return 0.7
+    elif board_state == '8/p7/8/1p6/8/PP6/8/8':  # a2a3 -> b6b5
+        return 0.5
+    elif board_state == '8/8/pp6/8/8/PP6/8/8':  # a2a3 -> a7a6
+        return 0.3
+    elif board_state == '8/8/1p6/p7/8/PP6/8/8':  # a2a3 -> a7a5 (pruned children)
+        return 0.0
+    elif board_state == '8/p7/8/1p6/1P6/8/P7/8':  # b3b4 -> b6b5
+        return 0.9
+    elif board_state == '8/8/pp6/8/1P6/8/P7/8':  # b3b4 -> a7a6
+        return 0.8
+    elif board_state == '8/8/1p6/p7/1P6/8/P7/8':  # b3b4 -> a7a5 (pruned children)
+        return 0.7
+    elif board_state == '8/p7/1p6/8/8/1P6/P7/8':  # ROOT
+        return 0.5
+    else:
+        raise RuntimeError("This definitely should not happen! Invalid board: %s" % board_state)
 
 def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
     """
@@ -204,7 +275,8 @@ def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
         Result [Boolean]
             True if test passed, False if test failed.
     """
-    search = RankPrune(leaf_eval=lambda x: random.random(), prune_perc=0.9)
+    # TODO: Add varying prune_perc
+    search = RankPrune(leaf_eval=lambda x: random.random(), prune_perc=0.9, buff_time=3)
     board = chess.Board(fen="2bq2R1/3P1PP1/3k3P/pP6/7N/NP1B3p/p1pQn2p/3nB2K w - - 0 1")  # Random FEN
 
     for t in xrange(min_time, max_time + 1, time_step):
@@ -215,6 +287,7 @@ def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
             print "Timing Test: Time Limit %f. Time Taken %f." % (float(t), time_taken)
         if time_taken > t:
             print "Error: time allowed: %f, time taken: %f" % (float(t), time_taken)
+            return False
     return True
 
 
@@ -415,7 +488,7 @@ def basic_test_eval(fen):
 # Used in minimax + pruning test
 def minimax_test_eval(fen):
     """
-    Arbitrary evaluation function for minimax test. Should yield move of b3b4 and value of 6.
+    Arbitrary evaluation function for minimax test. Should yield move of b3b4 and value of 0.6.
     """
     board_state, player, _, _, _, _ = fen.split(' ')
     if player != 'w':
@@ -447,6 +520,9 @@ def minimax_test_eval(fen):
         score = 0.6
     elif board_state == "8/8/pp6/P7/8/1P6/8/8":
         score = 0.1
+    # Start board, used for timing:
+    elif board_state == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR":
+        score = 0.5
     else:
         raise RuntimeError("This definitely should not happen! Invalid board: %s" % board_state)
 
@@ -464,7 +540,8 @@ def run_play_tests():
         'Partition': partition_test,
         'Quickselect': quickselect_test,
         'MinimaxTree': minimaxtree_test,
-        'Search Time' : search_timing_test
+        'Search Time': search_timing_test,
+        'Rank Prune': rank_prune_test
         }
 
     all_tests["Neural Net Tests"] = {

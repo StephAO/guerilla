@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from guerilla.play.neural_net import NeuralNet
-from guerilla.play.search import Complementmax, RankPrune
+from guerilla.play.search import Complementmax, RankPrune, IterativePrune
 import chess
 import random
 import os
@@ -24,6 +24,7 @@ class Player:
         """
         self.name = name
         self._colour = colour
+        self.time_taken = 0
 
     @property
     def colour(self):
@@ -37,6 +38,14 @@ class Player:
             self._colour = 'black'
         else:
             raise ValueError("Error: Invalid colour! Must be 'white','w','black', or 'b'.")
+
+    @abstractmethod
+    def __enter__(self, gui=None):
+        raise NotImplementedError("You should never see this")
+
+    @abstractmethod
+    def __exit__(self, e_type, value, traceback):
+        raise NotImplementedError("You should never see this")
 
     @abstractmethod
     def get_move(self, board):
@@ -62,7 +71,8 @@ class Guerilla(Player):
 
     search_types = {
                     "complementmax" : Complementmax,
-                    "rankprune"     : RankPrune
+                    "rankprune"     : RankPrune,
+                    "iterativeprune": IterativePrune
                     }
 
     def __init__(self, name, colour=None, search_type='complementmax', load_file=None,
@@ -72,7 +82,7 @@ class Guerilla(Player):
                             verbose=verbose, **kwargs)
         self.search = Guerilla.search_types[search_type](self.nn.evaluate)
 
-    def __enter__(self):
+    def __enter__(self, gui=None):
         self.nn.start_session()
         self.nn.init_graph()
         return self
@@ -82,9 +92,10 @@ class Guerilla(Player):
             print e_type, value, traceback
         self.nn.close_session()
 
-    def get_move(self, board):
+    def get_move(self, board, time_limit=10):
+        print time_limit
         # print "Guerilla is thinking..."
-        return self.search.run(board)[1]
+        return self.search.run(board, time_limit=time_limit)[1]
 
 
 class Human(Player):
@@ -92,10 +103,17 @@ class Human(Player):
         super(Human, self).__init__(name, colour)
         self.gui = None
 
-    def get_move_from_gui(self, board):
-        if self.gui is None:
+    def __enter__(self, gui=None):
+        if gui is None:
             raise Exception("No gui was provided to human")
+        self.gui = gui
+        return
 
+    def __exit__(self, e_type, value, traceback):
+        if e_type is not None:
+            print e_type, value, traceback
+
+    def get_move_from_gui(self, board):
         move = self.gui.get_player_input(board, )
         print move
         return chess.Move.from_uci(move)
@@ -148,6 +166,13 @@ class Sunfish(Player):
         self.search = sunfish.Searcher()
         self.time_limit = time_limit
 
+    def __enter__(self, gui=None):
+        return
+
+    def __exit__(self, e_type, value, traceback):
+        if e_type is not None:
+            print e_type, value, traceback
+
     def get_move(self, board):
         # Convert to Sunfish position
         sun_pos = sun_tools.parseFEN(board.fen())
@@ -172,6 +197,13 @@ class Stockfish(Player):
         self.engine = chess.uci.popen_engine('stockfish')
         self.engine.uci()
         self.new_game()
+
+    def __enter__(self, gui=None):
+        return
+
+    def __exit__(self, e_type, value, traceback):
+        if e_type is not None:
+            print e_type, value, traceback
 
     def get_move(self, board):
         self.engine.position(board)

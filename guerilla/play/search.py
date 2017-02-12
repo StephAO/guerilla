@@ -22,10 +22,17 @@ class Search:
         self.win_value = 1
         self.lose_value = 0
         self.draw_value = 0.5
+        self.num_evals = 0
+        self.num_visits = 0
+        self.nodes_pruned = [0]*5
         self.cache_hits = 0
         self.cache_miss = 0
         # cache: Key is FEN of board (where white plays next), Value is Score
         self.cache = {}
+
+    @abstractmethod
+    def __str__(self):
+        raise NotImplementedError("You should never see this")
 
     @abstractmethod
     def _set_evaluation_function(self, **kwargs):
@@ -101,6 +108,7 @@ class Search:
             best_leaf [String]
                 FEN of the board of the leaf node which yielded the highest value.
         """
+        self.num_visits += 1
         fen = unflipped_fen = board.fen()
         if dh.black_is_next(fen):
             fen = dh.flip_board(fen)
@@ -115,6 +123,7 @@ class Search:
             if self._cache_condition(**kwargs):
                 # Use cache
                 key = dh.strip_fen(fen)
+                self.num_evals += 1
                 if key not in self.cache:
                     self.cache_miss += 1
                     self.cache[key] = self.evaluation_function(fen)
@@ -127,10 +136,6 @@ class Search:
             return score, None, unflipped_fen
         else:
             return None
-
-    @abstractmethod
-    def __str__(self):
-        raise NotImplementedError("You should never see this")
 
 
 class Complementmax(Search):
@@ -147,6 +152,9 @@ class Complementmax(Search):
         self.max_depth = max_depth
         self.reci_prune = True
 
+    def __str__(self):
+        return "Complementmax"
+
     def _evaluation_condition(self, **kwargs):
         return kwargs['depth'] == self.max_depth
 
@@ -161,6 +169,8 @@ class Complementmax(Search):
     def run(self, board, time_limit=None, clear_cache=False):
         if clear_cache:
             self.cache = {}
+        self.num_evals = 0
+        self.num_visits = 0
         return self.complementmax(board)
 
     def complementmax(self, board, depth=0, a=1.0):
@@ -191,7 +201,7 @@ class Complementmax(Search):
         if end is not None:
             return end
         else:
-            for move in board.legal_moves:
+            for i, move in enumerate(board.legal_moves):
                 # print "D%d: %s" % (depth, move)
                 # recursive call
                 board.push(move)
@@ -211,18 +221,16 @@ class Complementmax(Search):
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
                 if self.reci_prune and best_score >= a:
+                    self.nodes_pruned[depth] += len(board.legal_moves) - i 
                     break
 
         # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
         return best_score, best_move, best_leaf
 
-    def __str__(self):
-        return "Complementmax"
-
 
 # RANK PRUNE
 class RankPrune(Search):
-    def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.75,
+    def __init__(self, leaf_eval, prune_perc=0.75, branch_eval=None,
                  time_limit=10, buff_time=0.1, limit_depth=False, max_depth=3, verbose=True):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
@@ -240,6 +248,10 @@ class RankPrune(Search):
         self.verbose = verbose
         self.leaf_estimate = None
 
+    def __str__(self):
+        return "RankPrune"
+
+
     def _evaluation_condition(self, **kwargs):
         return True
 
@@ -251,7 +263,7 @@ class RankPrune(Search):
 
     def _cache_condition(self, **kwargs):
         """ Only use cache if leaf node. """
-        return self.leaf_mode
+        return (self.evaluation_function == self.leaf_eval)
 
     def run(self, board, time_limit=None, clear_cache=False, return_root=False):
         """
@@ -297,6 +309,8 @@ class RankPrune(Search):
 
         if clear_cache:
             self.cache = {}
+        self.num_evals = 0
+        self.num_visits = 0
 
         # Start timing
         start_time = time.time()
@@ -331,6 +345,7 @@ class RankPrune(Search):
                     if not self.leaf_mode and time_left <= to_eval * self.leaf_estimate:
                         # clear queue and break
                         # print "Running out of time on depth %d. Queue size %d " % (curr_node.depth + 1, queue.qsize())
+                        print curr_node.depth + 1
                         self.leaf_mode = True
 
                     # play move
@@ -347,6 +362,7 @@ class RankPrune(Search):
                     # Prune children if necessary
                     if len(curr_node.children) > 1:
                         # TODO: Maybe this is better done in place
+                        self.nodes_pruned[curr_node.depth + 1] += int(math.floor(len(curr_node.children) * (self.prune_perc)))
                         top_ranked = k_top(curr_node.get_child_nodes(),
                                            int(math.ceil(len(curr_node.children) * (1 - self.prune_perc))),
                                            key=lambda x: x.value)
@@ -364,9 +380,140 @@ class RankPrune(Search):
 
         return output
 
-    def __str__(self):
-        return "RankPrune"
 
+class IterativePrune(Search):
+    """ 
+    Searches game tree in an Iterative Deepening Depth search.
+    At each depth prune from remaining possibilities
+    """
+    def __init__(self, evaluation_function, prune_perc=0.75,
+                 time_limit=10, buff_time=0.5, verbose=True):
+        
+        
+        # cache: Key is FEN of board (where white plays next), Value is Score
+        super(IterativePrune, self).__init__(evaluation_function)
+
+        self.evaluation_function = evaluation_function
+        self.prune_perc = prune_perc
+        self.time_limit = time_limit
+        self.buff_time = buff_time
+        self.depth_limit = 1
+
+    def __str__(self):
+        return "Complementmax"
+
+    def _set_evaluation_function(self, **kwargs):
+        """ Always use same evaluation functions """
+        return
+
+    def _evaluation_condition(self, **kwargs):
+        """ Always evaluate """
+        return True
+
+    def _cache_condition(self, **kwargs):
+        """ Always cache """
+        return True
+
+    def generate_children(self, board, node):
+        for i, move in enumerate(board.legal_moves):
+            board.push(move)
+            score, _, fen = self.check_conditions(board, depth=node.depth + 1)
+            # Note: Store unflipped fen
+            node.add_child(move, SearchNode(fen, node.depth + 1, score))
+            board.pop()
+
+    def DLS(self, node):
+        """ 
+            Depth limited search
+        """
+        best_move = None
+        board = chess.Board(node.fen)
+
+        self.time_left = (time.time() - self.start_time) <= self.time_limit - self.buff_time
+
+        if node.depth >= self.depth_limit or not node.expand or not self.time_left:
+            return node.value, None, node.fen
+        else:
+            # dict is empty
+            if not node.children:
+                self.generate_children(board, node)
+            for move in node.children:
+                # recursive call
+                board.push(move)
+                # print move
+                score, next_move, leaf_board = self.DLS(node.children[move])
+                # Best child is the one one which has the lowest value
+                if best_move is None or score < node.children[best_move].value:
+                    best_move = move
+
+                board.pop()
+
+            node.value = 1 - node.children[best_move].value
+
+        # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
+        return node.children[best_move].value, best_move, node.children[best_move].fen
+
+    def prune(self, node):
+        """ 
+            Recurisve pruning of remaining nodes
+        """
+        if not node.expand or not node.children:
+            return
+
+        print node.depth
+        children = [child for child in node.get_child_nodes() if child.expand]
+        # k = number of nodes that I keep
+        k = max(min(len(children), 2), int(math.ceil(len(children) * self.prune_perc)))
+        quickselect(children, 0, len(children) - 1, k - 1 , key=lambda x: x.value)
+
+        for child in children[:k]:
+            self.prune(child)
+        for child in children[k:]:
+            self.nodes_pruned[child.depth] += 35
+            child.expand = False
+
+
+    def run(self, board, time_limit=None, clear_cache=False):
+        """
+
+        """
+        if time_limit is None:
+            time_limit = self.time_limit
+
+        if time_limit <= self.buff_time:
+            raise ValueError("Rank-Prune Error: Time limit (%d) <= buffer time (%d). "
+                             "Please increase time limit or reduce buffer time." % (time_limit, self.buff_time))
+
+        if clear_cache:
+            self.cache = {}
+        self.num_evals = 0
+        self.num_visits = 0
+
+        # Start timing
+        self.time_limit = time_limit
+        self.start_time = time.time()
+        self.time_left = True
+
+        score, _, fen = self.check_conditions(board, depth=0)
+
+        root = SearchNode(fen, 0, score)  # Note: store unflipped fen
+
+        # Evaluation Queue. Holds SearchNode
+        curr_depth = 0
+        self.depth_limit = 1
+        cycle_time = 0
+        score, best_move, leaf_board = self.DLS(root)
+        while self.time_left:
+            print '-'*10, self.depth_limit, '-'*10
+            self.depth_limit += 1
+            self.prune(root)
+            score, best_move, leaf_board = self.DLS(root)
+
+        return score, best_move, leaf_board
+
+
+    def __str__(self):
+        return "IterativePrune"
 
 class SearchNode:
     def __init__(self, fen, depth, value):
@@ -388,6 +535,7 @@ class SearchNode:
         self.depth = depth
         self.value = value
         self.children = {}
+        self.expand = True
 
     def add_child(self, move, child):
         assert (isinstance(child, SearchNode))
@@ -435,7 +583,14 @@ def k_top(arr, k, key=None):
     return arr[-k:]
 
 
-def quickselect(arr, left, right, k, key=None):
+def quickselect(arr, left, right, k, key=None): # TODO: Isn't left always 0 and right always len(arr) -1
+                                                # If it's not, then this function is not fully defined
+                                                # Does it only consider things between left and right?
+                                                # If so you're assert should be: 0 <= k <= right - left
+                                                # OR does it mean that the pivot idx is between the left and the right?
+                                                # If so you're assert should be: left <= k <= right
+                                                # Also, you're treating k as a index here, when in reality it's suppose
+                                                # to be number of items to keep
     """
     Return the array with the k-th smallest valued element at the k-th index.
     Note that this requires left <= k <= right.
@@ -448,7 +603,7 @@ def quickselect(arr, left, right, k, key=None):
         right [Int]
             Ending index of the array to be considered. (Inclusive)
         k [Int]
-            The number of highest valued items to be returned.
+            The number of low elements to place.
         key [Function] (Optional)
             Used to convert items in arr to values. Useful when dealing with objects. Default is identity function.
     Output:
@@ -456,7 +611,7 @@ def quickselect(arr, left, right, k, key=None):
             k-highest valued items.
     """
 
-    assert (left <= k <= right)
+    assert (left <= k - 1 <= right)
 
     if key is None:
         key = lambda x: x
@@ -547,7 +702,7 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
         raise RuntimeError("Minimaxtree Error: Forbidden FEN %s reached!" % root.fen)
 
     # Check if leaf
-    if not root.children:
+    if not root.children or not root.expand:
         return root.value, None, root.fen
 
     else:

@@ -532,20 +532,20 @@ def run_play_tests():
     all_tests = {}
 
     all_tests["Search Tests"] = {
-        'Basic Search': basic_search_test,
-        'Checkmate Search': checkmate_search_test,
-        'Complementmax Search': complementmax_test,
-        'Rank-Prune Search': rank_prune_test,
-        'Top k-items': k_top_test,
-        'Partition': partition_test,
-        'Quickselect': quickselect_test,
-        'MinimaxTree': minimaxtree_test,
-        'Search Time': search_timing_test,
+        # 'Basic Search': basic_search_test,
+        # 'Checkmate Search': checkmate_search_test,
+        # 'Complementmax Search': complementmax_test,
+        # 'Rank-Prune Search': rank_prune_test,
+        # 'Top k-items': k_top_test,
+        # 'Partition': partition_test,
+        # 'Quickselect': quickselect_test,
+        # 'MinimaxTree': minimaxtree_test,
+        # 'Search Time': search_timing_test,
         'Rank Prune': rank_prune_test
         }
 
     all_tests["Neural Net Tests"] = {
-        'Weight Save and Load': save_load_weights_test
+        #'Weight Save and Load': save_load_weights_test
     }
 
     success = True

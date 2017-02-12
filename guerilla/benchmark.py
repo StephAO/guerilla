@@ -52,6 +52,41 @@ def search_bench(max_depth=3, num_rep=3, verbose=True):
 
     return output
 
+def search_types_bench(verbose=True):
+    """
+    Times how long searches of different depths takes.
+    Input:
+        max_depth [Int]
+            Each search depth up to max_depth will be timed individually. (Inclusive)
+        num_rep [Int]
+            The number of times each search depth timing is repeated.
+        verbose [Boolean]
+            Whether results are printed in addition to being returned.
+    Output:
+        Result [Dict]
+            Dictionary of Results.
+    """
+    # Random seed
+    rnd_seed = 1234
+
+    # Random board
+    board = chess.Board('3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24')
+
+    # Create Guerilla with Random weights:
+    for search_type in ['iterativeprune', 'complementmax', 'rankprune']:
+        with Guerilla('curious_george','w', search_type=search_type, verbose=True, seed=rnd_seed) as g:
+            
+            g.search.max_depth = 3
+            # Time multiple repetitions
+            start_time = time.time()
+            g.get_move(board, time_limit=25)
+            time_taken = (time.time() - start_time)
+            
+            print "Search type: %s, Time: %f\nNumber nodes visited: %d, " \
+                  "number of nodes evaluated: %d, cache hits: %d, nodes_pruned: %s" % \
+                  (search_type, time_taken, g.search.num_visits, \
+                    g.search.num_evals, g.search.cache_hits, str(g.search.nodes_pruned))
+
 def data_processing_bench():
     fen = '3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24'
     input_types = ['bitmap', 'giraffe', 'movemap']
@@ -77,9 +112,10 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        'Search': search_bench,
-        'Data Processing': data_processing_bench,
-        'Evaluation' : nn_evaluation_bench
+        # 'Search': search_bench,
+        'Search Types': search_types_bench,
+        # 'Data Processing': data_processing_bench,
+        # 'Evaluation' : nn_evaluation_bench
     }
 
     print "\nRunning Benchmarks..."

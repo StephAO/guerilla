@@ -883,7 +883,7 @@ class Teacher:
         # print "Calculating TD-Leaf values for move ",
         for i, root_board in enumerate(game):
             # Output value is P(winning of current player)
-            value, _, leaf_board = self.guerilla.search.run(chess.Board(root_board))
+            value, _, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cash=True)
 
             # Modify value so that it represents P(white winning)
             if dh.white_is_next(root_board):
@@ -1055,18 +1055,15 @@ def main():
 
     with Guerilla('Harambe', colour='w', load_file="w_30k_movemap_3FC.p") as g:
         g.search.max_depth = 2
-        # start_time = time.time()
-        # print eval_sts(g, step_size=10)
-        # print time.time() - start_time
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=10000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=200000)  # 488037
         t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
         t.set_sp_params(num_selfplay=10, max_length=12)
         t.sts_on = False
         t.sts_interval = 100
         t.checkpoint_interval = None
         t.run(['train_bootstrap'], training_time=run_time)
-        print eval_sts(g)
+        print eval_sts(g, step_size=10)
 
 
 if __name__ == '__main__':

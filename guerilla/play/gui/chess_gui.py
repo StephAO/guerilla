@@ -99,7 +99,7 @@ class ChessGUI:
                 messgage[string]:
                     message to print
         """
-        print message
+        # print message
         self.text_box.add(message)
         self.text_box.draw()
         

@@ -26,10 +26,9 @@ class Game:
         assert all(isinstance(p, Player) for p in players)
 
         # Initialize players
-        self.player1 = players[0]
-        self.player2 = players[1]
-        self.player1.colour = 'white'
-        self.player2.colour = 'black'
+        self.players = players
+        self.players[0].colour = 'white'
+        self.players[1].colour = 'black'
 
         # Initialize board
         self.board = chess.Board()
@@ -40,126 +39,126 @@ class Game:
         self.data['wins'] = [0, 0]
         self.data['draws'] = 0
 
-        self.use_gui = use_gui
+        self.use_gui = use_gui or any(isinstance(p, Human) for p in players)
         # Initialize gui
         if use_gui:
             self.gui = ChessGUI()
-            if type(players[0]) is Human:
-                self.player1.gui = self.gui
-            if type(players[1]) is Human:
-                self.player2.gui = self.gui
 
     def swap_colours(self):
-        if self.player1.colour == 'white' and self.player2.colour == 'black':
-            self.player1.colour = 'black'
-            self.player2.colour = 'white'
-        elif self.player1.colour == 'black' and self.player2.colour == 'white':
-            self.player1.colour = 'white'
-            self.player2.colour = 'black'
+        # Ensure that there is currently a white player and a black player
+        if all(colour in [p.colour for p in self.players] for colour in ['white', 'black']):
+            self.players[0].colour, self.players[1].colour = self.players[1].colour, self.players[0].colour
         else:
             raise ValueError('Error: one of the players has an invalid colour. ' +
-                             'Player 1: %s, Player 2: %s' % (self.player1.colour, self.player2.colour))
+                             'Player 1: %s, Player 2: %s' % (self.players[0].colour, self.players[1].colour))
 
     def start(self):
         """ 
             Run n games. For each game players take turns until game is over.
             Note: draws are claimed automatically asap
         """
+        with self.players[0], self.players[1]:
 
-        for game in xrange(self.num_games):
+            for game in xrange(self.num_games):
 
-            # Print info.
-            print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game + 1, self.player1.name,
-                                                               type(self.player1).__name__,
-                                                               self.player1.colour,
-                                                               self.player2.name,
-                                                               type(self.player2).__name__,
-                                                               self.player2.colour)
-            if self.use_gui:
-                self.gui.print_msg("Game %d:" % game)
-                self.gui.print_msg("%s [%s] (%s)" % (self.player1.name,
-                                                     type(self.player1).__name__, self.player1.colour))
-                self.gui.print_msg("VS:")
-                self.gui.print_msg("%s [%s] (%s)" % (self.player2.name,
-                                                     type(self.player2).__name__, self.player2.colour))
-            # Reset board
-            self.board.reset()
-
-            # Signal to players that a new game is being played.
-            self.player1.new_game()
-            self.player2.new_game()
-
-            player1_turn = self.player1.colour == 'white'
-
-            game_pgn = chess.pgn.Game()
-            game_pgn.headers["White"] = self.player1.name if player1_turn else self.player2.name
-            game_pgn.headers["Black"] = self.player2.name if player1_turn else self.player1.name
-            game_pgn.headers["Date"] = time.strftime("%Y.%m.%d")
-            game_pgn.headers["Event"] = "Test"
-            game_pgn.headers["Round"] = game
-            game_pgn.headers["Site"] = "My PC"
-
-            # Start game
-            while not self.board.is_game_over(claim_draw=True):
+                # Print info.
+                print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game + 1, self.players[0].name,
+                                                                   type(self.players[0]).__name__,
+                                                                   self.players[0].colour,
+                                                                   self.players[1].name,
+                                                                   type(self.players[1]).__name__,
+                                                                   self.players[1].colour)
                 if self.use_gui:
-                    self.gui.draw(self.board)
-                else:
-                    Game.pretty_print_board(self.board)
+                    self.gui.print_msg("Game %d:" % (game + 1))
+                    self.gui.print_msg("%s [%s] (%s)" % (self.players[0].name,
+                                                         type(self.players[0]).__name__, self.players[0].colour))
+                    self.gui.print_msg("VS:")
+                    self.gui.print_msg("%s [%s] (%s)" % (self.players[1].name,
+                                                         type(self.players[1]).__name__, self.players[1].colour))
+                # Reset board
+                self.board.reset()
 
-                # Get move
-                move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
-                game_pgn.add_main_variation(move)
-                game_pgn = game_pgn.variation(0)
-                while move not in self.board.legal_moves:
+                # Signal to players that a new game is being played.
+                [p.new_game() for p in self.players]
+
+                player1_turn = self.players[0].colour == 'white'
+                curr_player_idx = 0 if player1_turn else 0
+
+                game_pgn = chess.pgn.Game()
+                game_pgn.headers["White"] = self.players[curr_player_idx].name
+                game_pgn.headers["Black"] = self.players[(curr_player_idx + 1) % 2].name
+                game_pgn.headers["Date"] = time.strftime("%Y.%m.%d")
+                game_pgn.headers["Event"] = "Test"
+                game_pgn.headers["Round"] = game
+                game_pgn.headers["Site"] = "My PC"
+
+                # Start game
+                while not self.board.is_game_over(claim_draw=True):
                     if self.use_gui:
-                        self.gui.print_msg("Error: Move is not legal, try again")
+                        self.gui.draw(self.board)
                     else:
-                        print "Error: Move is not legal"
-                    move = self.player1.get_move(self.board) if player1_turn else self.player2.get_move(self.board)
-                self.board.push(move)
+                        Game.pretty_print_board(self.board)
+
+                    # Get move
+                    st = time.time()
+                    move = self.players[curr_player_idx].get_move(self.board)
+                    self.players[curr_player_idx].time_taken += time.time() - st
+                    game_pgn.add_main_variation(move)
+                    game_pgn = game_pgn.variation(0)
+                    while move not in self.board.legal_moves:
+                        if self.use_gui:
+                            self.gui.print_msg("Error: Move is not legal, try again")
+                        else:
+                            print "Error: Move is not legal"
+                        move = self.players[curr_player_idx].get_move(self.board)
+                    self.board.push(move)
+                    if self.use_gui:
+                        self.gui.print_msg("%s played %s" % (self.players[curr_player_idx].name, move))
+                    else:
+                        print "%s played %s" % (self.players[curr_player_idx].name, move)
+
+                    # Switch sides
+                    curr_player_idx = (curr_player_idx + 1) % 2
+
                 if self.use_gui:
-                    self.gui.print_msg("%s played %s" % (self.player1.name if player1_turn else self.player2.name, move))
+                    self.gui.end_of_game = True
+                    self.gui.draw(self.board)
+
+                result = self.board.result(claim_draw=True)
+                if result == '1-0':
+                    winner = self.players[0] if self.players[0].colour == 'white' else self.players[1]
+                elif result == '0-1':
+                    winner = self.players[1] if self.players[0].colour == 'white' else self.players[0]
                 else:
-                    print "%s played %s" % (self.player1.name if player1_turn else self.player2.name, move)
+                    winner = None
+                    self.data['draws'] += 1
+                    if self.use_gui:
+                        self.gui.print_msg("Draw.")
+                    else:
+                        print "Draw."
 
-                # Switch sides
-                player1_turn = not player1_turn
+                if winner is not None:
+                    winner_idx = (curr_player_idx + 1) % 2
+                    self.data['wins'][winner_idx] += 1
+                    if self.use_gui:
+                        self.gui.print_msg("%s wins." % winner.name)
+                    else:
+                        print "%s wins." % winner.name
 
-            if self.use_gui:
-                self.gui.end_of_game = True
-                self.gui.draw(self.board)
+                for p in self.players:
+                    print "Player %s took %f seconds in total" % (p.name, p.time_taken)
+                    p.time_taken = 0
 
-            result = self.board.result(claim_draw=True)
-            if result == '1-0':
-                winner = self.player1 if self.player1.colour == 'white' else self.player2
-            elif result == '0-1':
-                winner = self.player2 if self.player1.colour == 'white' else self.player1
-            else:
-                winner = None
-                self.data['draws'] += 1
+                game_pgn = game_pgn.root()
+                game_pgn.headers["Result"] = result
+                with open(resource_filename('guerilla', 'data/played_games/') + self.players[0].name + '_' +
+                            self.players[1].name + '_' + str(game) + '.pgn', 'w') as pgn:
+                    pgn.write(str(game_pgn))
+
                 if self.use_gui:
-                    self.gui.print_msg("Draw.")
-                else:
-                    print "Draw."
+                    self.gui.wait_for_endgame_input()
 
-            if winner is not None:
-                winner_idx = 0 if winner == self.player1 else 1
-                self.data['wins'][winner_idx] += 1
-                if self.use_gui:
-                    self.gui.print_msg("%s wins." % winner.name)
-                else:
-                    print "%s wins." % winner.name
-
-            game_pgn = game_pgn.root()
-            game_pgn.headers["Result"] = result
-            with open(resource_filename('guerilla', 'data/played_games/') + self.player1.name + '_' +
-                        self.player2.name + '_' + str(game) + '.pgn', 'w') as pgn:
-                pgn.write(str(game_pgn))
-
-            if self.use_gui:
-                self.gui.wait_for_endgame_input()
-
-            self.swap_colours()
+                self.swap_colours()
 
     @staticmethod
     def pretty_print_board(board):
@@ -195,14 +194,15 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        # players[1] = Guerilla('Harambe (bootstrap)', _load_file='weights_train_bootstrap_20160930-193556.p')
+        players[1] = Guerilla('Harambe (COMPLEMENTMAX)', search_type='complementmax', _load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
         # players[0] = Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
 
-        players[1] = Sunfish("Sun", time_limit=1)
-        players[0] = Guerilla('Harambe', load_file='weights_train_bootstrap_20161130-095457.p')
+        # players[1] = Sunfish("Sun", time_limit=1)
+        players[0] = Guerilla('King Kong (RANKPRUNE)', search_type='rankprune', load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
 
         # players[1].search.max_depth = 3
-        players[0].search.max_depth = 3
+        players[0].search.max_depth = 2
+        players[1].search.max_depth = 2
 
 
     elif choose_players == 'c':
@@ -219,18 +219,18 @@ def main():
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
-    game = Game(players, num_games=5)
-    if isinstance(players[0], Guerilla) and isinstance(players[1], Guerilla):
-        with players[0], players[1]:
-            game.start()
-    elif isinstance(players[0], Guerilla):
-        with players[0]:
-            game.start()
-    elif isinstance(players[1], Guerilla):
-        with players[1]:
-            game.start()
-    else:
-        game.start()
+    game = Game(players, num_games=2)
+    # if isinstance(players[0], Guerilla) and isinstance(players[1], Guerilla):
+    #     with players[0], players[1]:
+    #         game.start()
+    # elif isinstance(players[0], Guerilla):
+    #     with players[0]:
+    #         game.start()
+    # elif isinstance(players[1], Guerilla):
+    #     with players[1]:
+    #         game.start()
+    # else:
+    game.start()
 
 
 if __name__ == '__main__':

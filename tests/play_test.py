@@ -13,6 +13,7 @@ import guerilla.data_handler as dh
 import guerilla.play.neural_net as nn
 from guerilla.play.search import *
 
+
 ###############################################################################
 # NEURAL NET TEST
 ###############################################################################
@@ -58,42 +59,32 @@ def save_load_weights_test(verbose=False):
 
     return True
 
+
 ###############################################################################
 # SEARCH TESTS
 ###############################################################################
 
-def k_top_test():
+def k_bot_test():
     """
-    Tests the k-top function used in Rank-Prune searching.
+    Tests the k-bot function used in Rank-Prune searching.
     Output:
         Result [Boolean]
             True if test passed, False if test failed.
     """
     test_list = [10, 79, 9, 59, 9, 47, 50, 41, 36, 80, 63, 25, 76, 81, 81, 30, 79, 81, 26, 52]
-    top_1 = [81]
-    top_3 = [81, 81, 81]
-    top_5 = [81, 81, 81, 80, 79]
-    top_10 = [81, 81, 81, 80, 79, 79, 76, 63, 59, 52]
-
-    test_solutions = {
-        1 : top_1, 
-        3 : top_3, 
-        5 : top_5, 
-        10: top_10
-    }
+    test_list_sorted = sorted(test_list)
 
     success = True
-    for test, solution in test_solutions.iteritems():
-        result = k_top(list(test_list), test)
+    for test in [1, 3, 5, 10]:
+        result = k_bot(list(test_list), test)
         if len(result) != test:
-            print "Error: k_top does not return the correct number of items.\n" \
+            print "Error: k_bot does not return the correct number of items.\n" \
                   "Expected: %d, Actual: %d" % (test, len(result))
             success = False
-        for item in result:
-            if item not in solution:
-                print "Error: k_top does not return the maximum values\n" \
-                      "Expected: %s, Actual:%s" % (str(solution), str(result))
-                success = False
+        if set(result) != set(test_list_sorted[:test]):
+            print "Error: k_bot does not return the %d smallest values\n" \
+                  "Expected: %s, Got: %s" % (test, str(test_list_sorted[:test]), str(result))
+            success = False
 
     return success
 
@@ -168,7 +159,7 @@ def quickselect_test(num_test=10, seed=12345):
         expected = sorted(rnd_arr)[k]
         if rnd_arr[k] != expected:
             print "Quickselect Test Failed: Expected %d-th smallest element to be %d, got %d" % (
-            k, expected, rnd_arr[k])
+                k, expected, rnd_arr[k])
             return False
 
     return True
@@ -237,27 +228,28 @@ def branch_test_eval(fen):
         raise RuntimeError("This shouldn't happen! Evaluation should always be called with white next.")
 
     if board_state == dh.strip_fen(dh.flip_board('8/p7/1p6/8/8/PP6/8/8 w - - 0 2')):  # a2a3
-        return 0.9
+        return 0.7
     elif board_state == dh.strip_fen(dh.flip_board('8/p7/1p6/8/1P6/8/P7/8 w - - 0 2')):  # b3b4
         return 0.8
     elif board_state == dh.strip_fen(dh.flip_board('8/p7/1p6/8/P7/1P6/8/8 w - - 0 2')):  # a2a4 (pruned children)
-        return 0.7
+        return 0.9
     elif board_state == '8/p7/8/1p6/8/PP6/8/8':  # a2a3 -> b6b5
-        return 0.5
+        return 0.0
     elif board_state == '8/8/pp6/8/8/PP6/8/8':  # a2a3 -> a7a6
         return 0.3
     elif board_state == '8/8/1p6/p7/8/PP6/8/8':  # a2a3 -> a7a5 (pruned children)
-        return 0.0
+        return 0.5
     elif board_state == '8/p7/8/1p6/1P6/8/P7/8':  # b3b4 -> b6b5
-        return 0.9
+        return 0.7
     elif board_state == '8/8/pp6/8/1P6/8/P7/8':  # b3b4 -> a7a6
         return 0.8
     elif board_state == '8/8/1p6/p7/1P6/8/P7/8':  # b3b4 -> a7a5 (pruned children)
-        return 0.7
+        return 0.9
     elif board_state == '8/p7/1p6/8/8/1P6/P7/8':  # ROOT
         return 0.5
     else:
         raise RuntimeError("This definitely should not happen! Invalid board: %s" % board_state)
+
 
 def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
     """
@@ -363,7 +355,7 @@ def basic_search_test(search_modes=None):
                 True if test passed, False if test failed.
                 """
 
-    search_modes = [Complementmax(basic_test_eval, max_depth=1), 
+    search_modes = [Complementmax(basic_test_eval, max_depth=1),
                     RankPrune(basic_test_eval, prune_perc=0, time_limit=10, limit_depth=True, max_depth=1)]
 
     success = True
@@ -400,21 +392,21 @@ def checkmate_search_test():
             True if test passed, False if test failed.
     """
 
-    search_modes = [Complementmax((lambda x: 0.5), max_depth=1), 
+    search_modes = [Complementmax((lambda x: 0.5), max_depth=1),
                     RankPrune((lambda x: 0.5), prune_perc=0, time_limit=10, limit_depth=True, max_depth=2)]
 
     success = True
 
-    for s in search_modes:
+    for search_mode in search_modes:
 
         # Checkmates on this turn
         black_loses = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
         white_loses = chess.Board('8/8/8/8/8/2k5/1p6/rK6 w - - 0 1')
-        result, _, _ = s.run(black_loses)
+        result, _, _ = search_mode.run(black_loses)
         if result != 0:
             print "%s Checkmate Search Test failed, invalid result for black checkmate." % search_mode
             success = False
-        result, _, _ = s.run(white_loses)
+        result, _, _ = search_mode.run(white_loses)
         if result != 0:
             print "%s Checkmate search test failed, invalid result for white checkmate." % search_mode
             success = False
@@ -423,11 +415,11 @@ def checkmate_search_test():
         white_wins_next = chess.Board('6k1/R4ppp/8/8/8/8/8/4K3 w - - 0 1')
         black_wins_next = chess.Board('8/8/8/8/8/2k5/rp6/1K6 b - - 0 1')
 
-        result, move, _ = s.run(white_wins_next)
+        result, move, _ = search_mode.run(white_wins_next)
         if result != 1 or str(move) != 'a7a8':
             print "%s Checkmate Search test failed, invalid result for white checkmating black." % search_mode
             success = False
-        result, move, _ = s.run(black_wins_next)
+        result, move, _ = search_mode.run(black_wins_next)
         if result != 1 or str(move) != 'a2a1':
             print "%s Checkmate Search test failed, invalid result for black checkmating white." % search_mode
             success = False
@@ -446,7 +438,7 @@ def complementmax_test():
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
     shallow = Complementmax(minimax_test_eval, max_depth=3)
-    score, move, _ = shallow.run(board)
+    score, move, fen = shallow.run(board)
     if (score == 0.6) and (str(move) == "b3b4"):
         return True
     else:
@@ -528,6 +520,7 @@ def minimax_test_eval(fen):
 
     return 1 - score
 
+
 def run_play_tests():
     all_tests = {}
 
@@ -536,13 +529,12 @@ def run_play_tests():
         'Checkmate Search': checkmate_search_test,
         'Complementmax Search': complementmax_test,
         'Rank-Prune Search': rank_prune_test,
-        'Top k-items': k_top_test,
+        'Top k-items': k_bot_test,
         'Partition': partition_test,
         'Quickselect': quickselect_test,
         'MinimaxTree': minimaxtree_test,
         'Search Time': search_timing_test,
-        'Rank Prune': rank_prune_test
-        }
+    }
 
     all_tests["Neural Net Tests"] = {
         'Weight Save and Load': save_load_weights_test
@@ -560,11 +552,13 @@ def run_play_tests():
 
     return success
 
+
 def main():
     if run_play_tests():
         print "All tests passed"
     else:
         print "You broke something - go fix it"
+
 
 if __name__ == '__main__':
     main()

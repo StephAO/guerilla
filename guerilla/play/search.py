@@ -346,14 +346,15 @@ class RankPrune(Search):
                 if not self.leaf_mode:
                     # Prune children if necessary
                     if len(curr_node.children) > 1:
+                        # Get the WORST moves for your opponent, these are the BEST moves for you
                         # TODO: Maybe this is better done in place
-                        top_ranked = k_top(curr_node.get_child_nodes(),
+                        best_moves = k_bot(curr_node.get_child_nodes(),
                                            int(math.ceil(len(curr_node.children) * (1 - self.prune_perc))),
                                            key=lambda x: x.value)
                     else:
-                        top_ranked = curr_node.get_child_nodes()
+                        best_moves = curr_node.get_child_nodes()
                     # Queue non-pruned children
-                    for child in top_ranked:
+                    for child in best_moves:
                         queue.put(child)
 
         # Minimax on game tree
@@ -404,9 +405,9 @@ class SearchNode:
         return "Node{%s, %d, %f, %d children}" % (self.fen, self.depth, self.value, len(self.children))
 
 
-def k_top(arr, k, key=None):
+def k_bot(arr, k, key=None):
     """
-    Selects the k-highest valued elements from the input list. i.e. k = 1 would yield the maximum element.
+    Selects the k-lowest valued elements from the input list. i.e. k = 1 would yield the lowest valued element.
     Uses quickselect.
     Input:
         arr [List]
@@ -420,7 +421,7 @@ def k_top(arr, k, key=None):
             k-highest valued items.
     """
     if k <= 0:
-        raise ValueError("K-Top error: %d is an invalid value for k, k must be > 0." % k)
+        raise ValueError("K-Bot error: %d is an invalid value for k, k must be > 0." % k)
 
     if len(arr) < k:
         return arr
@@ -430,9 +431,9 @@ def k_top(arr, k, key=None):
         key = lambda x: x
 
     # quickselect -> also partitions
-    quickselect(arr, 0, len(arr) - 1, len(arr) - k, key=key)
+    quickselect(arr, 0, len(arr) - 1, k - 1, key=key)
 
-    return arr[-k:]
+    return arr[:k]
 
 
 def quickselect(arr, left, right, k, key=None):

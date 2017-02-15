@@ -181,7 +181,7 @@ def rank_prune_test():
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
-    search = RankPrune(leaf_eval=minimax_test_eval, branch_eval=branch_test_eval,
+    search = RankPrune(leaf_eval=minimax_test_eval, internal_eval=internal_test_eval,
                        prune_perc=0.5, max_depth=3, limit_depth=True)
     score, move, leaf_fen, root = search.run(board, time_limit=float("inf"), return_root=True)
 
@@ -198,8 +198,8 @@ def rank_prune_test():
         if curr_node.depth == 3 and minimax_test_eval(fen) != curr_node.value:
             print "Rank Prune Test Failed! Was expecting leaf value %f for %s" % (minimax_test_eval(fen), curr_node)
             return False
-        elif curr_node.depth < 3 and branch_test_eval(fen) != curr_node.value:
-            print "Rank Prune Test Failed! Was expecting inner value %f for %s" % (branch_test_eval(fen), curr_node)
+        elif curr_node.depth < 3 and internal_test_eval(fen) != curr_node.value:
+            print "Rank Prune Test Failed! Was expecting inner value %f for %s" % (internal_test_eval(fen), curr_node)
             return False
 
         for child in curr_node.get_child_nodes():
@@ -218,7 +218,7 @@ def rank_prune_test():
         return False
 
 
-def branch_test_eval(fen):
+def internal_test_eval(fen):
     """
     Branch evaluation function used by Rank Prune test.
     """

@@ -307,7 +307,7 @@ def fen_to_giraffe(fen):
         Giraffe input list is based on Matthew Lai's giraffe model.
         He describes his input on page 17 of https://arxiv.org/pdf/1509.01549v1.pdf.
         Due to insufficient information, ours version of giraffe is not identical
-        to his (his lenght is 363, while ours is 351).
+        to his (his length is 363, while ours is 351).
 
         Inputs:
             fen[string]:
@@ -789,6 +789,30 @@ def diff_dict_helper(old_dict, new_dict):
 
     return None
 
+
+def material_score(fen):
+    """
+    Returns the material score for the input FEN.
+    Input:
+        fen [String]
+            FEN from which the material score is calculated.
+    Output:
+        scores [Dictionary]
+            Output is of the form {'w': white material score, 'b': black material score}
+    """
+
+    fen = strip_fen(fen)
+    scores = {'w': 0, 'b': 0}
+
+    for c in fen:
+        if c.isalpha():
+            player = 'w' if c.isupper() else 'b'
+            piece = c.lower()
+            # Skip if king
+            if piece != 'k':
+                scores[player] += piece_values[piece]
+
+    return scores
 
 def main():
     pass

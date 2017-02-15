@@ -144,6 +144,8 @@ class Complementmax(Search):
         super(Complementmax, self).__init__(leaf_eval)
 
         self.evaluation_function = leaf_eval
+        self.order_function = None
+        self.order_moves = False
         self.max_depth = max_depth
         self.reci_prune = True
 
@@ -165,7 +167,7 @@ class Complementmax(Search):
 
     def complementmax(self, board, depth=0, a=1.0):
         """ 
-            Recursive function to search for best move using complementomax with alpha-beta pruning.
+            Recursive function to search for best move using complementmax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
             which is the same as maximizing the reciprocal.
             Inputs:
@@ -191,7 +193,22 @@ class Complementmax(Search):
         if end is not None:
             return end
         else:
-            for move in board.legal_moves:
+            moves = list(board.legal_moves)
+
+            if self.order_moves:
+                # Get scores
+                move_scores = []
+                for move in moves:
+                    board.push(move)
+                    move_scores.append((move, self.order_function(board.fen())))
+                    board.pop()
+
+                # Order in ascending order (want to check boards which are BAD for opponent first)
+                move_scores.sort(key=lambda x: x[1])
+
+                moves = [x[0] for x in move_scores]
+
+            for move in moves:
                 # print "D%d: %s" % (depth, move)
                 # recursive call
                 board.push(move)
@@ -222,7 +239,7 @@ class Complementmax(Search):
 
 # RANK PRUNE
 class RankPrune(Search):
-    def __init__(self, leaf_eval, branch_eval=None, prune_perc=0.75,
+    def __init__(self, leaf_eval, internal_eval=None, prune_perc=0.50,
                  time_limit=10, buff_time=0.1, limit_depth=False, max_depth=3, verbose=True):
         # Evaluation function must yield a score between 0 and 1.
         # Search options
@@ -230,7 +247,7 @@ class RankPrune(Search):
 
         self.evaluation_function = None
         self.leaf_eval = leaf_eval
-        self.branch_eval = branch_eval if branch_eval is not None else leaf_eval
+        self.internal_eval = internal_eval if internal_eval is not None else leaf_eval
         self.prune_perc = prune_perc
         self.time_limit = time_limit
         self.buff_time = buff_time
@@ -247,7 +264,7 @@ class RankPrune(Search):
         if self.leaf_mode or (self.limit_depth and kwargs['depth'] == self.max_depth):
             self.evaluation_function = self.leaf_eval
         else:
-            self.evaluation_function = self.branch_eval
+            self.evaluation_function = self.internal_eval
 
     def _cache_condition(self, **kwargs):
         """ Only use cache if leaf node. """
@@ -568,3 +585,40 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
 
     # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
     return best_score, best_move, best_leaf
+
+
+def material_balance(fen, normalize=True):
+    """
+    Returns the material advantage of a given FEN.
+    Material Imbalance = Score[side to move] - Score[not side to move].
+    Input:
+        fen [String]
+            FEN to evaluate.
+        normalize [Boolean]
+            If True then output is normalized between 0 and 1.
+                1 corresponds to the highest possible imbalance of 39 (If > due to promotions, then reduced to 39).
+                0.5 corresponds to no imbalance (i.e. score[white] == score[black])
+                0 corresponds to the lower possible imbalance of -39.
+    Output:
+        imbalance [Int]
+            Material score advantage (positive) or disadvantage (negative) for the side to move.
+    """
+
+    NORM_UPPER = 39
+    NORM_LOWER = -NORM_UPPER
+
+    scores = dh.material_score(fen)
+
+    if dh.white_is_next(fen):
+        output = scores['w'] - scores['b']
+    else:
+        output = scores['b'] - scores['w']
+
+    if normalize:
+        # set score between -39 and 39
+        output = min(NORM_UPPER, max(NORM_LOWER, output))
+
+        # map
+        output = output / (NORM_UPPER * 2.0) + 0.5
+
+    return output

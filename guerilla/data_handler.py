@@ -492,7 +492,7 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
         move = piece_moves[piece_type][i]
 
         if piece_type == 'p' and piece_colour == 'b':
-            move[0] *= (-1)
+            move = [move[0] * (-1), move[1]]
 
         r, f = pos + move
         # Out of bounds

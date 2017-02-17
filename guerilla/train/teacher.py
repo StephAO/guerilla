@@ -63,6 +63,12 @@ class Teacher:
         self.actions = None
         self.curr_action_idx = None
         self.saved = None
+        # Random seed used for the FEN shuffle (passed as input to load_data). Specify for reproducibility.
+        #   Note: automatically saved and loaded
+        self.rnd_seed_shuffle = None
+        # Holds the state of the random number generator on the initial Teacher call. If load_and_resume is called then
+        #   the generator state is restored to its state at the original call. This is important for the FEN shuffle.
+        self.rnd_state = random.getstate()
 
         self.test = test
         self.verbose = verbose
@@ -71,7 +77,6 @@ class Teacher:
         self.num_bootstrap = -1
         self.conv_loss_thresh = 0.0001  # 
         self.conv_window_size = 20  # Number of epochs to consider when checking for convergence
-        self.keep_prob = 1.0 # Probability of dropout during neural network training
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -178,7 +183,7 @@ class Teacher:
                     print "Performing Bootstrap training!"
                     print "Fetching stockfish values..."
 
-                fens, true_values = self.load_data()
+                fens, true_values = self.load_data(self.rnd_seed_shuffle)
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_end':
@@ -202,7 +207,7 @@ class Teacher:
                 # If not timed out
                 self.curr_action_idx += 1
 
-    def load_data(self, shuffle=True, seed=123456):
+    def load_data(self, shuffle=True, seed=None):
         """
         Loads FENs and corresponding Stockfish values. Optional shuffle.
 
@@ -318,6 +323,8 @@ class Teacher:
         state['actions'] = self.actions
         state['prev_checkpoint'] = self.prev_checkpoint
         state['save_time'] = self.prev_checkpoint if is_checkpoint else time.time()
+        state['rnd_seed_shuffle'] = self.rnd_seed_shuffle
+        state['rnd_state'] = self.rnd_state
 
         # Save training parameters
         state['td_leaf_param'] = {'randomize': self.td_rand_file,
@@ -370,6 +377,10 @@ class Teacher:
         # Update checkpoint time
         self.prev_checkpoint = time.time() - (state['save_time'] - state['prev_checkpoint'])
 
+        # set random info
+        self.rnd_seed_shuffle = state['rnd_seed_shuffle']
+        random.setstate(state['rnd_state'])
+
         # Load training parameters
         self.set_td_params(**state.pop('td_leaf_param'))
         self.set_sp_params(**state.pop('sp_param'))
@@ -417,11 +428,7 @@ class Teacher:
             if self.verbose:
                 print "Resuming Bootstrap training..."
 
-            fens = cgp.load_fens(num_values=self.num_bootstrap)
-            if (len(fens) % self.hp['BATCH_SIZE']) != 0:
-                fens = fens[:(-1) * (len(fens) % self.hp['BATCH_SIZE'])]
-
-            true_values = sf.load_stockfish_values(num_values=len(fens))
+            fens, true_values = self.load_data(self.rnd_seed_shuffle)
 
             # finish epoch
             train_fens = fens[:(-1) * self.hp['VALIDATION_SIZE']]  # fens to train on
@@ -605,7 +612,7 @@ class Teacher:
         if len(input_data) != len(self.nn.input_data_placeholders):
             raise ValueError("The length of input data(%d) does not equal the " \
                              "length of input data place holders(%s)" % \
-                             len(input_data), len(input_data_placeholders))
+                             len(input_data), len(self.nn.input_data_placeholders))
         for j in xrange(len(input_data)):
             _feed_dict[self.nn.input_data_placeholders[j]] = input_data[j]
         if self.nn.hp['USE_CONV']:

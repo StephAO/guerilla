@@ -817,7 +817,7 @@ def run_play_tests():
     }
 
     all_tests["Neural Net Tests"] = {
-        #'Weight Save and Load': save_load_weights_test
+        'Weight Save and Load': save_load_weights_test
     }
 
     success = True

@@ -93,7 +93,6 @@ class Guerilla(Player):
         self.nn.close_session()
 
     def get_move(self, board, time_limit=10):
-        print time_limit
         # print "Guerilla is thinking..."
         return self.search.run(board, time_limit=time_limit)[1]
 

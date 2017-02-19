@@ -890,7 +890,7 @@ class Teacher:
         # print "Calculating TD-Leaf values for move ",
         for i, root_board in enumerate(game):
             # Output value is P(winning of current player)
-            value, _, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cash=True)
+            value, _, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=True)
 
             # Modify value so that it represents P(white winning)
             if dh.white_is_next(root_board):

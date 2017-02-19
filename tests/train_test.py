@@ -276,7 +276,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
         # values.append(0.25)
         # board.pop() # undo move
 
-    print len(fens)
+    # print len(fens)
 
     # Set hyper parameters
     hp = {}

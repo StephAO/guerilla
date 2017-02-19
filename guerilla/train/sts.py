@@ -1,5 +1,6 @@
 # Containts STS Evaluation functions
 
+import time
 import chess
 from pkg_resources import resource_filename
 from guerilla.players import *
@@ -43,23 +44,24 @@ def eval_sts(player, mode="strategy", step_size=1):
     board = chess.Board()
     scores = []
     max_scores = []
+    count = 0
 
     # Run tests
+    if step_size > 1:
+        print "\nNOTE: Evaluating every %d-th EPD\n" % step_size
+
     for test in mode:
         print "Running %s STS test." % test
         # load STS epds
-        epds = get_epds_by_mode(test)
+        epds = get_epds_by_mode(test)[::step_size]
 
         # Test epds
         score = 0
         max_score = 0
         length = len(epds)
-        count = 0
         print "STS: Scoring %s EPDS. Progress: " % length,
         print_perc = 5  # percent to print at
         for i, epd in enumerate(epds):
-            if i % step_size != 0:
-                continue
             # Print info
             count += 1
             if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
@@ -167,8 +169,16 @@ def get_epds(filenames):
 
     return epds
 
-if __name__ == '__main__':
-    with Guerilla('Harambe', 'w', training_mode='adagrad', load_file='w_train_bootstrap_0116-0154_conv_3FC.p') as g:
+
+def sparse_test():
+    with Guerilla('Harambe', 'w', load_file='mm_million.p') as g:
         g.search.max_depth = 2
-        #print eval_sts(g, mode=sts_piece_files)
-        print eval_sts(g, mode=sts_strat_files)
+        # g.search.order_moves = True
+        # g.search.order_function = material_balance
+        # print eval_sts(g, mode=sts_piece_files)
+        start = time.time()
+        print eval_sts(g, mode=sts_strat_files, step_size=25)
+        print time.time() - start
+
+if __name__ == '__main__':
+    sparse_test()

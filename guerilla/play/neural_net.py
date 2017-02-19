@@ -669,7 +669,7 @@ class NeuralNet:
         if len(input_data) != len(self.input_data_placeholders):
             raise ValueError("The length of input data(%d) does not equal the " \
                              "length of input data place holders(%d)" % \
-                             len(input_data), len(input_data_placeholders))
+                             len(input_data), len(self.input_data_placeholders))
         for i in xrange(len(input_data)):
             feed_dict[self.input_data_placeholders[i]] = np.array([input_data[i]])
             if np.shape(input_data[i])[0:2] == (8, 8) and self.hp['USE_CONV']:

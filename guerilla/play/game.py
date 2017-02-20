@@ -43,6 +43,9 @@ class Game:
         # Initialize gui
         if use_gui:
             self.gui = ChessGUI()
+            for p in players:
+                if isinstance(p, Human):
+                    p.gui = self.gui
 
     def swap_colours(self):
         # Ensure that there is currently a white player and a black player
@@ -194,15 +197,18 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[1] = Guerilla('Harambe (COMPLEMENTMAX)', search_type='complementmax', _load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
+        # players[1] = Guerilla('Harambe (COMPLEMENTMAX)', search_type='complementmax', _load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
         # players[0] = Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
 
         # players[1] = Sunfish("Sun", time_limit=1)
-        players[0] = Guerilla('King Kong (RANKPRUNE)', search_type='rankprune', load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
+        # players[0] = Guerilla('King Kong (RANKPRUNE)', search_type='rankprune', load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
+        # 
+        players[0] = Human('a')
+        players[1] = Human('b')
 
         # players[1].search.max_depth = 3
-        players[0].search.max_depth = 2
-        players[1].search.max_depth = 2
+        # players[0].search.max_depth = 2
+        # players[1].search.max_depth = 2
 
 
     elif choose_players == 'c':

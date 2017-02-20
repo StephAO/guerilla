@@ -82,7 +82,7 @@ class Guerilla(Player):
                             verbose=verbose, **kwargs)
         self.search = Guerilla.search_types[search_type](self.nn.evaluate)
 
-    def __enter__(self, gui=None):
+    def __enter__(self):
         self.nn.start_session()
         self.nn.init_graph()
         return self
@@ -102,10 +102,7 @@ class Human(Player):
         super(Human, self).__init__(name, colour)
         self.gui = None
 
-    def __enter__(self, gui=None):
-        if gui is None:
-            raise Exception("No gui was provided to human")
-        self.gui = gui
+    def __enter__(self):
         return
 
     def __exit__(self, e_type, value, traceback):
@@ -165,7 +162,7 @@ class Sunfish(Player):
         self.search = sunfish.Searcher()
         self.time_limit = time_limit
 
-    def __enter__(self, gui=None):
+    def __enter__(self):
         return
 
     def __exit__(self, e_type, value, traceback):
@@ -197,7 +194,7 @@ class Stockfish(Player):
         self.engine.uci()
         self.new_game()
 
-    def __enter__(self, gui=None):
+    def __enter__(self):
         return
 
     def __exit__(self, e_type, value, traceback):

@@ -260,7 +260,7 @@ class ChessGUI:
                 renderedLine = self.qrbk_font.render('b', antialias, (150,150,150))
                 self.screen.blit(renderedLine, (screen_x - off/2 - x_off, screen_y))
                 renderedLine = self.qrbk_font.render('k', antialias, (150,150,150))
-                self.screen.blit(renderedLine, (screen_x + x, screen_y))
+                self.screen.blit(renderedLine, (screen_x + x_off, screen_y))
 
 
         # Draw Next Game button
@@ -328,7 +328,7 @@ class ChessGUI:
                                 self.print_msg("        - q for Queen")
                                 self.print_msg("        - r for Rook")
                                 self.print_msg("        - b for Bishop")
-                                self.print_msg("        - k for Knight")
+                                self.print_msg("        - n for Knight")
                                 self.print_msg("        - c to cancel")
                                 self.draw(board, [tile], qrbk=True)
                                 promoted_type = self.wait_for_promotion_input()
@@ -389,7 +389,7 @@ class ChessGUI:
         while True:
             e = pygame.event.wait()
             if e.type is KEYDOWN:
-                return chr(e.key) if chr(e.key) in ['q', 'r', 'b', 'k'] else 'c'
+                return chr(e.key) if chr(e.key) in ['q', 'r', 'b', 'n'] else 'c'
             elif e.type is QUIT: #the "x" kill button
                 pygame.quit()
                 sys.exit(0)

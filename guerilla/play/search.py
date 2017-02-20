@@ -89,7 +89,7 @@ class Search:
         """
         raise NotImplementedError("You should never see this")
 
-    def check_conditions(self, board, **kwargs):
+    def conditional_eval(self, board, **kwargs):
         """ 
         Check current state of board, and decided whether or not to evaluate
         the given board.
@@ -149,8 +149,8 @@ class Complementmax(Search):
         super(Complementmax, self).__init__(leaf_eval)
 
         self.evaluation_function = leaf_eval
-        self.order_function = None
-        self.order_moves = False
+        self.order_function = material_balance
+        self.order_moves = True
         self.max_depth = max_depth
         self.reci_prune = True
 
@@ -199,7 +199,7 @@ class Complementmax(Search):
         best_move = None
         best_leaf = None
 
-        end = self.check_conditions(board, depth=depth)
+        end = self.conditional_eval(board, depth=depth)
         if end is not None:
             return end
         else:
@@ -331,7 +331,7 @@ class RankPrune(Search):
         # Start timing
         start_time = time.time()
 
-        score, _, fen = self.check_conditions(board, depth=0)
+        score, _, fen = self.conditional_eval(board, depth=0)
 
         root = SearchNode(fen, 0, score)  # Note: store unflipped fen
 
@@ -350,7 +350,7 @@ class RankPrune(Search):
 
             if self.leaf_mode:
                 # Re-evaluate node with leaf_eval
-                curr_node.value = self.check_conditions(board, depth=curr_node.depth)[0]
+                curr_node.value = self.conditional_eval(board, depth=curr_node.depth)[0]
             else:
                 # Evaluate all children
                 for i, move in enumerate(board.legal_moves):
@@ -365,7 +365,7 @@ class RankPrune(Search):
 
                     # play move
                     board.push(move)
-                    score, _, fen = self.check_conditions(board, depth=curr_node.depth + 1)
+                    score, _, fen = self.conditional_eval(board, depth=curr_node.depth + 1)
                     # Note: Store unflipped fen
                     curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, score))
 
@@ -433,7 +433,7 @@ class IterativePrune(Search):
     def generate_children(self, board, node):
         for i, move in enumerate(board.legal_moves):
             board.push(move)
-            score, _, fen = self.check_conditions(board, depth=node.depth + 1)
+            score, _, fen = self.conditional_eval(board, depth=node.depth + 1)
             # Note: Store unflipped fen
             node.add_child(move, SearchNode(fen, node.depth + 1, score))
             board.pop()
@@ -514,7 +514,7 @@ class IterativePrune(Search):
         self.start_time = time.time()
         self.time_left = True
 
-        score, _, fen = self.check_conditions(board, depth=0)
+        score, _, fen = self.conditional_eval(board, depth=0)
 
         self.root = SearchNode(fen, 0, score)  # Note: store unflipped fen
 
@@ -601,18 +601,12 @@ def k_bot(arr, k, key=None):
     return arr[:k]
 
 
-def quickselect(arr, left, right, k, key=None): # TODO: Isn't left always 0 and right always len(arr) -1
-                                                # If it's not, then this function is not fully defined
-                                                # Does it only consider things between left and right?
-                                                # If so you're assert should be: 0 <= k <= right - left
-                                                # OR does it mean that the pivot idx is between the left and the right?
-                                                # If so you're assert should be: left <= k <= right
-                                                # Also, you're treating k as a index here, when in reality it's suppose
-                                                # to be number of items to keep
+def quickselect(arr, left, right, k, key=None):
     """
     Return the array with the k-th smallest valued element at the k-th index.
-    Note that this requires left <= k <= right.
+    Note that this requires left <= k <= right, as the k-th element can't be placed outside of the considered arr slice.
     Based on: https://en.wikipedia.org/wiki/Quickselect
+    Note: left and right input are currently unused.
     Input:
         arr [List]
             List of items from which the k-highest valued items should be selected.

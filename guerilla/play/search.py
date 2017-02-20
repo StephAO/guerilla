@@ -401,7 +401,7 @@ class IterativePrune(Search):
     Searches game tree in an Iterative Deepening Depth search.
     At each depth prune from remaining possibilities
     """
-    def __init__(self, evaluation_function, prune_perc=0.5, time_limit=10,
+    def __init__(self, evaluation_function, prune_perc=0.25, time_limit=10,
                  buff_time=0.1, max_depth=None, verbose=True):
         
         
@@ -481,7 +481,7 @@ class IterativePrune(Search):
         children = list(node.get_child_nodes())
         # k = number of nodes that I keep
         k = max(min(len(children), 2), 
-                int(math.ceil(len(children) * (1 - self.prune_perc ** self.depth_limit))))
+                int(math.ceil(len(children) * (1 - self.prune_perc) ** self.depth_limit)))
         quickselect(children, 0, len(children) - 1, k - 1 , key=lambda x: x.value)
 
         for child in children[:k]:

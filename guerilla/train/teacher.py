@@ -1072,7 +1072,7 @@ def main():
             # t.checkpoint_interval = None
             # t.run(['train_bootstrap'], training_time=run_time)
             print st
-            print eval_sts(g, step_size=25)
+            print eval_sts(g, step_size=5)
 
 
 if __name__ == '__main__':

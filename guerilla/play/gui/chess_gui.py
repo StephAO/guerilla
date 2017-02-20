@@ -45,6 +45,7 @@ class ChessGUI:
         self.load_images()
         # pygame.font.init() - should be already called by pygame.init()
         self.default_font = pygame.font.Font(None, 20)
+        self.qrbk_font = pygame.font.Font(None, 30)
 
         self.ranks = ['8','7','6','5','4','3','2','1']
         self.files = ['a','b','c','d','e','f','g','h']
@@ -152,7 +153,7 @@ class ChessGUI:
             return None
         return self.files[_file] + self.ranks[_rank]        
         
-    def draw(self, board, highlight_tiles=[]):
+    def draw(self, board, highlight_tiles=[], qrbk=False):
         """ 
             Draw board
             Inputs:
@@ -244,7 +245,23 @@ class ChessGUI:
             elif char == 'K':
                 self.screen.blit(self.white_king, (screen_x, screen_y))
             _file += 1
-            
+        
+        if qrbk:    
+            for tile in highlight_tiles:
+                (screen_x, screen_y) = self.get_screen_coords_from_tile(tile)
+                screen_x += self.square_size/2
+                screen_y += self.square_size/2
+                off = 25
+                x_off = 5
+                renderedLine = self.qrbk_font.render('q', antialias, (150,150,150))
+                self.screen.blit(renderedLine, (screen_x - off/2 - x_off, screen_y - off))
+                renderedLine = self.qrbk_font.render('r', antialias, (150,150,150))
+                self.screen.blit(renderedLine, (screen_x + x_off, screen_y - off))
+                renderedLine = self.qrbk_font.render('b', antialias, (150,150,150))
+                self.screen.blit(renderedLine, (screen_x - off/2 - x_off, screen_y))
+                renderedLine = self.qrbk_font.render('k', antialias, (150,150,150))
+                self.screen.blit(renderedLine, (screen_x + x, screen_y))
+
 
         # Draw Next Game button
         if self.end_of_game:
@@ -302,9 +319,26 @@ class ChessGUI:
                 possible_to_tiles = [str(x)[2:] for x in board.legal_moves if from_tile == str(x)[:2]]
                 self.draw(board, possible_to_tiles)
                 if tile is not None:
-                    if tile in possible_to_tiles:
-                        to_tile = tile
-                    else:
+                    promoted_type = ''
+                    valid_to_tile = False
+                    for possible_to_tile in possible_to_tiles:
+                        if tile == possible_to_tile[:2]:
+                            if len(possible_to_tile) == 3:
+                                self.print_msg("Pawn Promotion:")
+                                self.print_msg("        - q for Queen")
+                                self.print_msg("        - r for Rook")
+                                self.print_msg("        - b for Bishop")
+                                self.print_msg("        - k for Knight")
+                                self.print_msg("        - c to cancel")
+                                self.draw(board, [tile], qrbk=True)
+                                promoted_type = self.wait_for_promotion_input()
+                            if promoted_type == 'c':
+                                valid_to_tile = False
+                            else:
+                                valid_to_tile = True
+                            to_tile = tile + promoted_type
+                            break
+                    if not valid_to_tile:
                         print "Illegal or invalid move"
                         from_tile = None
                         to_tile = None
@@ -344,6 +378,18 @@ class ChessGUI:
                     return False
                 elif e.key == K_RIGHT:
                     return True
+            elif e.type is QUIT: #the "x" kill button
+                pygame.quit()
+                sys.exit(0)
+
+    def wait_for_promotion_input(self):
+        pygame.event.set_blocked(MOUSEMOTION)
+        print 'start'
+            # Wait for input
+        while True:
+            e = pygame.event.wait()
+            if e.type is KEYDOWN:
+                return chr(e.key) if chr(e.key) in ['q', 'r', 'b', 'k'] else 'c'
             elif e.type is QUIT: #the "x" kill button
                 pygame.quit()
                 sys.exit(0)

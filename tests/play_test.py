@@ -239,64 +239,62 @@ def iterative_prune_test():
             fen = node.fen if node.fen.split()[1] == 'w' else dh.flip_board(node.fen)
 
             if fen.split()[0] =='7k/8/5P2/8/8/8/P7/3K4':
-                if (node.value - 0.8) > 0.0001 or node.depth != 0 or not node.expand:
+                if abs(node.value - 0.8) > 0.0001 or node.depth != 0 or not node.expand:
                     success = False
                     print "Error: Node with fen 7k/8/5P2/8/8/8/P7/3K4 incorrect"
 
             elif fen.split()[0] =='2k5/p7/8/8/8/5p2/8/7K':
-                if (node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
+                if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
                     print "Error: Node with fen 2k5/p7/8/8/8/5p2/8/7K incorrect"
 
             elif fen.split()[0] =='4k3/p7/8/8/8/5p2/8/7K':
-                if (node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
+                if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
                     print "Error: Node with fen 4k3/p7/8/8/8/5p2/8/7K incorrect"
 
             elif fen.split()[0] =='8/p1k5/8/8/8/5p2/8/7K':
-                if (node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
+                if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
                     print "Error: Node with fen 8/p2k4/8/8/8/5p2/8/7K incorrect"
 
             elif fen.split()[0] =='8/p2k4/8/8/8/5p2/8/7K':
-                if (node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
+                if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
                     print "Error: Node with fen 8/p1k5/8/8/8/5p2/8/7K incorrect"
 
             elif fen.split()[0] =='8/p3k3/8/8/8/5p2/8/7K':
-                if (node.value - 0.7) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.5) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 8/p3k3/8/8/8/5p2/8/7K is incorrect"
 
             elif fen.split()[0] =='3k4/8/p7/8/8/5p2/8/7K':
-                if (node.value - 0.7) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.5) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 3k4/8/p7/8/8/5p2/8/7K is incorrect"
 
             elif fen.split()[0] =='3k4/p7/8/8/8/8/5p2/7K':
-                if (node.value - 0.2) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.2) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 3k4/p7/8/8/8/8/5p2/7K is incorrect"
-                    print float(node.value) != float(0.2), node.depth != 1, not node.expand
-                    print repr(node.value), repr(0.2)
 
             elif fen.split()[0] =='3k4/8/8/p7/8/5p2/8/7K':
-                if (node.value - 0.7) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.5) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 3k4/8/8/p7/8/5p2/8/7K is incorrect"
 
             elif move =='h8g8':
-                if (node.value - 0.3) > 0.0001 or node.depth != 2 or node.expand:
+                if abs(node.value - 0.3) > 0.0001 or node.depth != 2 or node.expand:
                     success = False
                     print "Error: Node with fen 8/7k/5P2/8/8/8/P7/2K5 is incorrect"
 
             elif move =='h8h7':
-                if (node.value - 0.9) > 0.0001 or node.depth != 2 or not node.expand:
+                if abs(node.value - 0.9) > 0.0001 or node.depth != 2 or not node.expand:
                     success = False
                     print "Error: Node with fen 6k1/8/5P2/8/8/8/P7/2K5 is incorrect"
 
             elif move == 'h8g7':
-                if (node.value - 0.8) > 0.0001 or node.depth != 2 or not node.expand:
+                if abs(node.value - 0.8) > 0.0001 or node.depth != 2 or not node.expand:
                     success = False
                     print "Error: Node with fen 8/5Pk1/8/8/8/8/P7/3K4 is incorrect"
             else:
@@ -313,185 +311,42 @@ def iterative_prune_test():
 def iterative_prune_test_eval(fen):
 
     if fen.split()[0] == '7k/8/5P2/8/8/8/P7/3K4':
-        """
-        Root
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . K . . . .
-        """
         return 0.0
 
     elif fen.split()[0] == '2k5/p7/8/8/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . K . . . . .
-        """
         return 0.6
 
     elif fen.split()[0] == '4k3/p7/8/8/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . . K . . .
-        """
         return 0.6
 
     elif fen.split()[0] == '8/p1k5/8/8/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . K . . . . .
-        . . . . . . . .
-        """
         return 0.6
 
     elif fen.split()[0] == '8/p2k4/8/8/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . K . . . .
-        . . . . . . . .
-        """
         return 0.6
 
     elif fen.split()[0] == '8/p3k3/8/8/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . K . . .
-        . . . . . . . .
-        """
         return 0.4
 
     elif fen.split()[0] == '3k4/8/p7/8/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . . . . . .
-        . . . K . . . .
-        """
         return 0.4
 
     elif fen.split()[0] == '3k4/p7/8/8/8/8/5p2/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . K . . . .
-        """
         return 0.4
 
     elif fen.split()[0] == '3k4/8/8/p7/8/5p2/8/7K':
-        """
-        Depth 1, Child of 0
-        . . . . . . . k
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . K . . . .
-        """
         return 0.4
 
     elif fen.split()[0][:8] == '8/7k/5P2':
-        """
-        Depth 2, Child of 0
-        . . . . . . . .
-        . . . . . . . k
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . K . . . . .
-        """
         return 0.8
 
     elif fen.split()[0][:9] == '6k1/8/5P2':
-        """
-        Depth 2, Child of 0
-        . . . . . . k .
-        . . . . . . . .
-        . . . . . P . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . K . . . . .
-        """
-        return 0.3
+        return 0.5
 
     elif fen.split()[0][:8] == '8/5Pk1/8':
-        """
-        Depth 2, Child of 6
-        . . . . . . . .
-        . . . . . P k .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . K . . . .
-        """
         return 0.8
 
     elif fen.split()[0][:8] == '8/5P1k/8':
-        """
-        Depth 2, Child of 6
-        . . . . . . . .
-        . . . . . P . k
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        . . . . . . . .
-        P . . . . . . .
-        . . . K . . . .
-        """
         return 0.9
 
     else:

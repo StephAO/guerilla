@@ -401,8 +401,8 @@ class IterativePrune(Search):
     Searches game tree in an Iterative Deepening Depth search.
     At each depth prune from remaining possibilities
     """
-    def __init__(self, evaluation_function, prune_perc=0.75, time_limit=10,
-                 buff_time=0.5, max_depth=None, verbose=True):
+    def __init__(self, evaluation_function, prune_perc=0.5, time_limit=10,
+                 buff_time=0.1, max_depth=None, verbose=True):
         
         
         # cache: Key is FEN of board (where white plays next), Value is Score
@@ -478,13 +478,15 @@ class IterativePrune(Search):
         if not node.expand or not node.children:
             return
 
-        children = [child for child in node.get_child_nodes() if child.expand]
+        children = list(node.get_child_nodes())
         # k = number of nodes that I keep
-        k = max(min(len(children), 2), int(math.ceil(len(children) * self.prune_perc)))
+        k = max(min(len(children), 2), 
+                int(math.ceil(len(children) * (1 - self.prune_perc ** self.depth_limit))))
         quickselect(children, 0, len(children) - 1, k - 1 , key=lambda x: x.value)
 
         for child in children[:k]:
             self.prune(child)
+            child.expand = True
         for child in children[k:]:
             self.nodes_pruned[child.depth] += len(chess.Board(child.fen).legal_moves)
             child.expand = False
@@ -522,8 +524,8 @@ class IterativePrune(Search):
         score, best_move, leaf_board = self.DLS(self.root)
         while self.time_left and \
              (self.max_depth is None or self.depth_limit < self.max_depth):
-            self.depth_limit += 1
             self.prune(self.root)
+            self.depth_limit += 1
             score, best_move, leaf_board = self.DLS(self.root)
 
         return score, best_move, leaf_board

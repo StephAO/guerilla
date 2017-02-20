@@ -1060,17 +1060,19 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', colour='w', load_file="w_30k_movemap_3FC.p") as g:
-        g.search.max_depth = 2
-        t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=200000)  # 488037
-        t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
-        t.set_sp_params(num_selfplay=10, max_length=12)
-        t.sts_on = False
-        t.sts_interval = 100
-        t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=run_time)
-        print eval_sts(g, step_size=10)
+    for st in Guerilla.search_types:
+        with Guerilla('Harambe', search_type=st, colour='w', load_file="mm_million_fix.p") as g:
+            g.search.max_depth = 2
+            # t = Teacher(g, training_mode='adagrad')
+            # t.set_bootstrap_params(num_bootstrap=200000)  # 488037
+            # t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
+            # t.set_sp_params(num_selfplay=10, max_length=12)
+            # t.sts_on = False
+            # t.sts_interval = 100
+            # t.checkpoint_interval = None
+            # t.run(['train_bootstrap'], training_time=run_time)
+            print st
+            print eval_sts(g, step_size=25)
 
 
 if __name__ == '__main__':

@@ -73,7 +73,7 @@ def search_types_bench(verbose=True):
     board = chess.Board('3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24')
 
     # Create Guerilla with Random weights:
-    for search_type in ['iterativeprune', 'complementmax', 'rankprune']:
+    for search_type in ['iterativedeepening', 'complementmax', 'rankprune']:
         with Guerilla('curious_george','w', search_type=search_type, verbose=True, seed=rnd_seed) as g:
             
             g.search.max_depth = 3

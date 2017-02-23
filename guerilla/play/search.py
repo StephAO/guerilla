@@ -24,7 +24,6 @@ class Search:
         self.draw_value = 0.5
         self.num_evals = 0
         self.num_visits = 0
-        self.nodes_pruned = [0]*5
         self.cache_hits = 0
         self.cache_miss = 0
         # cache: Key is FEN of board (where white plays next), Value is Score
@@ -238,7 +237,6 @@ class Complementmax(Search):
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
                 if self.reci_prune and best_score >= a:
-                    self.nodes_pruned[depth] += len(board.legal_moves) - i 
                     break
 
         # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
@@ -396,24 +394,27 @@ class RankPrune(Search):
         return output
 
 
-class IterativePrune(Search):
+class IterativeDeepening(Search):
     """ 
     Searches game tree in an Iterative Deepening Depth search.
     At each depth prune from remaining possibilities
     """
-    def __init__(self, evaluation_function, prune_perc=0.25, time_limit=10,
-                 buff_time=0.1, max_depth=None, verbose=True):
+    def __init__(self, evaluation_function, time_limit=10, buff_time=0.1, 
+                 max_depth=None, rank_prune=False, prune_perc=0.25,
+                 ab_prune=True, verbose=True):
         
         
         # cache: Key is FEN of board (where white plays next), Value is Score
-        super(IterativePrune, self).__init__(evaluation_function)
+        super(IterativeDeepening, self).__init__(evaluation_function)
 
         self.evaluation_function = evaluation_function
-        self.prune_perc = prune_perc
         self.time_limit = time_limit
         self.buff_time = buff_time
         self.depth_limit = 1
         self.max_depth = max_depth
+        self.rank_prune = rank_prune
+        self.prune_perc = prune_perc
+        self.ab_prune = ab_prune
 
     def __str__(self):
         return "Complementmax"
@@ -438,11 +439,12 @@ class IterativePrune(Search):
             node.add_child(move, SearchNode(fen, node.depth + 1, score))
             board.pop()
 
-    def DLS(self, node):
+    def DLS(self, node, a=1.0):
         """ 
             Depth limited search
         """
         best_move = None
+        best_score = 0.0
         leaf_fen = None
         board = chess.Board(node.fen)
 
@@ -451,22 +453,29 @@ class IterativePrune(Search):
         if node.depth >= self.depth_limit or not node.expand or not self.time_left:
             return node.value, None, node.fen
         else:
-            # dict is empty
+            # child dict is empty
             if not node.children:
                 self.generate_children(board, node)
-            for move in node.children:
+            # order moves based on child value
+            moves = sorted(node.children.keys(), key=lambda move: node.children[move].value)
+            for move in moves:
                 # recursive call
                 board.push(move)
                 # print move
-                score, next_move, lf = self.DLS(node.children[move])
+                score, next_move, lf = self.DLS(node.children[move], 1.0 - best_score)
+                score = 1 - score
                 # Best child is the one one which has the lowest value
-                if best_move is None or score < node.children[best_move].value:
+                if best_move is None or score > best_score:
+                    best_score = score
                     best_move = move
                     leaf_fen = lf
 
                 board.pop()
 
-            node.value = 1 - node.children[best_move].value
+                if self.ab_prune and best_score >= a:
+                    break
+
+            node.value = best_score
 
         # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
         return node.value, best_move, leaf_fen
@@ -488,7 +497,6 @@ class IterativePrune(Search):
             self.prune(child)
             child.expand = True
         for child in children[k:]:
-            self.nodes_pruned[child.depth] += len(chess.Board(child.fen).legal_moves)
             child.expand = False
 
 
@@ -524,14 +532,15 @@ class IterativePrune(Search):
         score, best_move, leaf_board = self.DLS(self.root)
         while self.time_left and \
              (self.max_depth is None or self.depth_limit < self.max_depth):
-            self.prune(self.root)
+            if self.rank_prune:
+                self.prune(self.root)
             self.depth_limit += 1
             score, best_move, leaf_board = self.DLS(self.root)
 
         return score, best_move, leaf_board
 
     def __str__(self):
-        return "IterativePrune"
+        return "IterativeDeepening"
 
 class SearchNode:
     def __init__(self, fen, depth, value):

@@ -219,7 +219,7 @@ def rank_prune_test():
 def iterative_prune_test():
     success = True
     fen = '7k/8/5P2/8/8/8/P7/3K4 w - - 0 1'
-    ip = IterativePrune(iterative_prune_test_eval, prune_perc=0.5, max_depth=2)
+    ip = IterativeDeepening(iterative_prune_test_eval, prune_perc=0.5, max_depth=2)
     score, best_move, leaf_board = ip.run(chess.Board(fen))
     if score != 0.8:
         success = False

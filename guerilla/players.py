@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from guerilla.play.neural_net import NeuralNet
-from guerilla.play.search import Complementmax, RankPrune, IterativePrune
+from guerilla.play.search import Complementmax, RankPrune, IterativeDeepening
 import chess
 import random
 import os
@@ -70,9 +70,9 @@ class Player:
 class Guerilla(Player):
 
     search_types = {
-                    "complementmax" : Complementmax,
-                    "rankprune"     : RankPrune,
-                    "iterativeprune": IterativePrune
+                    #"complementmax" : Complementmax,
+                    #"rankprune"     : RankPrune,
+                    "iterativedeepening": IterativeDeepening
                     }
 
     def __init__(self, name, colour=None, search_type='complementmax', load_file=None,
@@ -92,7 +92,7 @@ class Guerilla(Player):
             print e_type, value, traceback
         self.nn.close_session()
 
-    def get_move(self, board, time_limit=10):
+    def get_move(self, board, time_limit=60):
         # print "Guerilla is thinking..."
         return self.search.run(board, time_limit=time_limit)[1]
 

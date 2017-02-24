@@ -18,6 +18,7 @@ import guerilla.train.chess_game_parser as cgp
 from guerilla.players import Guerilla
 from guerilla.train.teacher import Teacher
 
+
 ###############################################################################
 # STOCKFISH TESTS
 ###############################################################################
@@ -73,6 +74,7 @@ def stockfish_test():
         prev_score = score
 
     return True
+
 
 def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_repeat=3):
     """
@@ -139,6 +141,7 @@ def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_
 
     return True
 
+
 ###############################################################################
 # TRAINING TESTS
 ###############################################################################
@@ -151,13 +154,13 @@ def training_test(nn_input_type, verbose=False):
     # Set hyper params for mini-test
     full_success = True
     for t_m in nn.NeuralNet.training_modes:
-        for use_conv in [True,False]:
+        for use_conv in [True, False]:
             success = True
             error_msg = ""
             try:
-                with Guerilla('Harambe', 'w', verbose=verbose, 
-                    NN_INPUT_TYPE=nn_input_type, USE_CONV=use_conv) as g:
-                    g.search.max_depth = 1
+                with Guerilla('Harambe', 'w', verbose=verbose,
+                              nn_params={'NN_INPUT_TYPE': nn_input_type, 'USE_CONV': use_conv},
+                              search_params={'max_depth': 1}) as g:
 
                     t = Teacher(g, bootstrap_training_mode=t_m,
                                 td_training_mode=t_m,
@@ -219,6 +222,7 @@ def training_test(nn_input_type, verbose=False):
 
     return full_success
 
+
 def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     """
     NOTE: DEPRECATED. The test does not converge quickly (if at all). Replaced with learn_moves_test.
@@ -260,21 +264,20 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
         board, move_scores = sts.parse_epd(epd)
 
         for move, score in move_scores.iteritems():
-
             # Add good moves
-            board.push(move) # apply move
+            board.push(move)  # apply move
             fen = board.fen()
             fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
             values.append(1 if score == 10 else 0)
-            board.pop() # undo move
+            board.pop()  # undo move
 
-        # # Add random bad move
-        # move = rnd.choice(list(set(board.legal_moves) - set(move_scores.iterkeys())))
-        # board.push(move)  # apply move
-        # fen = board.fen()
-        # fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
-        # values.append(0.25)
-        # board.pop() # undo move
+            # # Add random bad move
+            # move = rnd.choice(list(set(board.legal_moves) - set(move_scores.iterkeys())))
+            # board.push(move)  # apply move
+            # fen = board.fen()
+            # fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
+            # values.append(0.25)
+            # board.pop() # undo move
 
     # print len(fens)
 
@@ -285,7 +288,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     hp['VALIDATION_SIZE'] = 50
     hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.0001
-    hp['LOSS_THRESHOLD'] = -100 # Make it so it never stops by convergence since VALIDATION_SIZE = 0
+    hp['LOSS_THRESHOLD'] = -100  # Make it so it never stops by convergence since VALIDATION_SIZE = 0
 
     # Add extra evaluation boards
     fens += fens[-hp['VALIDATION_SIZE']:]
@@ -297,8 +300,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     values = values[:len(fens)]
 
     # Train and Test Guerilla
-    with Guerilla('Harambe', 'w', NN_INPUT_TYPE=nn_input_type) as g:
-        g.search.max_depth = 1
+    with Guerilla('Harambe', 'w', nn_params={'NN_INPUT_TYPE': nn_input_type}, search_params={'max_depth': 1}) as g:
         # Train
         t = Teacher(g, bootstrap_training_mode='adagrad')
         t.set_hyper_params(**hp)
@@ -307,7 +309,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
         # Run STS Test
         result = sts.eval_sts(g, mode=mode)
 
-    if float(result[0][0])/result[1][0] <= thresh:
+    if float(result[0][0]) / result[1][0] <= thresh:
         print "STS Scores was too low, got a score of %d/%d" % (result[0][0], result[1][0])
         return False
 
@@ -340,7 +342,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     hp['VALIDATION_SIZE'] = 30
     hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.00005
-    hp['LOSS_THRESHOLD'] = float("-inf") # so that convergence threshold is never met
+    hp['LOSS_THRESHOLD'] = float("-inf")  # so that convergence threshold is never met
 
     # Probability value Constants (0 <= x <= 1)
     high_value = 0.9
@@ -349,10 +351,10 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     # Load fens
     fen_multiplier = 20
     spacing = 100
-    base_fens = cgp.load_fens(num_values=num_test*spacing)[::spacing] # So not all within the same game
+    base_fens = cgp.load_fens(num_values=num_test * spacing)[::spacing]  # So not all within the same game
 
     # For each fen get all moves, score one move's board highly (goal move), the others poorly
-    goal_moves = [] # List of tuples
+    goal_moves = []  # List of tuples
     fens = []
     values = []
     val_fens = []
@@ -367,18 +369,19 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
 
         # Score goal move highly
         board.push(goal_move)
-        fens += [dh.flip_board(board.fen())]*fen_multiplier # Flip board and give low value since NN input must be white next
-        values += [1 - high_value]*fen_multiplier
+        fens += [dh.flip_board(
+            board.fen())] * fen_multiplier  # Flip board and give low value since NN input must be white next
+        values += [1 - high_value] * fen_multiplier
         board.pop()
 
         # Build validation set
-        val_fens += [fens[-1]] * (hp['VALIDATION_SIZE']/num_test)
-        val_values += [1.0 - high_value] * (hp['VALIDATION_SIZE']/num_test)  # values[-hp['VALIDATION_SIZE']:]
+        val_fens += [fens[-1]] * (hp['VALIDATION_SIZE'] / num_test)
+        val_values += [1.0 - high_value] * (hp['VALIDATION_SIZE'] / num_test)  # values[-hp['VALIDATION_SIZE']:]
 
         # score other moves poorly
         for move in (set(board.legal_moves) - {goal_move}):
             board.push(move)
-            fens += [dh.flip_board(board.fen())] # Flip board and give high value since NN input must be white next
+            fens += [dh.flip_board(board.fen())]  # Flip board and give high value since NN input must be white next
             values += [1 - low_value]
             board.pop()
 
@@ -395,8 +398,8 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     err_msg = ''
     for i in range(num_attempt):
         score = 0
-        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
-            g.search.max_depth = 1
+        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+                      search_params={'max_depth': 1}) as g:
             # Train
             t = Teacher(g, bootstrap_training_mode='gradient_descent', verbose=verbose)
             t.set_hyper_params(**hp)
@@ -415,8 +418,9 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
                     board.pop()
                     board.push(result_move)
                     result_score = 1 - g.nn.evaluate(dh.flip_board(board.fen()))
-                    err_msg += ('FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
-                                    (goal_move, result_move, goal_move, goal_score, result_move, result_score))
+                    err_msg += (
+                        'FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
+                        (goal_move, result_move, goal_move, goal_score, result_move, result_score))
 
         if score == num_test:
             return True
@@ -425,6 +429,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
 
     print err_msg
     return False
+
 
 def load_and_resume_test(nn_input_type, verbose=False):
     """
@@ -472,8 +477,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run action
-        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
-            g.search.max_depth = 1
+        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+                      search_params={'max_depth': 1}) as g:
             t = Teacher(g, test=True, verbose=verbose)
             t.set_hyper_params(**hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
@@ -481,7 +486,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             t.set_sp_params(num_selfplay=3, max_length=5)
 
             # Run
-            t.run(set_of_actions, training_time= (0.5 if not isinstance(action, list) else 4))
+            t.run(set_of_actions, training_time=(0.5 if not isinstance(action, list) else 4))
 
             # Save current action
             pause_action = t.actions[t.curr_action_idx]
@@ -496,8 +501,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run resume
-        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type) as g:
-            g.search.max_depth = 1
+        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+                      search_params={'max_depth': 1}) as g:
             t = Teacher(g, test=True, verbose=verbose)
             t.set_hyper_params(**hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
@@ -506,7 +511,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             t.run(['load_and_resume'])
 
             # Save loaded current action
-            state = t.load_state() # resets weights and training vars to start of resume values
+            state = t.load_state()  # resets weights and training vars to start of resume values
             new_actions = state['actions']
             new_action = new_actions[state['curr_action_idx']]
 
@@ -515,7 +520,6 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
             # Save new training variables
             new_train_vars = g.nn.sess.run(g.nn.get_training_vars())
-
 
         # Compare weight values
         result_msg = dh.diff_dict_helper(weights, new_weights)
@@ -582,8 +586,8 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
     for td_training_mode in ['gradient_descent', 'adagrad']:
 
-        with Guerilla('Harambe', 'w', verbose=verbose, NN_INPUT_TYPE=nn_input_type, seed=123) as g:
-            g.search.max_depth = 0 # Standard temporal difference
+        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+                      search_params={'max_depth': 0}, seed=123) as g:
 
             # Due to differences in initialization distribution
             if td_training_mode == 'gradient_descent':
@@ -597,7 +601,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
                 else:
                     td_lrn_rate = 0.00001
 
-            t = Teacher(g, TD_LRN_RATE = td_lrn_rate, td_training_mode = td_training_mode, verbose=verbose)
+            t = Teacher(g, TD_LRN_RATE=td_lrn_rate, td_training_mode=td_training_mode, verbose=verbose)
             if td_training_mode == 'gradient_descent':
                 t.td_batch_size = 1
             elif td_training_mode == 'adagrad':
@@ -622,7 +626,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
                 t.td_leaf(fens)
 
             final_diff = abs(first - second)
-            perc_change = 1 - final_diff/init_diff
+            perc_change = 1 - final_diff / init_diff
             if perc_change < dec_thresh:
                 err_msg += "Convergence failure on training mode %s: " % td_training_mode
                 err_msg += "Initial Diff: %f Final Diff: %f Percent Change: %f" % (init_diff, final_diff, perc_change)
@@ -633,11 +637,12 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
     return success
 
+
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
         'Stockfish Handling': stockfish_test,
-        #'NSV Alignment': nsv_test
+        # 'NSV Alignment': nsv_test
     }
 
     all_tests["Training Tests"] = {
@@ -668,11 +673,13 @@ def run_train_tests():
 
     return success
 
+
 def main():
     if run_train_tests():
         print "All tests passed"
     else:
         print "You broke something - go fix it"
+
 
 if __name__ == '__main__':
     main()

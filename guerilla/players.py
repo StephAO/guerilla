@@ -68,19 +68,22 @@ class Player:
 
 
 class Guerilla(Player):
-
     search_types = {
-                    #"complementmax" : Complementmax,
-                    #"rankprune"     : RankPrune,
-                    "iterativedeepening": IterativeDeepening
-                    }
+        "complementmax": Complementmax,
+        "rankprune": RankPrune,
+        "iterativedeepening": IterativeDeepening
+    }
 
     def __init__(self, name, colour=None, search_type='complementmax', load_file=None,
-                 hp_load_file=None, seed=None, verbose=True, **kwargs):
+                 hp_load_file=None, seed=None, verbose=True, nn_params=None, search_params=None):
         super(Guerilla, self).__init__(name, colour)
+
         self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, seed=seed,
-                            verbose=verbose, **kwargs)
-        self.search = Guerilla.search_types[search_type](self.nn.evaluate)
+                            verbose=verbose, hp=nn_params)
+
+        search_params = {} if search_params is None else search_params
+
+        self.search = Guerilla.search_types[search_type](self.nn.evaluate, **search_params)
 
     def __enter__(self):
         self.nn.start_session()

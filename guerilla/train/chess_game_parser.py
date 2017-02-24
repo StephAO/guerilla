@@ -42,7 +42,7 @@ def read_pgn(filename, max_skip=80):
     return fens[skip_start:]
 
 
-def get_fens(generate_time, num_random=2, store_prob=0.5):
+def get_fens(generate_time, num_random=2, store_prob=0.0):
     """
     Returns a list of fens from games.
     Will either read from all games in folder /pgn_files/single_game_pgns.

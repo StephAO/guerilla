@@ -171,8 +171,7 @@ def get_epds(filenames):
 
 
 def sparse_test():
-    with Guerilla('Harambe', 'w', load_file='mm_million.p') as g:
-        g.search.max_depth = 2
+    with Guerilla('Harambe', 'w', load_file='mm_million.p', search_params={'max_depth': 2}) as g:
         # g.search.order_moves = True
         # g.search.order_function = material_balance
         # print eval_sts(g, mode=sts_piece_files)

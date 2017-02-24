@@ -11,7 +11,7 @@ class NeuralNet:
 
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
-    def __init__(self, load_file=None, hp_load_file=None, seed=None, verbose=True, **hp):
+    def __init__(self, load_file=None, hp_load_file=None, seed=None, verbose=True, hp=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
             and structure.
@@ -27,7 +27,7 @@ class NeuralNet:
                     Value for the graph-level seed. If 'None', seed is not set. Default is 'None'.
                 verbose [Bool]:
                     Enables Verbose mode.
-                **hp[**kwargs]:
+                hp [Dict]:
                     Hyper parameters in keyword format. Keyword must match hyper
                     parameter name. See self._set_hyper_params for valid hyper
                     parameters. Hyper parameters defined in hp will overwrite
@@ -44,7 +44,9 @@ class NeuralNet:
         if hp_load_file is None:
             hp_load_file = 'default.yaml'
         self._set_hyper_params_from_file(hp_load_file)
-        self._set_hyper_params(**hp)
+        if hp is None:
+            hp = {}
+        self._set_hyper_params(hp)
 
         # Always list different input structures in increasing order of size
         # All input sizes must be tuples. If it's a single value, use (x,)
@@ -327,7 +329,7 @@ class NeuralNet:
         with open(filepath, 'r') as yaml_file:
             self.hp.update(yaml.load(yaml_file))
 
-    def _set_hyper_params(self, **hyper_parameters):
+    def _set_hyper_params(self, hyper_parameters):
         """
             Updates hyper parameters from arguments.
             Will only affect hyper parameters that are provided. Unspecified
@@ -349,7 +351,7 @@ class NeuralNet:
                 "USE_CONV" - Use convolution for bitmap representation
 
             Inputs:
-                hyperparmeters[**kwargs]:
+                hyperparmeters[dict]:
                     hyperparameters to update with
         """
         self.hp.update(hyper_parameters)

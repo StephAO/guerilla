@@ -246,7 +246,8 @@ def iterative_prune_test():
             elif fen.split()[0] =='2k5/p7/8/8/8/5p2/8/7K':
                 if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
-                    print "Error: Node with fen 2k5/p7/8/8/8/5p2/8/7K incorrect"
+                    print "Error: Node with fen 2k5/p7/8/8/8/5p2/8/7K incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='4k3/p7/8/8/8/5p2/8/7K':
                 if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
@@ -309,44 +310,43 @@ def iterative_prune_test():
     return success
 
 def iterative_prune_test_eval(fen):
-
-    if fen.split()[0] == '7k/8/5P2/8/8/8/P7/3K4':
+    if dh.strip_fen(fen) == '7k/8/5P2/8/8/8/P7/3K4':
         return 0.0
 
-    elif fen.split()[0] == '2k5/p7/8/8/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '2k5/p7/8/8/8/5p2/8/7K':
         return 0.6
 
-    elif fen.split()[0] == '4k3/p7/8/8/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '4k3/p7/8/8/8/5p2/8/7K':
         return 0.6
 
-    elif fen.split()[0] == '8/p1k5/8/8/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '8/p1k5/8/8/8/5p2/8/7K':
         return 0.6
 
-    elif fen.split()[0] == '8/p2k4/8/8/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '8/p2k4/8/8/8/5p2/8/7K':
         return 0.6
 
-    elif fen.split()[0] == '8/p3k3/8/8/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '8/p3k3/8/8/8/5p2/8/7K':
         return 0.4
 
-    elif fen.split()[0] == '3k4/8/p7/8/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '3k4/8/p7/8/8/5p2/8/7K':
         return 0.4
 
-    elif fen.split()[0] == '3k4/p7/8/8/8/8/5p2/7K':
+    elif dh.strip_fen(fen) == '3k4/p7/8/8/8/8/5p2/7K':
         return 0.4
 
-    elif fen.split()[0] == '3k4/8/8/p7/8/5p2/8/7K':
+    elif dh.strip_fen(fen) == '3k4/8/8/p7/8/5p2/8/7K':
         return 0.4
 
-    elif fen.split()[0][:8] == '8/7k/5P2':
+    elif dh.strip_fen(fen)[:8] == '8/7k/5P2':
         return 0.8
 
-    elif fen.split()[0][:9] == '6k1/8/5P2':
+    elif dh.strip_fen(fen)[:9] == '6k1/8/5P2':
         return 0.5
 
-    elif fen.split()[0][:8] == '8/5Pk1/8':
+    elif dh.strip_fen(fen)[:8] == '8/5Pk1/8':
         return 0.8
 
-    elif fen.split()[0][:8] == '8/5P1k/8':
+    elif dh.strip_fen(fen)[:8] == '8/5P1k/8':
         return 0.9
 
     else:

@@ -6,7 +6,7 @@ import guerilla.data_handler as dh
 from guerilla.players import Guerilla
 
 
-def search_bench(max_depth=3, num_rep=3, verbose=True):
+def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
     """
     Times how long searches of different depths takes.
     Input:
@@ -32,10 +32,9 @@ def search_bench(max_depth=3, num_rep=3, verbose=True):
     if verbose:
         print "Each timing is the average of %d runs" % num_rep
 
-    # Create Guerilla with Random weights:
-    with Guerilla('curious_george','w', verbose=True, seed=rnd_seed) as g:
-        for i in range(max_depth + 1):
-            g.search.max_depth = i
+    for i in range(max_depth + 1):
+        # Create Guerilla with Random weights:
+        with Guerilla('curious_george', 'w', verbose=False, seed=rnd_seed, search_params={'max_depth': i}) as g:
 
             # Time multiple repetitions
             avg_time = 0.0
@@ -52,14 +51,15 @@ def search_bench(max_depth=3, num_rep=3, verbose=True):
 
     return output
 
-def search_types_bench(verbose=True):
+
+def search_types_bench(max_depth=3, time_limit=25, verbose=True):
     """
     Times how long searches of different depths takes.
     Input:
         max_depth [Int]
-            Each search depth up to max_depth will be timed individually. (Inclusive)
-        num_rep [Int]
-            The number of times each search depth timing is repeated.
+            Maximum depth searched by Complimentmax.
+        time_limit [Float]
+            Time limit for RankPrune and IterativeDeepening.
         verbose [Boolean]
             Whether results are printed in addition to being returned.
     Output:
@@ -73,19 +73,18 @@ def search_types_bench(verbose=True):
     board = chess.Board('3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24')
 
     # Create Guerilla with Random weights:
-    for search_type in ['iterativedeepening', 'complementmax', 'rankprune']:
-        with Guerilla('curious_george','w', search_type=search_type, verbose=True, seed=rnd_seed) as g:
-            
-            g.search.max_depth = 3
+    sp = {'max_depth': max_depth}
+    for st in ['iterativedeepening', 'complementmax', 'rankprune']:
+        with Guerilla('curious_george', 'w', search_type=st, verbose=False, seed=rnd_seed, search_params=sp) as g:
             # Time multiple repetitions
             start_time = time.time()
-            g.get_move(board, time_limit=25)
+            g.get_move(board, time_limit=time_limit)
             time_taken = (time.time() - start_time)
-            
+
             print "Search type: %s, Time: %f\nNumber nodes visited: %d, " \
-                  "number of nodes evaluated: %d, cache hits: %d, nodes_pruned: %s" % \
-                  (search_type, time_taken, g.search.num_visits, \
-                    g.search.num_evals, g.search.cache_hits, str(g.search.nodes_pruned))
+                  "number of nodes evaluated: %d, cache hits: %d, depth reached: %d" % \
+                  (st, time_taken, g.search.num_visits, \
+                   g.search.num_evals, g.search.cache_hits, g.search.depth_reached)
 
 def data_processing_bench():
     fen = '3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24'
@@ -112,7 +111,7 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        # 'Search': search_bench,
+        'Complimentmax Search': complimentmax_search_bench,
         'Search Types': search_types_bench,
         # 'Data Processing': data_processing_bench,
         # 'Evaluation' : nn_evaluation_bench

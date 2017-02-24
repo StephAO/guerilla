@@ -1061,8 +1061,8 @@ def main():
         run_time = None
 
     for st in Guerilla.search_types:
-        with Guerilla('Harambe', search_type=st, colour='w', load_file="mm_million_fix.p") as g:
-            g.search.max_depth = 2
+        with Guerilla('Harambe', search_type=st, colour='w',
+                      load_file="mm_million_fix.p", search_params={'max_depth': 2}) as g:
             # t = Teacher(g, training_mode='adagrad')
             # t.set_bootstrap_params(num_bootstrap=200000)  # 488037
             # t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)

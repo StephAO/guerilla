@@ -2,8 +2,10 @@
 
 Guerilla is a deep learning chess engine developed by Miguel and Stephane Aroca-Ouellette. More details on the project can be found at [here](https://unarresteddev.wordpress.com/2017/02/23/guerilla-a-chess-engine-part-1/).
   
-
 The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructions below are for linux systems. If someone gets it running on a different operating system successfully, a pull request with the instructions would be appreciated.  
+
+## Dependencies
+Packages and programs required for things to work.
 
 ### Required Packages to Play
 - python-chess:
@@ -31,11 +33,12 @@ The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructi
 ### Optional other chess engines
 - stockfish:
   - `sudo apt-get install stockfish` (if installed to train, no need to do this again)
-- sunfish (chess engine):
+- sunfish:
   - `cd ../guerilla/other_engines/`
   - `git clone https://github.com/thomasahle/sunfish.git`
   - `touch sunfish/__init__.py`
-  
+
+## Usage
 ### How to Play
 1. Go to guerilla directory (outer guerilla directory)
   - `cd /path/to/guerilla`
@@ -58,7 +61,7 @@ The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructi
 4. Train by running:
   - `python -m guerilla.train.teacher <number hours (optional)> <number minutes (optional)> <number seconds (optional)>`
 
-If you need further information on development, feel free to contact [us](#Authors).
+If you need further information on development, feel free to contact [us](###Authors).
 
 ### How to Test
 1. Go to guerilla directory (outer guerilla directory)
@@ -71,9 +74,9 @@ If you need further information on development, feel free to contact [us](#Autho
 3. Run test:
   - `python -m tests.<test_chosen>`
 
-### License
+## License
 Licensed under MIT license. Refer to [LICENSE.md](LICENSE.md).  
 
-### Authors
+## Authors
   - Miguel Aroca-Ouellette: mig_ao[at]live[dot]com
   - Stephane Aroca-Ouellette: stephanearocaouellette[at]gmail[dot].com

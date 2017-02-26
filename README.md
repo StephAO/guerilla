@@ -61,7 +61,7 @@ Packages and programs required for things to work.
 4. Train by running:
   - `python -m guerilla.train.teacher <number hours (optional)> <number minutes (optional)> <number seconds (optional)>`
 
-If you need further information on development, feel free to contact [us](###Authors).
+If you need further information on development, feel free to contact [us](#authors).
 
 ### How to Test
 1. Go to guerilla directory (outer guerilla directory)

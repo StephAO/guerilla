@@ -347,6 +347,13 @@ class ChessGUI:
         return from_tile + to_tile
 
     def wait_for_endgame_input(self):
+        """ 
+            Spin until player has selected what to do after game ends.
+            Options:
+                New game (and players switch sides)
+                Quit (ends program)
+        """
+
         pygame.event.set_blocked(MOUSEMOTION)
             # Wait for input
         while True:
@@ -362,6 +369,13 @@ class ChessGUI:
                 sys.exit(0)
 
     def wait_for_view_input(self):
+        """ 
+            Spins until player has selected next position to go to
+            Options:
+                Next board 
+                Previous board
+                Quit
+        """
         pygame.event.set_blocked(MOUSEMOTION)
             # Wait for input
         while True:
@@ -383,6 +397,15 @@ class ChessGUI:
                 sys.exit(0)
 
     def wait_for_promotion_input(self):
+        """ 
+         Spins until player has selected next position to go to
+            Options:
+                Promote to queen ('q')
+                Promote to rook ('r')
+                Promote to bishop ('b')
+                Promote to knight ('n')
+                Quit
+        """
         pygame.event.set_blocked(MOUSEMOTION)
         print 'start'
             # Wait for input

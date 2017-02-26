@@ -6,8 +6,6 @@ import random
 import os
 import sys
 import chess.uci
-import other_engines.sunfish.sunfish as sunfish
-import other_engines.sunfish.tools as sun_tools
 
 
 class Player:
@@ -152,34 +150,38 @@ class Human(Player):
         else:
             return self.get_move_from_tml(board)
 
+try:
+    import other_engines.sunfish.sunfish as sunfish
+    import other_engines.sunfish.tools as sun_tools
+except ImportError:
+    pass
+else:
+    class Sunfish(Player):
+        def __init__(self, name, colour=None, time_limit=2):
+            """
+            Initializes the Sunfish class.
+            Input:
+                time_limit [Integer]
+                    The time limit for each move search in SECONDS.
+            """
+            super(Sunfish, self).__init__(name, colour)
+            self.search = sunfish.Searcher()
+            self.time_limit = time_limit
 
-class Sunfish(Player):
-    def __init__(self, name, colour=None, time_limit=2):
-        """
-        Initializes the Sunfish class.
-        Input:
-            time_limit [Integer]
-                The time limit for each move search in SECONDS.
-        """
-        super(Sunfish, self).__init__(name, colour)
-        self.search = sunfish.Searcher()
-        self.time_limit = time_limit
+        def __enter__(self):
+            return
 
-    def __enter__(self):
-        return
+        def __exit__(self, e_type, value, traceback):
+            if e_type is not None:
+                print e_type, value, traceback
 
-    def __exit__(self, e_type, value, traceback):
-        if e_type is not None:
-            print e_type, value, traceback
+        def get_move(self, board):
+            # Convert to Sunfish position
+            sun_pos = sun_tools.parseFEN(board.fen())
 
-    def get_move(self, board):
-        # Convert to Sunfish position
-        sun_pos = sun_tools.parseFEN(board.fen())
-
-        # Returns move
-        move, _ = self.search.search(sun_pos, self.time_limit)
-        return board.parse_san(sun_tools.renderSAN(sun_pos, move))
-
+            # Returns move
+            move, _ = self.search.search(sun_pos, self.time_limit)
+            return board.parse_san(sun_tools.renderSAN(sun_pos, move))
 
 class Stockfish(Player):
     def __init__(self, name, colour=None, time_limit=2):

@@ -741,6 +741,7 @@ class Teacher:
             self.td_batch_size = batch_size
 
     def reset_adagrad(self):
+        """ Resets adagrad accumulator """
         self.td_adagrad_acc = []
         for weight_shape in self.weight_shapes:
             self.td_adagrad_acc.append(np.zeros(weight_shape))
@@ -883,7 +884,7 @@ class Teacher:
         game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
 
         # turn pruning for search off
-        self.guerilla.search.reci_prune = False
+        self.guerilla.search.ab_prune = False
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
@@ -913,7 +914,7 @@ class Teacher:
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))]
 
         # turn pruning for search back on
-        self.guerilla.search.reci_prune = True
+        self.guerilla.search.ab_prune = True
 
         for t in range(num_boards):
             td_val = 0
@@ -1060,19 +1061,16 @@ def main():
     if run_time == 0:
         run_time = None
 
-    for st in Guerilla.search_types:
-        with Guerilla('Harambe', search_type=st, colour='w',
-                      load_file="mm_million_fix.p", search_params={'max_depth': 2}) as g:
-            # t = Teacher(g, training_mode='adagrad')
-            # t.set_bootstrap_params(num_bootstrap=200000)  # 488037
-            # t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
-            # t.set_sp_params(num_selfplay=10, max_length=12)
-            # t.sts_on = False
-            # t.sts_interval = 100
-            # t.checkpoint_interval = None
-            # t.run(['train_bootstrap'], training_time=run_time)
-            print st
-            print eval_sts(g, step_size=25)
+    with Guerilla('Harambe', colour='w', search_params={'max_depth': 2}) as g:
+        t = Teacher(g, training_mode='adagrad')
+        t.set_bootstrap_params(num_bootstrap=200000)  # 488037
+        t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
+        t.set_sp_params(num_selfplay=10, max_length=12)
+        t.sts_on = False
+        t.sts_interval = 100
+        t.checkpoint_interval = None
+        t.run(['train_bootstrap'], training_time=run_time)
+        print eval_sts(g, step_size=25)
 
 
 if __name__ == '__main__':

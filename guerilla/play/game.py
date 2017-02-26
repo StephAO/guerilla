@@ -16,7 +16,7 @@ class Game:
         'stockfish': Stockfish
     }
 
-    def __init__(self, players, num_games=1, use_gui=True):
+    def __init__(self, players, num_games=None, use_gui=True):
         """ 
             Note: p1 is white, p2 is black
             Input:
@@ -48,7 +48,7 @@ class Game:
                     p.gui = self.gui
 
     def swap_colours(self):
-        # Ensure that there is currently a white player and a black player
+        """ Ensure that there is currently a white player and a black player then swaps their colors"""
         if all(colour in [p.colour for p in self.players] for colour in ['white', 'black']):
             self.players[0].colour, self.players[1].colour = self.players[1].colour, self.players[0].colour
         else:
@@ -62,7 +62,9 @@ class Game:
         """
         with self.players[0], self.players[1]:
 
-            for game in xrange(self.num_games):
+            game = 0
+
+            while True:
 
                 # Print info.
                 print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game + 1, self.players[0].name,
@@ -165,6 +167,7 @@ class Game:
                     self.gui.wait_for_endgame_input()
 
                 self.swap_colours()
+                game += 1
 
     @staticmethod
     def pretty_print_board(board):
@@ -200,19 +203,8 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[0] = Guerilla('Harambe (IDS)', search_type='iterativedeepening', load_file='mm_million_fix.p')
-        # players[0] = Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
-
-        # players[1] = Sunfish("Sun", time_limit=1)
-        # players[0] = Guerilla('King Kong (RANKPRUNE)', search_type='rankprune', load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
-        # 
-        # players[0] = Human('a')
-        players[1] = Human('b')
-
-        # players[1].search.max_depth = 3
-        # players[0].search.max_depth = 2
-        # players[1].search.max_depth = 2
-
+        players[1] = Guerilla('Harambe', search_type='iterativedeepening', load_file='default.p')
+        players[0] = Human('You')
 
     elif choose_players == 'c':
         for i in xrange(2):
@@ -222,23 +214,13 @@ def main():
             if player_type == 'guerilla':
                 weight_file = raw_input(
                     "Load_file or (d) for default. (File must be located in the pickles directory):\n")
-                players[i] = Guerilla(player_name, load_file=(weight_file if weight_file != 'd' else None))
+                players[i] = Guerilla(player_name, load_file=(weight_file if weight_file != 'd' else 'default.p'))
             elif player_type == 'human':
                 players[i] = Human(player_name)
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 
-    game = Game(players, num_games=2)
-    # if isinstance(players[0], Guerilla) and isinstance(players[1], Guerilla):
-    #     with players[0], players[1]:
-    #         game.start()
-    # elif isinstance(players[0], Guerilla):
-    #     with players[0]:
-    #         game.start()
-    # elif isinstance(players[1], Guerilla):
-    #     with players[1]:
-    #         game.start()
-    # else:
+    game = Game(players)
     game.start()
 
 

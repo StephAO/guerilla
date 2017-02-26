@@ -139,22 +139,35 @@ class Search:
 
 
 class Complementmax(Search):
-    def __init__(self, leaf_eval, max_depth=2):
-        # Evaluation function must yield a value between 0 and 1.
-        # Search options
+    """ 
+        Uses a recursive function to perform a simple minimax with 
+        alpha-beta pruning.
+    """
+    def __init__(self, leaf_eval, max_depth=2, ab_prune=True):
+        """
+            Constructor
+            Inputs:
+                leaf_eval[function]:
+                    function used to evaluate leaf nodes
+                max_depth[int]:
+                    depth to go to
+                ab_prune[bool]:
+                    Alpha-beta pruning. Same results on or off, only set to off for td training
+        """
         super(Complementmax, self).__init__(leaf_eval)
 
         self.evaluation_function = leaf_eval
         self.order_function = material_balance
         self.order_moves = True
         self.max_depth = max_depth
-        self.reci_prune = True
+        self.ab_prune = ab_prune
         self.depth_reached = max_depth  # By definition
 
     def __str__(self):
         return "Complementmax"
 
     def _evaluation_condition(self, **kwargs):
+        """ Condition on which to evaluate """
         return kwargs['depth'] == self.max_depth
 
     def _set_evaluation_function(self, **kwargs):
@@ -166,6 +179,7 @@ class Complementmax(Search):
         return True
 
     def run(self, board, time_limit=None, clear_cache=False):
+        """ Reset some variables, call recursive function """
         if clear_cache:
             self.cache = {}
         self.num_evals = 0
@@ -216,15 +230,12 @@ class Complementmax(Search):
                 moves = [x[0] for x in move_scores]
 
             for i, move in enumerate(moves):
-                # print "D%d: %s" % (depth, move)
                 # recursive call
                 board.push(move)
-                # print move
                 score, next_move, leaf_board = self.complementmax(board, depth + 1, 1 - best_score)
                 # Take reciprocal of score since alternating levels
                 score = 1 - score
                 board.pop()
-                # print "D: %d M: %s S: %.1f" % (depth, move, score)
                 if score >= best_score:
                     best_score = score
                     best_move = move
@@ -234,19 +245,30 @@ class Complementmax(Search):
                 # a is the upper bound of what's useful to search
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
-                if self.reci_prune and best_score >= a:
+                if self.ab_prune and best_score >= a:
                     break
 
-        # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
         return best_score, best_move, best_leaf
 
 
-# RANK PRUNE
 class RankPrune(Search):
     def __init__(self, leaf_eval, prune_perc=0.75, internal_eval=None,
                  time_limit=10, buff_time=0.1, max_depth=None, verbose=True):
-        # Evaluation function must yield a score between 0 and 1.
-        # Search options
+        """
+            Inputs:
+                leaf_eval[function]:
+                    function used to evaluate leaf nodes
+                prune_perc[float range([0,1])]:
+                    Percent of nodes to prune for heuristic prune
+                internal_eval[function]:
+                    function used to sort and prune internal nodes (branches)
+                time_limit[float]:
+                    default time limit per move
+                buff_time[float]:
+                    buffer time on search used to get result from tree after generation
+                max_depth[int]:
+                    If not None, limit depth to max_depth
+        """
         super(RankPrune, self).__init__(leaf_eval)
 
         self.evaluation_function = None
@@ -264,9 +286,11 @@ class RankPrune(Search):
         return "RankPrune"
 
     def _evaluation_condition(self, **kwargs):
+        """" Always evaluate. """
         return True
 
     def _set_evaluation_function(self, **kwargs):
+        """ Set evaluation function. """
         if self.leaf_mode or (self.max_depth is not None and kwargs['depth'] == self.max_depth):
             self.evaluation_function = self.leaf_eval
         else:
@@ -398,22 +422,37 @@ class RankPrune(Search):
 class IterativeDeepening(Search):
     """ 
     Searches game tree in an Iterative Deepening Depth search.
-    At each depth prune from remaining possibilities
+    At each depth optionally prune from remaining possibilities
+    Implements alpha_beta pruning by default
     """
-
-    def __init__(self, evaluation_function, time_limit=10, buff_time=0.1,
-                 max_depth=None, rank_prune=False, prune_perc=0.0,
+    def __init__(self, evaluation_function, time_limit=10,
+                 max_depth=None, h_prune=False, prune_perc=0.0,
                  ab_prune=True, verbose=True):
 
-        # cache: Key is FEN of board (where white plays next), Value is Score
+        """
+            Constructor
+            Inputs:
+                evaluation_function[function]:
+                    function used to evaluate leaf nodes
+                time_limit[float]:
+                    default time limit per move
+                max_depth[int]:
+                    If not None, limit depth to max_depth
+                h_prune[bool]:
+                    Heuristic_prune. If true, prune between between depth-limited-searches
+                prune_perc[float range([0,1])]:
+                    Percent of nodes to prune for heuristic prune
+                ab_prune[bool]:
+                    Alpha-beta pruning. Same results on or off, only set to off for td training
+        """
         super(IterativeDeepening, self).__init__(evaluation_function)
 
         self.evaluation_function = evaluation_function
         self.time_limit = time_limit
         self.buff_time = buff_time
-        self.depth_limit = 1
+        self.depth_limit = time_limit * 0.02
         self.max_depth = max_depth
-        self.rank_prune = rank_prune
+        self.h_prune = h_prune
         self.prune_perc = prune_perc
         self.ab_prune = ab_prune
 
@@ -433,6 +472,14 @@ class IterativeDeepening(Search):
         return True
 
     def generate_children(self, board, node):
+        """ 
+            Generate children of a given SearchNode. 
+            Inputs:
+                board[chess.Board]:
+                    chess board of node
+                node[SearchNode]:
+                    node who's children we need to generate
+        """
         for i, move in enumerate(board.legal_moves):
             board.push(move)
             score, _, fen = self.conditional_eval(board, depth=node.depth + 1)
@@ -442,7 +489,21 @@ class IterativeDeepening(Search):
 
     def DLS(self, node, a=1.0):
         """ 
-            Depth limited search.
+            Recusrive depth limited search with alpha_beta pruning.
+            Assumes that the layer above the leaves are trying to minimize the positive value,
+            which is the same as maximizing the reciprocal.
+            Inputs:
+                node [SearchNode]:
+                    Node to expand
+                a [float]:
+                    lower bound of layer above, upper bound of current layer (because of alternating signs)
+            Outputs:
+                best_score [float]:
+                    Score achieved by best move
+                best_move [chess.Move]:
+                    Best move to play
+                best_leaf [String]
+                    FEN of the board of the leaf node which yielded the highest value.
         """
         best_move = None
         best_score = 0.0
@@ -481,12 +542,11 @@ class IterativeDeepening(Search):
 
             node.value = best_score
 
-        # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
         return node.value, best_move, leaf_fen
 
     def prune(self, node):
         """ 
-            Recursive pruning of remaining nodes
+            Recursive pruning of nodes
         """
         if not node.expand or not node.children:
             return
@@ -505,14 +565,27 @@ class IterativeDeepening(Search):
 
     def run(self, board, time_limit=None, clear_cache=False):
         """
-
+            For the duration of the time limit and depth limit:
+                1. Depth Limited Search
+                2. If enabled: Prune nodes
+                3. Increase max depth
+            Inputs:
+                board[chess.Board]:
+                    Chess board to search the best move for
+                time_limit[float]:
+                    time limit for search. If None, defaults to time_limit set in init
+                clear_cache[bool]:
+                    clear evaluation cache. Needed for trainings
+            Outputs:
+                best_score [float]:
+                    Score achieved by best move
+                best_move [chess.Move]:
+                    Best move to play
+                best_leaf [String]
+                    FEN of the board of the leaf node which yielded the highest value.
         """
         if time_limit is None:
             time_limit = self.time_limit
-
-        if time_limit <= self.buff_time:
-            raise ValueError("Rank-Prune Error: Time limit (%d) <= buffer time (%d). "
-                             "Please increase time limit or reduce buffer time." % (time_limit, self.buff_time))
 
         if clear_cache:
             self.cache = {}
@@ -522,6 +595,7 @@ class IterativeDeepening(Search):
         # Start timing
         if time_limit is not None:
             self.time_limit = time_limit
+            self.buff_time = time_limit * 0.02
         self.start_time = time.time()
         self.time_left = True
 
@@ -535,7 +609,7 @@ class IterativeDeepening(Search):
         score, best_move, leaf_board = self.DLS(self.root)
         while self.time_left and \
                 (self.max_depth is None or self.depth_limit < self.max_depth):
-            if self.rank_prune:
+            if self.h_prune:
                 self.prune(self.root)
             self.depth_limit += 1
             score, best_move, leaf_board = self.DLS(self.root)
@@ -557,7 +631,6 @@ class SearchNode:
         Non-Input Class Attributes
             children [Dict of SearchNode's]
                 Children of the current SearchNode, key is Move which yields that SearchNode.
-
         """
         self.fen = fen
         self.depth = depth

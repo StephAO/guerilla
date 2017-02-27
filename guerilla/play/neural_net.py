@@ -190,13 +190,18 @@ class NeuralNet:
             print "Tensorflow session opened."
 
     def close_session(self):
-        """ Closes tensorflow session"""
-        assert self.sess is not None  # M: Not sure if this should be an assert
+        """ Closes tensorflow session."""
+        assert self.sess is not None
 
         self.sess.close()
         if self.verbose:
             print "Tensorflow session closed."
 
+    def reset_graph(self):
+        """ Resets the defaults graph."""
+        tf.reset_default_graph()
+        if self.verbose:
+            print "Default graph reset."
 
     def weight_variable(self, shape):
         initial = tf.truncated_normal(shape, stddev=self.variable_value, dtype=tf.float32)

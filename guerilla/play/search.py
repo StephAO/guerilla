@@ -23,7 +23,7 @@ class Search:
         self.lose_value = 0
         self.draw_value = 0.5
         self.num_evals = 0
-        self.num_visits = 0
+        self.num_visits = []  # Index: depth, Value: Number of vists at that depth
         self.depth_reached = 0
         self.cache_hits = 0
         self.cache_miss = 0
@@ -89,7 +89,7 @@ class Search:
         """
         raise NotImplementedError("You should never see this")
 
-    def conditional_eval(self, board, **kwargs):
+    def conditional_eval(self, board, depth, **kwargs):
         """ 
         Check current state of board, and decided whether or not to evaluate
         the given board.
@@ -108,7 +108,18 @@ class Search:
             best_leaf [String]
                 FEN of the board of the leaf node which yielded the highest value.
         """
-        self.num_visits += 1
+        try:
+            self.num_visits[depth] += 1
+        except IndexError:
+            self.num_visits.append(1)
+
+        # check if new depth reached
+        if depth > self.depth_reached:
+            self.depth_reached = depth
+
+        # add for inputs
+        kwargs['depth'] = depth
+
         fen = unflipped_fen = board.fen()
         if dh.black_is_next(fen):
             fen = dh.flip_board(fen)
@@ -148,8 +159,7 @@ class Complementmax(Search):
         self.order_function = material_balance
         self.order_moves = True
         self.max_depth = max_depth
-        self.reci_prune = True
-        self.depth_reached = max_depth  # By definition
+        self.ab_prune = True
 
     def __str__(self):
         return "Complementmax"
@@ -169,7 +179,7 @@ class Complementmax(Search):
         if clear_cache:
             self.cache = {}
         self.num_evals = 0
-        self.num_visits = 0
+        self.num_visits = []
         return self.complementmax(board)
 
     def complementmax(self, board, depth=0, a=1.0):
@@ -234,7 +244,7 @@ class Complementmax(Search):
                 # a is the upper bound of what's useful to search
                 # if my lower bound breaks the boundaries of what's worth to search
                 # stop searching here
-                if self.reci_prune and best_score >= a:
+                if self.ab_prune and best_score >= a:
                     break
 
         # print "D%d: best: %.1f, %s" % (depth, best_score, best_move)
@@ -321,7 +331,7 @@ class RankPrune(Search):
         if clear_cache:
             self.cache = {}
         self.num_evals = 0
-        self.num_visits = 0
+        self.num_visits = []
 
         # Start timing
         start_time = time.time()
@@ -343,10 +353,6 @@ class RankPrune(Search):
             if self.max_depth is not None and curr_node.depth == self.max_depth:
                 continue
 
-            # Check if new depth is reached
-            if curr_node.depth > self.depth_reached:
-                self.depth_reached = curr_node.depth
-
             if self.leaf_mode:
                 # (Re)evaluate node with leaf_eval
                 curr_node.value = self.conditional_eval(board, depth=curr_node.depth)[0]
@@ -363,13 +369,7 @@ class RankPrune(Search):
                         self.leaf_mode = True
 
                     # play move
-                    board.push(move)
-                    score, _, fen = self.conditional_eval(board, depth=curr_node.depth + 1)
-                    # Note: Store unflipped fen
-                    curr_node.add_child(move, SearchNode(fen, curr_node.depth + 1, score))
-
-                    # Undo move
-                    board.pop()
+                    curr_node.gen_child(move, eval_fn=self.conditional_eval)
 
                 # Expand if didn't time out
                 if not self.leaf_mode:
@@ -416,6 +416,8 @@ class IterativeDeepening(Search):
         self.rank_prune = rank_prune
         self.prune_perc = prune_perc
         self.ab_prune = ab_prune
+        self.order_fn_fast = material_balance  # The move ordering function to use pre-Guerilla evaluation
+        self.order_moves = True
 
     def __str__(self):
         return "IterativeDeepening"
@@ -432,14 +434,6 @@ class IterativeDeepening(Search):
         """ Always cache """
         return True
 
-    def generate_children(self, board, node):
-        for i, move in enumerate(board.legal_moves):
-            board.push(move)
-            score, _, fen = self.conditional_eval(board, depth=node.depth + 1)
-            # Note: Store unflipped fen
-            node.add_child(move, SearchNode(fen, node.depth + 1, score))
-            board.pop()
-
     def DLS(self, node, a=1.0):
         """ 
             Depth limited search.
@@ -452,29 +446,43 @@ class IterativeDeepening(Search):
         self.time_left = (time.time() - self.start_time) <= self.time_limit - self.buff_time
 
         if node.depth >= self.depth_limit or not node.expand or not self.time_left:
-            if node.depth > self.depth_reached:
-                self.depth_reached = node.depth  # Update maximum depth reached
             return node.value, None, node.fen
         else:
-            # child dict is empty
-            if not node.children:
-                self.generate_children(board, node)
+            moves = list(board.legal_moves)
+            if self.order_moves:
+                fast_order = []
+                node_order = []
+                for move in moves:
+                    # Children have not previously been evaluated, use fast ordering
+                    if move not in node.children:
+                        # Get scores
+                        board.push(move)
+                        fast_order.append((move, self.order_fn_fast(board.fen())))
+                        board.pop()
+                    else:
+                        # Children have previously been evaluated, use node evaluation for ordering
+                        node_order.append((move, node.children[move].value))
 
-            # order moves based on child value
-            moves = sorted(node.children.keys(), key=lambda move: node.children[move].value)
-            for move in moves:
-                # recursive call
-                board.push(move)
+                # Order in ascending order (want to check boards which are BAD for opponent first)
+                fast_order.sort(key=lambda x: x[1])
+                node_order.sort(key=lambda x: x[1])
+
+                # Always favor node ordering, mark whether or not this is a new move
+                moves = [(x[0], False) for x in node_order] + [(x[0], True) for x in fast_order]
+
+            for move, new_move in moves:
+                # Generate child if necessary
+                if new_move:
+                    node.gen_child(move, eval_fn=self.conditional_eval)
+
                 # print move
                 score, next_move, lf = self.DLS(node.children[move], 1.0 - best_score)
                 score = 1 - score
                 # Best child is the one one which has the lowest value
-                if best_move is None or score > best_score:
+                if best_move is None or score >= best_score:
                     best_score = score
                     best_move = move
                     leaf_fen = lf
-
-                board.pop()
 
                 if self.ab_prune and best_score >= a:
                     break
@@ -517,7 +525,7 @@ class IterativeDeepening(Search):
         if clear_cache:
             self.cache = {}
         self.num_evals = 0
-        self.num_visits = 0
+        self.num_visits = []
 
         # Start timing
         if time_limit is not None:
@@ -529,7 +537,6 @@ class IterativeDeepening(Search):
 
         self.root = SearchNode(fen, 0, score)  # Note: store unflipped fen
 
-        # Evaluation Queue. Holds SearchNode
         self.depth_limit = 1
         cycle_time = 0
         score, best_move, leaf_board = self.DLS(self.root)
@@ -569,6 +576,28 @@ class SearchNode:
         assert (isinstance(child, SearchNode))
 
         self.children[move] = child
+
+    def gen_child(self, move, eval_fn):
+        """
+        Generates a child for the search node based on the input move.
+        Generation involves adding and evaluating the child.
+        Throws an error if move is not legal or if input move has already been used for child generation.
+        Input:
+            move [chess.Move]
+                Move used for child generation. Must be a legal move which has not already been generated.
+            eval_fn [Function]
+                Function used to evaluate the child.
+        """
+        board = chess.Board(self.fen)
+        if not board.is_legal(move):
+            raise ValueError("Invalid move for child generation! %s is not a legal move from %s.", str(move), self.fen)
+        if move in self.children:
+            raise ValueError("Invalid move for child generation! Child Node %s already exists", str(move))
+        board.push(move)
+        score, _, fen = eval_fn(board, depth=self.depth + 1)
+        self.add_child(move, SearchNode(fen, self.depth + 1, score))
+        board.pop()
+
 
     def get_child_nodes(self):
         """

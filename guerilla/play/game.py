@@ -156,7 +156,10 @@ class Game:
                 game_pgn.headers["Result"] = result
                 with open(resource_filename('guerilla', 'data/played_games/') + self.players[0].name + '_' +
                             self.players[1].name + '_' + str(game) + '.pgn', 'w') as pgn:
-                    pgn.write(str(game_pgn))
+                    try:
+                        pgn.write(str(game_pgn))
+                    except AttributeError as e:
+                        print "Error writing pgn file: %s" % (e)
 
                 if self.use_gui:
                     self.gui.wait_for_endgame_input()
@@ -197,13 +200,13 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        # players[1] = Guerilla('Harambe (COMPLEMENTMAX)', search_type='complementmax', _load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
+        players[0] = Guerilla('Harambe (IDS)', search_type='iterativedeepening', load_file='mm_million_fix.p')
         # players[0] = Guerilla('Donkey Kong (full)', _load_file='weights_train_td_endgames_20161006-065100.p')
 
         # players[1] = Sunfish("Sun", time_limit=1)
         # players[0] = Guerilla('King Kong (RANKPRUNE)', search_type='rankprune', load_file='w_train_bootstrap_0212-0248_movemap_3FC.p')
         # 
-        players[0] = Human('a')
+        # players[0] = Human('a')
         players[1] = Human('b')
 
         # players[1].search.max_depth = 3

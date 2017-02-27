@@ -96,9 +96,10 @@ class Guerilla(Player):
         self.nn.close_session()
         self.nn.reset_graph()
 
-    def get_move(self, board, time_limit=60):
+    def get_move(self, board, time_limit=10):
         # print "Guerilla is thinking..."
-        return self.search.run(board, time_limit=time_limit)[1]
+        move = self.search.run(board, time_limit=time_limit)[1]
+        return move
 
 
 class Human(Player):
@@ -115,7 +116,6 @@ class Human(Player):
 
     def get_move_from_gui(self, board):
         move = self.gui.get_player_input(board, )
-        print move
         return chess.Move.from_uci(move)
 
     def get_move_from_tml(self, board):

@@ -18,7 +18,7 @@ class Game:
         player_types['sunfish'] = Sunfish
     except NameError:
         pass
-    try
+    try:
         player_types['stockfish'] = Stockfish
     except NameError:
         pass
@@ -132,10 +132,6 @@ class Game:
                     # Switch sides
                     curr_player_idx = (curr_player_idx + 1) % 2
 
-                if self.use_gui:
-                    self.gui.end_of_game = True
-                    self.gui.draw(self.board)
-
                 result = self.board.result(claim_draw=True)
                 if result == '1-0':
                     winner = self.players[0] if self.players[0].colour == 'white' else self.players[1]
@@ -146,15 +142,13 @@ class Game:
                     self.data['draws'] += 1
                     if self.use_gui:
                         self.gui.print_msg("Draw.")
-                    else:
-                        print "Draw."
+                        print "Draw."                        
 
                 if winner is not None:
                     winner_idx = (curr_player_idx + 1) % 2
                     self.data['wins'][winner_idx] += 1
                     if self.use_gui:
                         self.gui.print_msg("%s wins." % winner.name)
-                    else:
                         print "%s wins." % winner.name
 
                 for p in self.players:
@@ -171,6 +165,8 @@ class Game:
                         print "Error writing pgn file: %s" % (e)
 
                 if self.use_gui:
+                    self.gui.end_of_game = True
+                    self.gui.draw(self.board)
                     self.gui.wait_for_endgame_input()
 
                 self.swap_colours()
@@ -210,8 +206,8 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[1] = Guerilla('Harambe', search_type='iterativedeepening', load_file='default.p')
-        players[0] = Human('You')
+        players[0] = Guerilla('Harambe', search_type='complementmax', load_file='default.p')
+        players[1] = Human('You')
 
     elif choose_players == 'c':
         for i in xrange(2):

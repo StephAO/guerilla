@@ -450,8 +450,8 @@ class IterativeDeepening(Search):
 
         self.evaluation_function = evaluation_function
         self.time_limit = time_limit
-        self.buff_time = buff_time
-        self.depth_limit = time_limit * 0.02
+        self.buff_time = time_limit * 0.02
+        self.depth_limit = 1
         self.max_depth = max_depth
         self.h_prune = h_prune
         self.prune_perc = prune_perc
@@ -531,7 +531,7 @@ class IterativeDeepening(Search):
 
                 # print move
                 score, next_move, lf = self.DLS(node.children[move], 1.0 - best_score)
-                score = 1 - score
+                score = 1.0 - score
                 # Best child is the one one which has the lowest value
                 if best_move is None or score >= best_score:
                     best_score = score

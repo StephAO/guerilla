@@ -219,7 +219,8 @@ def rank_prune_test():
 def iterative_prune_test():
     success = True
     fen = '7k/8/5P2/8/8/8/P7/3K4 w - - 0 1'
-    ip = IterativeDeepening(iterative_prune_test_eval, prune_perc=0.5, max_depth=2)
+    ip = IterativeDeepening(iterative_prune_test_eval, h_prune=True, prune_perc=0.5, max_depth=2)
+    ip.order_fn_fast = iterative_prune_test_eval
     score, best_move, leaf_board = ip.run(chess.Board(fen))
     if score != 0.8:
         success = False
@@ -227,21 +228,21 @@ def iterative_prune_test():
     if str(best_move) != "f6f7":
         success = False
         print "Error: Wrong best move, Expected: f6f7, Actual %s" % (str(best_move))
-    if leaf_board.split()[0] != "8/5Pk1/8/8/8/8/P7/3K4":
+    if leaf_board.split()[0] != "8/5P1k/8/8/8/8/P7/3K4":
         success = False
-        print "Error: Wrong leaf board, Expected: 8/5Pk1/8/8/8/8/P7/3K4, Actual %s" % (leaf_board.split()[0])
+        print "Error: Wrong leaf board, Expected: 8/5P1k/8/8/8/8/P7/3K4, Actual %s" % (leaf_board.split()[0])
     curr_layer = [(None, ip.root)]
     next_layer = []
-    for i in xrange(2):
+    for i in xrange(3):
         for child in curr_layer:
             move = child[0]
             node = child[1]
             fen = node.fen if node.fen.split()[1] == 'w' else dh.flip_board(node.fen)
-
             if fen.split()[0] =='7k/8/5P2/8/8/8/P7/3K4':
                 if abs(node.value - 0.8) > 0.0001 or node.depth != 0 or not node.expand:
                     success = False
-                    print "Error: Node with fen 7k/8/5P2/8/8/8/P7/3K4 incorrect"
+                    print "Error: Node with fen 7k/8/5P2/8/8/8/P7/3K4 incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='2k5/p7/8/8/8/5p2/8/7K':
                 if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
@@ -252,55 +253,66 @@ def iterative_prune_test():
             elif fen.split()[0] =='4k3/p7/8/8/8/5p2/8/7K':
                 if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
-                    print "Error: Node with fen 4k3/p7/8/8/8/5p2/8/7K incorrect"
+                    print "Error: Node with fen 4k3/p7/8/8/8/5p2/8/7K incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='8/p1k5/8/8/8/5p2/8/7K':
                 if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
-                    print "Error: Node with fen 8/p2k4/8/8/8/5p2/8/7K incorrect"
+                    print "Error: Node with fen 8/p2k4/8/8/8/5p2/8/7K incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='8/p2k4/8/8/8/5p2/8/7K':
                 if abs(node.value - 0.6) > 0.0001 or node.depth != 1 or node.expand:
                     success = False
-                    print "Error: Node with fen 8/p1k5/8/8/8/5p2/8/7K incorrect"
+                    print "Error: Node with fen 8/p1k5/8/8/8/5p2/8/7K incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='8/p3k3/8/8/8/5p2/8/7K':
-                if abs(node.value - 0.5) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
-                    print "Error: Node with fen 8/p3k3/8/8/8/5p2/8/7K is incorrect"
+                    print "Error: Node with fen 8/p3k3/8/8/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/8/p7/8/8/5p2/8/7K':
-                if abs(node.value - 0.5) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
-                    print "Error: Node with fen 3k4/8/p7/8/8/5p2/8/7K is incorrect"
+                    print "Error: Node with fen 3k4/8/p7/8/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/p7/8/8/8/8/5p2/7K':
                 if abs(node.value - 0.2) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
-                    print "Error: Node with fen 3k4/p7/8/8/8/8/5p2/7K is incorrect"
+                    print "Error: Node with fen 3k4/p7/8/8/8/8/5p2/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/8/8/p7/8/5p2/8/7K':
-                if abs(node.value - 0.5) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
-                    print "Error: Node with fen 3k4/8/8/p7/8/5p2/8/7K is incorrect"
+                    print "Error: Node with fen 3k4/8/8/p7/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
-            elif move =='h8g8':
-                if abs(node.value - 0.3) > 0.0001 or node.depth != 2 or node.expand:
+            elif str(move) =='h8g8':
+                if abs(node.value - 0.7) > 0.0001 or node.depth != 2:
                     success = False
-                    print "Error: Node with fen 8/7k/5P2/8/8/8/P7/2K5 is incorrect"
+                    print "Error: Node with fen 8/7k/5P2/8/8/8/P7/2K5 is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
-            elif move =='h8h7':
-                if abs(node.value - 0.9) > 0.0001 or node.depth != 2 or not node.expand:
+            elif str(move) =='h8h7':
+                if abs(node.value - 0.8) > 0.0001 or node.depth != 2:
+                    print node.fen, move
                     success = False
-                    print "Error: Node with fen 6k1/8/5P2/8/8/8/P7/2K5 is incorrect"
+                    print "Error: Node with fen 6k1/8/5P2/8/8/8/P7/2K5 is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
 
-            elif move == 'h8g7':
-                if abs(node.value - 0.8) > 0.0001 or node.depth != 2 or not node.expand:
+            elif str(move) == 'h8g7':
+                if abs(node.value - 0.9) > 0.0001 or node.depth != 2:
                     success = False
-                    print "Error: Node with fen 8/5Pk1/8/8/8/8/P7/3K4 is incorrect"
+                    print "Error: Node with fen 8/5Pk1/8/8/8/8/P7/3K4 is incorrect (value: %f, depth: %d, expand: %s)" % (
+                    node.value, node.depth, node.expand)
             else:
                 success = False
-                print "Error: Node with fen %s shouldn't exists" % (fen)
+                print "Error: Node with fen %s shouldn't exists, move: %s" % (fen, str(move))
 
             if node.expand:
                 next_layer.extend(node.children.items())
@@ -310,6 +322,9 @@ def iterative_prune_test():
     return success
 
 def iterative_prune_test_eval(fen):
+    if fen.split()[1] == 'b':
+        fen = dh.flip_board(fen)
+
     if dh.strip_fen(fen) == '7k/8/5P2/8/8/8/P7/3K4':
         return 0.0
 
@@ -341,13 +356,13 @@ def iterative_prune_test_eval(fen):
         return 0.8
 
     elif dh.strip_fen(fen)[:9] == '6k1/8/5P2':
-        return 0.5
+        return 0.7
 
     elif dh.strip_fen(fen)[:8] == '8/5Pk1/8':
-        return 0.8
+        return 0.9
 
     elif dh.strip_fen(fen)[:8] == '8/5P1k/8':
-        return 0.9
+        return 0.8
 
     else:
         raise RuntimeError("This definitely should not happen! Invalid board: %s" % fen)

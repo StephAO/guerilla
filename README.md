@@ -45,8 +45,8 @@ Packages and programs required for things to work.
 2. Run game by running:
   - `python -m guerilla.play.game`
 3. Select players:
-  - Typing 'd' then <ENTER>, will choose defaults, which is a game against the current best version of the Guerilla engine. You will start as white, Guerilla as white. After each game, opponents will swap colors
-  - Typing 'c' then <ENTER>, will let you choose the players. Player 1 (first inputted) will start as white. The terminal will prompt you to input the following:   
+  - Typing 'd' then \<ENTER>, will choose defaults, which is a game against the current best version of the Guerilla engine. You will start as white, Guerilla as white. After each game, opponents will swap colors
+  - Typing 'c' then \<ENTER>, will let you choose the players. Player 1 (first inputted) will start as white. The terminal will prompt you to input the following:   
     - Player name (i.e. Donkey Kong)
     - Player type ['human', 'guerilla', 'Stockfish' (if installed), 'Sunfish' (if installed)]
     - If guerilla selected, weight file to load from. 'd' will default to the best current version of guerilla

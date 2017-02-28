@@ -1061,16 +1061,17 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', colour='w', search_params={'max_depth': 2}) as g:
+    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2}) as g:
         t = Teacher(g, training_mode='adagrad')
-        t.set_bootstrap_params(num_bootstrap=200000)  # 488037
-        t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
-        t.set_sp_params(num_selfplay=10, max_length=12)
-        t.sts_on = False
-        t.sts_interval = 100
-        t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=run_time)
-        print eval_sts(g, step_size=25)
+        t.rnd_seed_shuffle = 123456
+        t.set_bootstrap_params(num_bootstrap=1050000)  # 488037
+        # t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
+        # t.set_sp_params(num_selfplay=10, max_length=12)
+        # t.sts_on = False
+        # t.sts_interval = 100
+        # t.checkpoint_interval = None
+        t.run(['train_bootstrap'], training_time=15 * 3600)
+        print eval_sts(g)
 
 
 if __name__ == '__main__':

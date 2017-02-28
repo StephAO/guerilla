@@ -92,10 +92,11 @@ class Guerilla(Player):
         if e_type is not None:
             print e_type, value, traceback
         self.nn.close_session()
+        self.nn.reset_graph()
 
-    def get_move(self, board, time_limit=10):
+    def get_move(self, board):
         # print "Guerilla is thinking..."
-        move = self.search.run(board, time_limit=time_limit)[1]
+        move = self.search.run(board)[1]
         return move
 
 

@@ -12,9 +12,16 @@ class Game:
     player_types = {
         'guerilla': Guerilla,
         'human': Human,
-        'sunfish': Sunfish,
-        'stockfish': Stockfish
     }
+
+    try:
+        player_types['sunfish'] = Sunfish
+    except NameError:
+        pass
+    try
+        player_types['stockfish'] = Stockfish
+    except NameError:
+        pass
 
     def __init__(self, players, num_games=None, use_gui=True):
         """ 
@@ -215,8 +222,8 @@ def main():
                 weight_file = raw_input(
                     "Load_file or (d) for default. (File must be located in the pickles directory):\n")
                 players[i] = Guerilla(player_name, load_file=(weight_file if weight_file != 'd' else 'default.p'))
-            elif player_type == 'human':
-                players[i] = Human(player_name)
+            elif player_type in Game.player_types.keys():
+                players[i] = Game.player_types[player_type](player_name)
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
 

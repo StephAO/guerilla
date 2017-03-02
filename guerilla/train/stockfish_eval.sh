@@ -14,11 +14,16 @@ seconds=${7:-3}
 binary=${8:-linux}
 threads=${9:-12}
 memory=${10:-1024}
-
+max_depth=${11}
 (
 echo "setoption name Hash value $memory" ;
 echo "setoption name threads value $threads" ;
 echo "position fen $fen $turn $castling $enpassant $half_move $full_move" ;
-echo "go infinite";
-sleep $seconds
+if [ -z "$max_depth" ]; then
+    echo "go infinite";
+    sleep $seconds
+else
+    echo "go depth $max_depth";
+    sleep $seconds
+fi
 ) | stockfish | grep -ohE "score cp (-?[0-9]+)|score mate (-?[0-9]+)" | tail -1 | cut -d' ' -f2-3

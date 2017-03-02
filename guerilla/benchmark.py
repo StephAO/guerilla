@@ -106,7 +106,7 @@ def nn_evaluation_bench():
         for num_fc in xrange(1, 5):
             start_time = time.time()
             with Guerilla('curious_george', 'w', verbose=False,
-                          NUM_FC=num_fc, NN_INPUT_TYPE=input_type) as g:
+                          nn_params={'NUM_FC': num_fc, 'NN_INPUT_TYPE': input_type}) as g:
                 for _ in xrange(100):
                     g.nn.evaluate(fen)
             print '100 iterations of evaluate using %s with %d fc layers took %f seconds' % \
@@ -116,9 +116,9 @@ def nn_evaluation_bench():
 def run_benchmark_tests():
     benchmarks = {
         # 'Complimentmax Search': complimentmax_search_bench,
-        'Search Types': search_types_bench,
+        # 'Search Types': search_types_bench,
         # 'Data Processing': data_processing_bench,
-        # 'Evaluation' : nn_evaluation_bench
+        'Evaluation': nn_evaluation_bench
     }
 
     print "\nRunning Benchmarks..."

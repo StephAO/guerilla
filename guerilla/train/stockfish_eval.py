@@ -66,7 +66,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                 sf_num += 1
 
                 if (sf_num + 1) % batch_size == 0:
-                    mapped_scores = sigmoid_array(np.array(scores))
+                    mapped_scores = sigmoid_array(np.array(scores))  # type: np.ndarray
                     for mscore in mapped_scores:
                         sf_file.write(str(mscore) + '\n')
                     scores = []
@@ -74,7 +74,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
                         num_file.write(str(sf_num))
 
-            mapped_scores = sigmoid_array(np.array(scores))
+            mapped_scores = sigmoid_array(np.array(scores))  # type: np.ndarray
             for mscore in mapped_scores:
                 sf_file.write(str(mscore) + '\n')
 
@@ -82,7 +82,8 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
         num_file.write(str(sf_num))
 
-def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
+
+def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, max_depth=None):
     """
     Input:
         fen [String]
@@ -95,7 +96,8 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
             Amount of memory to use for stockfish
         num_attempt [Int]
             Number of attempts which should be made to get a stockfish score for the given fen.
-
+        max_depth [Int]
+            Max depth to search to.
     Output:
         score [Float]
             Stockfish score. Returns None if no score found.
@@ -108,9 +110,11 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1):
     threads = threads or psutil.cpu_count() - 2
     binary = 'linux'
 
-    cmd = ' '.join([(resource_filename('guerilla.train', '/stockfish_eval.sh')), fen, str(seconds), binary, str(threads), str(memory)])
+    cmd = ' '.join([(resource_filename('guerilla.train', '/stockfish_eval.sh')), fen, str(seconds), binary,
+                    str(threads), str(memory), str(max_depth) if max_depth else ''])
 
     attempt = 0
+    output = None
     while attempt < num_attempt:
         try:
             output = subprocess.check_output(cmd, shell=True).strip().split('\n')
@@ -182,6 +186,21 @@ def load_stockfish_values(filename='sf_values.nsv', num_values=None):
     return stockfish_values
 
 
+def stockfish_eval_fn(fen, seconds=0.3, max_depth=1, num_attempt=3):
+    """
+    Evaluates the given fen using stockfish. Returns P(win).
+    Input:
+        fen [String]
+            FEN to evaluate.
+    Output:
+        value [Float]
+            P(win) of input FEN.
+    """
+
+    raw_value = get_stockfish_score(fen, seconds=seconds, max_depth=max_depth, num_attempt=num_attempt)
+
+    return sigmoid_array(raw_value)
+
 def main():
 
     generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
@@ -191,4 +210,5 @@ def main():
     stockfish_scores(generate_time)
 
 if __name__ == "__main__":
+
     main()

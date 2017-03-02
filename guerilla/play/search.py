@@ -247,7 +247,7 @@ class Complementmax(Search):
                 # Take reciprocal of score since alternating levels
                 score = 1 - score
                 board.pop()
-                if score >= best_score:
+                if score > best_score:
                     best_score = score
                     best_move = move
                     best_leaf = leaf_board
@@ -533,7 +533,7 @@ class IterativeDeepening(Search):
                 score, next_move, lf = self.DLS(node.children[move], 1.0 - best_score)
                 score = 1.0 - score
                 # Best child is the one one which has the lowest value
-                if best_move is None or score >= best_score:
+                if best_move is None or score > best_score:
                     best_score = score
                     best_move = move
                     leaf_fen = lf
@@ -827,7 +827,7 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
             score, next_move, leaf_board = minimaxtree(child, 1 - best_score, forbidden_fens=forbidden_fens)
             # Take reciprocal of score since alternating levels
             score = 1 - score
-            if score >= best_score:
+            if score > best_score:
                 best_score, best_move, best_leaf = score, move, leaf_board
 
             # best_score is my current lower bound

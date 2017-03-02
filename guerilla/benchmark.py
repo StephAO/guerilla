@@ -79,7 +79,7 @@ def search_types_bench(max_depth=3, time_limit=50, verbose=True):
             # Time multiple repetitions
 
             start_time = time.time()
-            g.get_move(board, time_limit=time_limit)
+            g.get_move(board)
             time_taken = (time.time() - start_time)
 
             print "Search type: %s, Time: %f\nNumber nodes visited by depth: %s \n" \

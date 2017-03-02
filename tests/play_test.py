@@ -219,15 +219,15 @@ def rank_prune_test():
 def iterative_prune_test():
     success = True
     fen = '7k/8/5P2/8/8/8/P7/3K4 w - - 0 1'
-    ip = IterativeDeepening(iterative_prune_test_eval, h_prune=True, prune_perc=0.5, max_depth=2)
-    ip.order_fn_fast = iterative_prune_test_eval
+    ip = IterativeDeepening(iterative_prune_test_eval, h_prune=True, prune_perc=0.5,
+                            max_depth=2, time_limit=1e6)
     score, best_move, leaf_board = ip.run(chess.Board(fen))
     if score != 0.8:
         success = False
         print "Error: Wrong score, Expected: 0.8, Actual %s" % (score)
     if str(best_move) != "f6f7":
         success = False
-        print "Error: Wrong best move, Expected: f6f7, Actual %s" % (str(best_move))
+        print "Error: Wrong best move, Expected: f6f7, Actual: %s" % (str(best_move))
     if leaf_board.split()[0] != "8/5P1k/8/8/8/8/P7/3K4":
         success = False
         print "Error: Wrong leaf board, Expected: 8/5P1k/8/8/8/8/P7/3K4, Actual %s" % (leaf_board.split()[0])
@@ -287,7 +287,8 @@ def iterative_prune_test():
                     node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/8/8/p7/8/5p2/8/7K':
-                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - 0.2) > 0.0001 or node.depth != 1 or not node.expand:
+                    # NOTE: The value is 0.2 since the 0.3 node was never checked due to rank-prune
                     success = False
                     print "Error: Node with fen 3k4/8/8/p7/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
                     node.value, node.depth, node.expand)

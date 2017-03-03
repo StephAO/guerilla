@@ -459,6 +459,10 @@ class IterativeDeepening(Search):
         self.order_fn_fast = material_balance  # The move ordering function to use pre-Guerilla evaluation
         self.order_moves = True
 
+        # Holds the Killer Moves by depth. Each Entry is (set of moves, sorted array of (score, moves)).
+        self.killer_table = [{'moves': set(), 'scores': list()}]
+        self.num_killer = 2  # Number of killer moves store for each depth
+
     def __str__(self):
         return "IterativeDeepening"
 
@@ -502,27 +506,46 @@ class IterativeDeepening(Search):
         if node.depth >= self.depth_limit or not node.expand or not self.time_left:
             return node.value, None, node.fen
         else:
+            # Check if a new killer table entry should be created
+            if node.depth >= len(self.killer_table):
+                self.killer_table.append({'moves': set(), 'scores': list()})
+
             moves = list(board.legal_moves)
             if self.order_moves:
+                killers = []
                 fast_order = []
                 node_order = []
                 for move in moves:
-                    # Children have not previously been evaluated, use fast ordering
+
+                    # Child has not previously been evaluated, use fast scoring & ordering
                     if move not in node.children:
                         # Get scores
                         board.push(move)
-                        fast_order.append((move, self.order_fn_fast(board.fen())))
+                        value = self.order_fn_fast(board.fen())
+                        fast = True
                         board.pop()
                     else:
-                        # Children have previously been evaluated, use node evaluation for ordering
-                        node_order.append((move, node.children[move].value))
+                        # Child has previously been evaluated, use node evaluation for ordering
+                        value = node.children[move].value
+                        fast = False
+
+                    # Check which ordering it should go into
+                    move_inf = (move, value, fast)
+                    if self.is_killer(move, node.depth):
+                        killers.append(move_inf)
+                    elif move not in node.children:
+                        fast_order.append(move_inf)
+                    else:
+                        node_order.append(move_inf)
 
                 # Order in ascending order (want to check boards which are BAD for opponent first)
-                fast_order.sort(key=lambda x: x[1])
+                killers.sort(key=lambda x: x[1])
                 node_order.sort(key=lambda x: x[1])
+                fast_order.sort(key=lambda x: x[1])
 
-                # Always favor node ordering, mark whether or not this is a new move
-                moves = [(x[0], False) for x in node_order] + [(x[0], True) for x in fast_order]
+                # Favor killer moves the most
+                # Always favor node ordering, mark whether
+                moves = [(x[0], x[2]) for x in killers + node_order + fast_order]
 
             for move, new_move in moves:
                 # Generate child if necessary
@@ -539,11 +562,68 @@ class IterativeDeepening(Search):
                     leaf_fen = lf
 
                 if self.ab_prune and best_score >= a:
+                    self.update_killer(move, best_score, node.depth)
                     break
 
             node.value = best_score
 
         return node.value, best_move, leaf_fen
+
+    def update_killer(self, killer_move, score, depth):
+        """
+        Updates the killer move table.
+        Input:
+            killer_move [Chess.Move]
+                The move which caused the A-B pruning to trigger.
+            score [Float]
+                The score yielded by the killer move.
+            depth [Int]
+                The depth FROM which the move was played.
+        """
+
+        k_tab = self.killer_table[depth]
+
+        # Skip if already in killer table
+        if killer_move in k_tab['moves']:
+            return
+
+        # Check if table is full
+        if len(k_tab['moves']) < self.num_killer:
+            # Not Full
+            self._add_killer_move(depth, score, killer_move)
+        else:
+            # Full
+            # Check if move is better than worst current move
+            if score > k_tab['scores'][0]:
+                # Remove Worst
+                _, worst_move = k_tab['scores'].pop(0)
+                k_tab['moves'].remove(worst_move)
+
+                # Add Item
+                self._add_killer_move(depth, score, killer_move)
+
+    def _add_killer_move(self, depth, score, killer_move):
+        """
+        Adds killer move to the table.
+        """
+        # Update moves
+        self.killer_table[depth]['moves'].add(str(killer_move))
+
+        # Update scores
+        self.killer_table[depth]['scores'].append((score, str(killer_move)))
+        self.killer_table[depth]['scores'].sort(key=lambda x: x[0])  # Sorting each time is OK since length is small.
+
+    def is_killer(self, move, depth):
+        """
+        Checks if the current move is a killer move.
+        Input:
+            move [chess.Move]
+                Move to check.
+        Output:
+            output [Boolean]
+                True if it is a kill move, False if not.
+        """
+        return str(move) in self.killer_table[depth]['moves']
 
     def prune(self, node):
         """ 

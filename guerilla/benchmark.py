@@ -52,7 +52,7 @@ def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
     return output
 
 
-def search_types_bench(max_depth=3, time_limit=50, verbose=True):
+def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
     """
     Times how long searches of different depths takes.
     Input:
@@ -60,6 +60,8 @@ def search_types_bench(max_depth=3, time_limit=50, verbose=True):
             Maximum depth searched by Complimentmax.
         time_limit [Float]
             Time limit for RankPrune and IterativeDeepening.
+        num_rep [Int]
+            The number of times each search depth test is repeated.
         verbose [Boolean]
             Whether results are printed in addition to being returned.
     Output:
@@ -67,25 +69,37 @@ def search_types_bench(max_depth=3, time_limit=50, verbose=True):
             Dictionary of Results.
     """
     # Random seed
-    rnd_seed = 1234
+    rnd_seed = 123456
 
     # Random board
     board = chess.Board('3r2k1/1br1qpbp/pp2p1p1/2pp3n/P2P1P2/1PP1P1P1/R2N2BP/1NR1Q1K1 w - - 5 24')
 
     # Create Guerilla with Random weights:
-    sp = {'max_depth': max_depth}
+
     for st in ['iterativedeepening', 'complementmax', 'rankprune']:
-        with Guerilla('curious_george', 'w', search_type=st, verbose=False, seed=rnd_seed, search_params=sp) as g:
-            # Time multiple repetitions
+        sp = {'max_depth': max_depth} if st == 'complementmax' else {'time_limit': time_limit}
+        num_visits = None
+        time_taken = num_evals = cache_hits = depth_reached = 0
+        for _ in range(num_rep):
+            with Guerilla('curious_george', 'w', search_type=st, seed=rnd_seed, verbose=False, search_params=sp) as g:
+                # Time multiple repetitions
+                start_time = time.time()
+                g.get_move(board)
+                time_taken += (time.time() - start_time) / num_rep
 
-            start_time = time.time()
-            g.get_move(board)
-            time_taken = (time.time() - start_time)
+                # Increase output values
+                if num_visits is None:
+                    num_visits = g.search.num_visits
+                else:
+                    num_visits = [num_visits[i] + g.search.num_visits[i] for i in range(len(g.search.num_visits))]
+                num_evals += g.search.num_evals
+                cache_hits += g.search.cache_hits
+                depth_reached += g.search.depth_reached
 
-            print "Search type: %s, Time: %f\nNumber nodes visited by depth: %s \n" \
-                  "number of nodes evaluated: %d, cache hits: %d, depth reached: %d\n" % \
-                  (st, time_taken, str(g.search.num_visits),
-                   g.search.num_evals, g.search.cache_hits, g.search.depth_reached)
+        print "Search type: %s, Average of %d repetition(s).\nTime Taken: %f\nNumber nodes visited by depth: %s \n" \
+              "number of nodes evaluated: %d, cache hits: %d, depth reached: %d\n" % \
+              (st, num_rep, time_taken, str([num_visits[i] / num_rep for i in range(len(num_visits))]),
+               num_evals / num_rep, cache_hits / num_rep, depth_reached / num_rep)
 
 
 def data_processing_bench():
@@ -115,9 +129,9 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        # 'Complimentmax Search': complimentmax_search_bench,
-        # 'Search Types': search_types_bench,
-        # 'Data Processing': data_processing_bench,
+        'Complimentmax Search': complimentmax_search_bench,
+        'Search Types': search_types_bench,
+        'Data Processing': data_processing_bench,
         'Evaluation': nn_evaluation_bench
     }
 

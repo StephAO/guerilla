@@ -106,7 +106,7 @@ class Human(Player):
         self.gui = None
 
     def __enter__(self):
-        return
+        return self
 
     def __exit__(self, e_type, value, traceback):
         if e_type is not None:
@@ -201,7 +201,7 @@ class Stockfish(Player):
         self.new_game()
 
     def __enter__(self):
-        return
+        return self
 
     def __exit__(self, e_type, value, traceback):
         if e_type is not None:

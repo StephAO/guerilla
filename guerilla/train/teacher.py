@@ -76,7 +76,7 @@ class Teacher:
         # Bootstrap parameters
         self.num_bootstrap = -1
         self.conv_loss_thresh = 0.0001  # 
-        self.conv_window_size = 20  # Number of epochs to consider when checking for convergence
+        self.conv_window_size = 10  # Number of epochs to consider when checking for convergence
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')

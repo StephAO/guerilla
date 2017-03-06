@@ -884,7 +884,7 @@ class Teacher:
         game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
 
         # turn pruning for search off
-        self.guerilla.search.ab_prune = False
+        # self.guerilla.search.ab_prune = False
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
@@ -914,7 +914,7 @@ class Teacher:
                 game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))]
 
         # turn pruning for search back on
-        self.guerilla.search.ab_prune = True
+        # self.guerilla.search.ab_prune = True
 
         for t in range(num_boards):
             td_val = 0
@@ -999,7 +999,11 @@ class Teacher:
                     break
 
                 # Play move
-                board.push(self.guerilla.get_move(board))
+                try:
+                    board.push(self.guerilla.get_move(board))
+                except ValueError:
+                    # This occurs if the Guerilla cannot play a move.
+                    continue
 
                 # Store fen
                 game_fens.append(board.fen())
@@ -1063,10 +1067,11 @@ def main():
 
     with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2}) as g:
         t = Teacher(g, training_mode='adagrad')
+        # print eval_sts(g)
         t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=1050000)  # 488037
-        # t.set_td_params(num_end=100, num_full=12, randomize=False, end_length=5, full_length=12)
-        # t.set_sp_params(num_selfplay=10, max_length=12)
+        t.set_bootstrap_params(num_bootstrap=1450000)  # 488037
+        t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
+        t.set_sp_params(num_selfplay=500, max_length=12)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None

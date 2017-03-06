@@ -38,7 +38,7 @@ class Player:
             raise ValueError("Error: Invalid colour! Must be 'white','w','black', or 'b'.")
 
     @abstractmethod
-    def __enter__(self, gui=None):
+    def __enter__(self):
         raise NotImplementedError("You should never see this")
 
     @abstractmethod
@@ -97,6 +97,8 @@ class Guerilla(Player):
     def get_move(self, board):
         # print "Guerilla is thinking..."
         move = self.search.run(board)[1]
+        if move is None:
+            raise ValueError("There are no valid moves from this position! FEN: %s" % board.fen())
         return move
 
 

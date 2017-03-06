@@ -217,7 +217,7 @@ class Complementmax(Search):
                 best_leaf [String]
                     FEN of the board of the leaf node which yielded the highest value.
         """
-        best_score = 0.0
+        best_score = -1
         best_move = None
         best_leaf = None
 
@@ -497,7 +497,7 @@ class IterativeDeepening(Search):
                     FEN of the board of the leaf node which yielded the highest value.
         """
         best_move = None
-        best_score = 0.0
+        best_score = -1
         leaf_fen = None
         board = chess.Board(node.fen)
 
@@ -890,7 +890,7 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
     """
     assert (isinstance(root, SearchNode))
 
-    best_score = 0.0
+    best_score = -1
     best_move = None
     best_leaf = None
 

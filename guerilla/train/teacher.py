@@ -30,7 +30,7 @@ class Teacher:
 
     def __init__(self, _guerilla, hp_load_file=None,
                  bootstrap_training_mode='adagrad',
-                 td_training_mode = 'gradient_descent',
+                 td_training_mode='gradient_descent',
                  test=False, verbose=True, **hp):
         """
             Initialize teacher, sets member variables.
@@ -85,7 +85,7 @@ class Teacher:
         self.td_num_full = -1  # The number of full games to train on using TD-Leaf
         self.td_end_length = 12  # How many moves are included in endgame training
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
-        self.td_training_mode = td_training_mode # Training mode to use for TD training
+        self.td_training_mode = td_training_mode  # Training mode to use for TD training
         self.td_w_update = None
         self.td_fen_index = 0
         self.td_batch_size = 5
@@ -97,9 +97,9 @@ class Teacher:
         self.set_hyper_params(**hp)
 
         self.training_mode = bootstrap_training_mode
-        self.train_step = self.nn.init_training(self.training_mode, learning_rate = self.hp['LEARNING_RATE'],
-                                                reg_const = self.hp['REGULARIZATION_CONST'], loss_fn = self.nn.MSE,
-                                                decay_rate= self.hp['DECAY_RATE'])
+        self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
+                                                reg_const=self.hp['REGULARIZATION_CONST'], loss_fn=self.nn.MSE,
+                                                decay_rate=self.hp['DECAY_RATE'])
 
         if self.verbose:
             print "Bootstrap training neural net using %s." % self.training_mode
@@ -123,13 +123,12 @@ class Teacher:
 
         # Build unique file modifier which demarks final output files from this session
         self.file_modifier = "_%s_%s%s_%sFC.p" % (time.strftime("%m%d-%H%M"),
-                                                   self.nn.hp['NN_INPUT_TYPE'],
-                                                   '_conv' if \
-                                                   (self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' \
-                                                   and self.guerilla.nn.hp['USE_CONV']) 
-                                                   else '',
-                                                   str(self.nn.hp['NUM_FC']))
-
+                                                  self.nn.hp['NN_INPUT_TYPE'],
+                                                  '_conv' if \
+                                                      (self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' \
+                                                       and self.guerilla.nn.hp['USE_CONV'])
+                                                  else '',
+                                                  str(self.nn.hp['NUM_FC']))
 
     # ---------- RUNNING AND RESUMING METHODS
 
@@ -237,7 +236,7 @@ class Teacher:
         if shuffle:
             shuffle_idxs = range(len(fens))
             random.shuffle(shuffle_idxs)
-            fens =[fens[i] for i in shuffle_idxs]
+            fens = [fens[i] for i in shuffle_idxs]
             true_values = [true_values[i] for i in shuffle_idxs]
 
         return fens, true_values
@@ -581,25 +580,25 @@ class Teacher:
             _shape = [self.hp['BATCH_SIZE']] + list(input_size)
             input_data.append(np.zeros(_shape))
 
-            if input_size[0:2] == (8,8) and self.nn.hp['USE_CONV']:
+            if input_size[0:2] == (8, 8) and self.nn.hp['USE_CONV']:
                 diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.size_per_tile))
         true_values = np.zeros(self.hp['BATCH_SIZE'])
         return input_data, diagonals, true_values
 
     def get_batch_feed_dict(self, input_data, diagonals, true_values, \
-                                  _true_values, fens, board_num, game_indices):
+                            _true_values, fens, board_num, game_indices):
         """ 
             Generate batch feed dict. 
             Note: true values with a _ prefix contains values, without it is just
                   the true values struct
         """
         for j in xrange(self.hp['BATCH_SIZE']):
-            nn_input_data = dh.fen_to_nn_input(fens[game_indices[board_num]], 
-                                           self.nn.hp['NN_INPUT_TYPE'])
+            nn_input_data = dh.fen_to_nn_input(fens[game_indices[board_num]],
+                                               self.nn.hp['NN_INPUT_TYPE'])
 
             for k in xrange(len(nn_input_data)):
                 input_data[k][j] = nn_input_data[k]
-                if np.shape(input_data[k][j])[0:2] == (8,8) and self.nn.hp['USE_CONV']:
+                if np.shape(input_data[k][j])[0:2] == (8, 8) and self.nn.hp['USE_CONV']:
                     diagonals[j] = dh.get_diagonals(input_data[k][j],
                                                     self.nn.size_per_tile)
 
@@ -640,8 +639,8 @@ class Teacher:
                 return True, {'game_indices': game_indices[(i * self.hp['BATCH_SIZE']):]}
 
             _feed_dict, board_num = \
-                self.get_batch_feed_dict(input_data, diagonals, true_values, 
-                                         _true_values, fens, board_num, 
+                self.get_batch_feed_dict(input_data, diagonals, true_values,
+                                         _true_values, fens, board_num,
                                          game_indices)
             # train batch
             self.nn.sess.run([train_step], feed_dict=_feed_dict)
@@ -675,7 +674,7 @@ class Teacher:
 
         for i in xrange(num_batches):
             _feed_dict, board_num = \
-                self.get_batch_feed_dict(input_data, diagonals, true_values, 
+                self.get_batch_feed_dict(input_data, diagonals, true_values,
                                          _true_values, fens, board_num,
                                          range(len(fens)))
             # Get batch loss
@@ -901,7 +900,7 @@ class Teacher:
 
             # Get gradient of prediction on leaf board
             if dh.white_is_next(leaf_board):
-                game_info[i]['gradient'] = self.nn.get_all_weights_gradient(leaf_board)
+                game_info[i]['gradient'] = np.array(self.nn.get_all_weights_gradient(leaf_board))
             else:
                 # Get NEGATIVE gradient of a flipped board
                 # Explanation:
@@ -911,7 +910,7 @@ class Teacher:
                 #   Grad(P(white win | board )) = Grad(1 - P(black win | board))
                 #                                   = - Grad(P(black win | board))
                 #                                                                = - Grad(P(white win | flip(board)))
-                game_info[i]['gradient'] = [-x for x in self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))]
+                game_info[i]['gradient'] = np.array(self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))) * -1
 
         # turn pruning for search back on
         # self.guerilla.search.ab_prune = True
@@ -925,19 +924,18 @@ class Teacher:
                 td_val += math.pow(self.hp['TD_DISCOUNT'], j - t) * dt
 
             # Use gradient to update sum
-            if not self.td_w_update:
-                self.td_w_update = [w * td_val for w in game_info[t]['gradient']]
+            if self.td_w_update is None:
+                self.td_w_update = game_info[t]['gradient'] * td_val
             else:
-                # update each set of weights
-                for i in range(len(game_info[t]['gradient'])):
-                    self.td_w_update[i] += game_info[t]['gradient'][i] * td_val
+                self.td_w_update += game_info[t]['gradient'] * td_val
 
             self.td_fen_index += 1
 
-            if self.td_fen_index == self.td_batch_size:
-                self.td_update_weights()
-                self.td_fen_index = 0
-                self.td_w_update = None
+        # Only update at the end of a game
+        if self.td_fen_index >= self.td_batch_size:
+            self.td_update_weights()
+            self.td_fen_index = 0
+            self.td_w_update = None
 
     # ---------- SELF-PLAY TRAINING METHODS
 
@@ -965,13 +963,10 @@ class Teacher:
 
         fens = cgp.load_fens(num_values=self.sp_num)
 
-        # shuffle fens
-        random.shuffle(fens)
-
         if game_indices is None:
             game_indices = np.random.choice(len(fens), self.sp_num)
 
-        max_len = float("inf") if self.sp_length == -1 else self.sp_length
+        max_len = sys.maxint if self.sp_length == -1 else self.sp_length
 
         # Initialize STS scores if necessary
         if sts_scores is None and self.sts_on:
@@ -995,7 +990,7 @@ class Teacher:
             game_fens = [board.fen()]
             for _ in range(max_len):
                 # Check if game finished
-                if board.is_checkmate():
+                if board.is_game_over(claim_draw=True):
                     break
 
                 # Play move

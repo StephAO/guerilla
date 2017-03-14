@@ -15,7 +15,7 @@ from pkg_resources import resource_filename
 import guerilla.data_handler as dh
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
-from guerilla.players import Guerilla
+from guerilla.players import *
 from guerilla.train.sts import eval_sts, sts_strat_files
 
 
@@ -24,11 +24,11 @@ class Teacher:
         'train_bootstrap',
         'train_td_end',
         'train_td_full',
-        'train_selfplay',
+        'train_gameplay',
         'load_and_resume'
     ]
 
-    def __init__(self, _guerilla, hp_load_file=None,
+    def __init__(self, guerilla, hp_load_file=None,
                  bootstrap_training_mode='adagrad',
                  td_training_mode='gradient_descent',
                  test=False, verbose=True, **hp):
@@ -36,7 +36,7 @@ class Teacher:
             Initialize teacher, sets member variables.
 
             Inputs:
-                _guerilla [Guerilla]:
+                guerilla [Guerilla]:
                     Guerilla to train
                 bootstrap_training_mode [String]:
                     Training mode to be used for bootstrap. Defaults to Adagrad.
@@ -54,8 +54,8 @@ class Teacher:
         """
         # dictionary of different training/evaluation methods
 
-        self.guerilla = _guerilla
-        self.nn = _guerilla.nn
+        self.guerilla = guerilla
+        self.nn = guerilla.nn
         self.start_time = None
         self.training_time = None
         self.prev_checkpoint = None
@@ -75,7 +75,7 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
-        self.conv_loss_thresh = 0.0001  # 
+        self.conv_loss_thresh = 0.0001
         self.conv_window_size = 10  # Number of epochs to consider when checking for convergence
 
         # TD-Leaf parameters
@@ -114,6 +114,7 @@ class Teacher:
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
         self.sp_length = 12  # How many moves are included in game playing
+        self.opponent = guerilla
 
         # STS Evaluation Parameters
         self.sts_on = False  # Whether STS evaluation occurs during training
@@ -193,10 +194,10 @@ class Teacher:
                 if self.verbose:
                     print "Performing full-game TD-Leaf training!"
                 self.train_td(False)
-            elif action == 'train_selfplay':
+            elif action == 'train_gameplay':
                 if self.verbose:
-                    print "Performing self-play training!"
-                self.train_selfplay()
+                    print "Performing gameplay training!"
+                self.train_gameplay()
             elif action == 'load_and_resume':
                 raise ValueError("Error: Resuming must be the first action in an action set.")
             else:
@@ -268,14 +269,14 @@ class Teacher:
                 "VALIDATION_SIZE" - Number of positions used to calculate
                                     validation loss.
                                     None of the positions in validation set are
-                                    used in training. 
-                                    VALIDATION SIZE % BATCH SIZE == 0 
+                                    used in training.
+                                    VALIDATION SIZE % BATCH SIZE == 0
                                     VALIDATION SIZE + BATCH SIZE < Number of fens provided
                 "TRAIN_CHECK_SIZE" - Number of positions used to calculate
                                      training loss.
                                      All of the positions in validation set are
                                      used in training.
-                "LOSS_THRESHOLD" - If all loss changes in the window <= 
+                "LOSS_THRESHOLD" - If all loss changes in the window <=
                                    than LOSS_THRESHOLD then weights have converged
                 "TD_LRN_RATE" - constant used to scale the gradient before the
                                 value is used to update weights in td_leaf
@@ -338,7 +339,7 @@ class Teacher:
                                 'fen_index': self.td_fen_index,
                                 'adagrad_acc': self.td_adagrad_acc}
 
-        state['sp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
+        state['gp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
 
         # Save STS evaluation parameters
         state['sts_on'] = self.sts_on
@@ -382,7 +383,7 @@ class Teacher:
 
         # Load training parameters
         self.set_td_params(**state.pop('td_leaf_param'))
-        self.set_sp_params(**state.pop('sp_param'))
+        self.set_gp_params(**state.pop('gp_param'))
 
         # Load adagrad params
         if self.td_training_mode == 'adagrad':
@@ -447,10 +448,10 @@ class Teacher:
                 print "Resuming full-game TD-Leaf training..."
             self.train_td(False, game_indices=state['game_indices'], start_idx=state['start_idx'],
                           sts_scores=state['sts_scores'])
-        elif action == 'train_selfplay':
+        elif action == 'train_gameplay':
             if self.verbose:
-                print "Resuming self-play training..."
-            self.train_selfplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
+                print "Resuming gameplay training..."
+            self.train_gameplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
                                 sts_scores=state['sts_scores'])
         elif action == 'load_and_resume':
             raise ValueError("Error: Trying to resume on a resume call - This shouldn't happen.")
@@ -587,8 +588,8 @@ class Teacher:
 
     def get_batch_feed_dict(self, input_data, diagonals, true_values, \
                             _true_values, fens, board_num, game_indices):
-        """ 
-            Generate batch feed dict. 
+        """
+            Generate batch feed dict.
             Note: true values with a _ prefix contains values, without it is just
                   the true values struct
         """
@@ -870,17 +871,21 @@ class Teacher:
 
         self.nn.add_to_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
 
-    def td_leaf(self, game):
+    def td_leaf(self, game, restrict_td=True):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
                 Game [List]
                     A game consists of a sequential list of board states. Each board state is a FEN.
                     FENs are alternating white's turn / black's turn.
+                restrict_td [Boolean]
+                    If True then positive temporal difference values (dt) are set to 0 IF the opponents move(s) were
+                    not predicted. This can be useful as positive (dt) values which were not predicted may indicate
+                    that the opponent made a blunder.
         """
 
         num_boards = len(game)
-        game_info = [{'value': None, 'gradient': None} for _ in range(num_boards)]  # Indexed the same as num_boards
+        game_info = [{'value': None, 'gradient': None, 'move': None} for _ in range(num_boards)]
 
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
@@ -890,7 +895,8 @@ class Teacher:
         # print "Calculating TD-Leaf values for move ",
         for i, root_board in enumerate(game):
             # Output value is P(winning of current player)
-            value, _, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=True)
+            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=True)
+            game_info[i]['move'] = move
 
             # Modify value so that it represents P(white winning)
             if dh.white_is_next(root_board):
@@ -920,6 +926,14 @@ class Teacher:
             for j in range(t, num_boards - 1):
                 # Calculate temporal difference
                 dt = game_info[j + 1]['value'] - game_info[j]['value']
+
+                if restrict_td:
+                    # If not predicted and > 0 then set to 0
+                    predicted_board = chess.Board(game[j])
+                    predicted_board.push(game_info[j]['move'])
+                    if predicted_board.fen() != game[j + 1]:
+                        dt = min(dt, 0)
+
                 # Add to sum
                 td_val += math.pow(self.hp['TD_DISCOUNT'], j - t) * dt
 
@@ -937,9 +951,9 @@ class Teacher:
             self.td_fen_index = 0
             self.td_w_update = None
 
-    # ---------- SELF-PLAY TRAINING METHODS
+    # ---------- GAMEPLAY TRAINING METHODS
 
-    def set_sp_params(self, num_selfplay=None, max_length=None):
+    def set_gp_params(self, num_selfplay=None, max_length=None, opponent=None):
         """
         Set the parameteres for self-play.
             Inputs:
@@ -947,18 +961,31 @@ class Teacher:
                     Number of games to play against itself and train using TD-Leaf.
                 max_length [Int]
                     Maximum number of moves in each self-play. (-1 = No max)
+                opponent [Player or None]
+                    The opponent to play when generating the gameplay for training. By default the opponent is the
+                    version of Guerilla currently being trained (self.guerilla).
         """
 
         if num_selfplay:
             self.sp_num = num_selfplay
         if max_length:
             self.sp_length = max_length
+        if opponent:
+            self.opponent = opponent
 
-    def train_selfplay(self, game_indices=None, start_idx=0, sts_scores=None):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None):
         """
-        Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against itself.
-        Self-play is performed from a random board position. The random board position is found by loading from the fens
-        file and then applying a random legal move to the board.
+        Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
+        Gameplay is performed from a random board position. The random board position is found by loading from the fens
+        file and then randomly flipping the board.
+
+        Inputs:
+            game_indices [List of Ints]
+                List of indices denoting which FENs to process and in what order. Used when loading and resuming.
+            start_idx [Int]
+                Marks which game index to start training from. Used when loading and resuming.
+            sts_scores [List]
+                List of previously of previously calculated STS scores. Used when loading and resuming.
         """
 
         fens = cgp.load_fens(num_values=self.sp_num)
@@ -979,14 +1006,14 @@ class Teacher:
         for i in xrange(start_idx, len(game_indices)):
             if self.verbose:
                 print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
-            # Load random fen
-            board = chess.Board(
-                fens[game_indices[i]])  # white plays next, turn counter & castling unimportant here
 
-            # Play random move to increase game variability
-            board.push(random.sample(board.legal_moves, 1)[0])
+            # Load random fen and randomly flip board
+            fen = fens[game_indices[i]]
+            if random.random() < 0.5:
+                fen = dh.flip_board(fen)
 
             # Play a game against yourself
+            board = chess.Board(fen)
             game_fens = [board.fen()]
             for _ in range(max_len):
                 # Check if game finished
@@ -994,11 +1021,7 @@ class Teacher:
                     break
 
                 # Play move
-                try:
-                    board.push(self.guerilla.get_move(board))
-                except ValueError:
-                    # This occurs if the Guerilla cannot play a move.
-                    continue
+                board.push(self.opponent.get_move(board))
 
                 # Store fen
                 game_fens.append(board.fen())
@@ -1060,13 +1083,13 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2}) as g:
+    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 1}) as g:
         t = Teacher(g, training_mode='adagrad')
         # print eval_sts(g)
         t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=1450000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=2500000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_sp_params(num_selfplay=500, max_length=12)
+        t.set_gp_params(num_selfplay=500, max_length=12)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None

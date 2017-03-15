@@ -815,7 +815,7 @@ def material_score(fen):
     return scores
 
 def main():
-    pass
+    print flip_board("q5k1/6p1/4RP2/3P1Q1K/2n1pp2/8/3nr3/1N3Bb1 w - - 0 1");
 
 
 if __name__ == '__main__':

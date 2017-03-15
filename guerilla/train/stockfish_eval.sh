@@ -10,11 +10,12 @@ castling=$3
 enpassant=$4
 half_move=$5
 full_move=$6
-seconds=${7:-3}
+seconds=${7:-10}
 binary=${8:-linux}
 threads=${9:-12}
 memory=${10:-1024}
-max_depth=${11}
+max_depth=9
+echo $seconds
 (
 echo "setoption name Hash value $memory" ;
 echo "setoption name threads value $threads" ;

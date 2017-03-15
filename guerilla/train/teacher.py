@@ -13,6 +13,7 @@ import yaml
 from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
+import guerilla.play.game as g
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
 from guerilla.players import *
@@ -114,7 +115,7 @@ class Teacher:
         # Self-play parameters
         self.sp_num = 1  # The number of games to play against itself
         self.sp_length = 12  # How many moves are included in game playing
-        self.opponent = guerilla
+        self.opponent = Stockfish("Magikarp")
 
         # STS Evaluation Parameters
         self.sts_on = False  # Whether STS evaluation occurs during training
@@ -871,7 +872,7 @@ class Teacher:
 
         self.nn.add_to_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
 
-    def td_leaf(self, game, restrict_td=True):
+    def td_leaf(self, game, restrict_td=True, only_own_boards=None):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -882,10 +883,14 @@ class Teacher:
                     If True then positive temporal difference values (dt) are set to 0 IF the opponents move(s) were
                     not predicted. This can be useful as positive (dt) values which were not predicted may indicate
                     that the opponent made a blunder.
+                only_boards[char]:
+                    'w' or 'b' or None. If 'w' or 'b', only update (use gradients of) positions
+                    where the next move is white or black respectively. If None, update on all boards
         """
 
         num_boards = len(game)
-        game_info = [{'value': None, 'gradient': None, 'move': None} for _ in range(num_boards)]
+        game_info = [{'value': None,'gradient': None, 'move': None}
+                      for _ in range(num_boards)]
 
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
@@ -922,9 +927,12 @@ class Teacher:
         # self.guerilla.search.ab_prune = True
 
         for t in range(num_boards):
+            if only_own_boards == game[t].split(' ')[1]:
+                continue
             td_val = 0
             for j in range(t, num_boards - 1):
                 # Calculate temporal difference
+                # TODO see if its worth memoizing this
                 dt = game_info[j + 1]['value'] - game_info[j]['value']
 
                 if restrict_td:
@@ -1013,18 +1021,29 @@ class Teacher:
                 fen = dh.flip_board(fen)
 
             # Play a game against yourself
-            board = chess.Board(fen)
-            game_fens = [board.fen()]
-            for _ in range(max_len):
-                # Check if game finished
-                if board.is_game_over(claim_draw=True):
-                    break
+            players = [None] * 2
 
-                # Play move
-                board.push(self.opponent.get_move(board))
+            guerilla_player = random.randint(0,1)
+            players[guerilla_player] = self.guerilla
+            opponent_player = (guerilla_player + 1) % 2
+            players[opponent_player] = self.opponent
+            game = g.Game(players, use_gui=False)
+            game.set_board(fen)
 
-                # Store fen
-                game_fens.append(board.fen())
+            turn_idx = 0 if fen.split()[1] == 'w' else 1
+
+            game_fens = game.play(turn_idx, moves_left=max_len, verbose=False)
+            # [board.fen()]
+            # for _ in range(max_len):
+            #     # Check if game finished
+            #     if board.is_game_over(claim_draw=True):
+            #         break
+
+            #     # Play move
+            #     board.push(self.opponent.get_move(board))
+
+            #     # Store fen
+            #     game_fens.append(board.fen())
 
             # Send game for TD-leaf training
             if self.verbose:
@@ -1083,17 +1102,17 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 1}) as g:
-        t = Teacher(g, training_mode='adagrad')
+    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2}, load_file='4654.p') as g:
+        t = Teacher(g, td_training_mode='adagrad')
         # print eval_sts(g)
         t.rnd_seed_shuffle = 123456
         t.set_bootstrap_params(num_bootstrap=2500000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=500, max_length=12)
+        t.set_gp_params(num_selfplay=500, max_length=-1)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=15 * 3600)
+        t.run(['train_gameplay'], training_time=run_time)
         print eval_sts(g)
 
 

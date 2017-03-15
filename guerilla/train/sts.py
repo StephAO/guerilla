@@ -2,6 +2,7 @@
 
 import time
 import chess
+import sys
 from pkg_resources import resource_filename
 from guerilla.players import *
 
@@ -66,6 +67,7 @@ def eval_sts(player, mode="strategy", step_size=1):
             count += 1
             if (i % (length / (100.0 / print_perc)) - 100.0 / length) < 0:
                 print "%d%% " % (i / (length / 100.0)),
+                sys.stdout.flush()
 
             board, move_scores = parse_epd(epd)
 

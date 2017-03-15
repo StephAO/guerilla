@@ -62,6 +62,48 @@ class Game:
             raise ValueError('Error: one of the players has an invalid colour. ' +
                              'Player 1: %s, Player 2: %s' % (self.players[0].colour, self.players[1].colour))
 
+    def set_board(self, fen):
+        self.board = chess.Board(fen)
+
+    def play(self, curr_player_idx, game_pgn=None, verbose=True, moves_left=-1):
+        game_fens = []
+
+        # Start game
+        while not self.board.is_game_over(claim_draw=True) and moves_left != 0:
+            if self.use_gui:
+                self.gui.draw(self.board)
+            elif verbose:
+                Game.pretty_print_board(self.board)
+
+            # Get move
+            st = time.time()
+            move = self.players[curr_player_idx].get_move(self.board)
+            self.players[curr_player_idx].time_taken += time.time() - st
+
+            while move not in self.board.legal_moves:
+                if self.use_gui:
+                    self.gui.print_msg("Error: Move is not legal, try again")
+                else:
+                    print "Error: Move is not legal"
+                move = self.players[curr_player_idx].get_move(self.board)
+            self.board.push(move)
+            if self.use_gui:
+                self.gui.print_msg("%s played %s" % (self.players[curr_player_idx].name, move))
+            elif verbose:
+                print "%s played %s" % (self.players[curr_player_idx].name, move)
+
+            if game_pgn is not None:
+                game_pgn.add_main_variation(move)
+                game_pgn = game_pgn.variation(0)
+            else:
+                game_fens.append(self.board.fen())
+
+            # Switch sides
+            curr_player_idx = (curr_player_idx + 1) % 2
+            moves_left -= 1
+
+        return game_fens
+
     def start(self):
         """ 
             Run n games. For each game players take turns until game is over.
@@ -94,7 +136,7 @@ class Game:
                 [p.new_game() for p in self.players]
 
                 player1_turn = self.players[0].colour == 'white'
-                curr_player_idx = 0 if player1_turn else 0
+                curr_player_idx = 0 if player1_turn else 1
 
                 game_pgn = chess.pgn.Game()
                 game_pgn.headers["White"] = self.players[curr_player_idx].name
@@ -104,33 +146,7 @@ class Game:
                 game_pgn.headers["Round"] = game
                 game_pgn.headers["Site"] = "My PC"
 
-                # Start game
-                while not self.board.is_game_over(claim_draw=True):
-                    if self.use_gui:
-                        self.gui.draw(self.board)
-                    else:
-                        Game.pretty_print_board(self.board)
-
-                    # Get move
-                    st = time.time()
-                    move = self.players[curr_player_idx].get_move(self.board)
-                    self.players[curr_player_idx].time_taken += time.time() - st
-                    game_pgn.add_main_variation(move)
-                    game_pgn = game_pgn.variation(0)
-                    while move not in self.board.legal_moves:
-                        if self.use_gui:
-                            self.gui.print_msg("Error: Move is not legal, try again")
-                        else:
-                            print "Error: Move is not legal"
-                        move = self.players[curr_player_idx].get_move(self.board)
-                    self.board.push(move)
-                    if self.use_gui:
-                        self.gui.print_msg("%s played %s" % (self.players[curr_player_idx].name, move))
-                    else:
-                        print "%s played %s" % (self.players[curr_player_idx].name, move)
-
-                    # Switch sides
-                    curr_player_idx = (curr_player_idx + 1) % 2
+                self.play(curr_player_idx, game_pgn=game_pgn)
 
                 result = self.board.result(claim_draw=True)
                 if result == '1-0':
@@ -206,7 +222,7 @@ def main():
     players = [None] * 2
     if choose_players == 'd':
 
-        players[0] = Guerilla('Harambe', search_type='complementmax', load_file='default.p')
+        players[0] = Guerilla('Harambe', search_type='complementmax', load_file='4654.p')
         players[1] = Human('You')
 
     elif choose_players == 'c':

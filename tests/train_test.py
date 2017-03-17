@@ -164,12 +164,12 @@ def training_test(nn_input_type, verbose=False):
                                 test=True, verbose=verbose,
                                 hp_load_file='training_test.yaml')
                     if t_m == 'adagrad':
-                        t.set_hyper_params(LEARNING_RATE=0.00001)
+                        t.hp['LEARNING_RATE'] = 0.00001
                     elif t_m == 'adadelta':
                         continue  # TODO remove when adadelta is fully implemented
-                        t.set_hyper_params(LEARNING_RATE=0.00001)
+                        t.hp['LEARNING_RATE'] = 0.00001
                     elif t_m == 'bootstrap':
-                        t.set_hyper_params(LEARNING_RATE=0.00001)
+                        t.hp['LEARNING_RATE'] = 0.00001
 
                     t.set_bootstrap_params(num_bootstrap=10500)  # 488037
                     t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
@@ -299,8 +299,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     # Train and Test Guerilla
     with Guerilla('Harambe', 'w', nn_params={'NN_INPUT_TYPE': nn_input_type}, search_params={'max_depth': 1}) as g:
         # Train
-        t = Teacher(g, bootstrap_training_mode='adagrad')
-        t.set_hyper_params(**hp)
+        t = Teacher(g, bootstrap_training_mode='adagrad', hp=hp)
         t.train_bootstrap(fens, values)
 
         # Run STS Test
@@ -399,8 +398,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
         with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}) as g:
             # Train
-            t = Teacher(g, bootstrap_training_mode='gradient_descent', verbose=verbose)
-            t.set_hyper_params(**hp)
+            t = Teacher(g, bootstrap_training_mode='gradient_descent', verbose=verbose, hp=hp)
             t.train_bootstrap(fens, values)
 
             # Evaluate
@@ -475,8 +473,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run action
         with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type}) as g:
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose)
-            t.set_hyper_params(**hp)
+            t = Teacher(g, test=True, verbose=verbose, hp=hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
             t.set_gp_params(num_selfplay=3, max_length=5)
@@ -499,8 +496,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run resume
         with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}) as g:
-            t = Teacher(g, test=True, verbose=verbose)
-            t.set_hyper_params(**hp)
+            t = Teacher(g, test=True, verbose=verbose, hp=hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
 
             # Run

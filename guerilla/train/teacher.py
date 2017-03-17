@@ -32,7 +32,7 @@ class Teacher:
     def __init__(self, guerilla, hp_load_file=None,
                  bootstrap_training_mode='adagrad',
                  td_training_mode='gradient_descent',
-                 test=False, verbose=True, **hp):
+                 test=False, verbose=True, hp=None):
         """
             Initialize teacher, sets member variables.
 
@@ -47,7 +47,7 @@ class Teacher:
                     Set to true if its a test. If true, doesn't save weights.
                 verbose [Bool]:
                     If true, teacher prints more output.
-                **hp[**kwargs]:
+                hp [Dict]:
                     Hyper parameters in keyword format. Keyword must match hyper
                     parameter name. See self._set_hyper_params for valid hyper
                     parameters. Hyper parameters defined in hp will overwrite
@@ -94,8 +94,9 @@ class Teacher:
         self.hp = {}
         if hp_load_file is None:
             hp_load_file = 'default.yaml'
-        self.set_hyper_params_from_file(hp_load_file)
-        self.set_hyper_params(**hp)
+        self._set_hyper_params_from_file(hp_load_file)
+        if hp is not None:
+            self._set_hyper_params(hp)
 
         self.training_mode = bootstrap_training_mode
         self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
@@ -243,7 +244,7 @@ class Teacher:
 
         return fens, true_values
 
-    def set_hyper_params_from_file(self, file):
+    def _set_hyper_params_from_file(self, file):
         """
             Updates hyper parameters from a yaml file.
             Will only affect hyper parameters that are provided. Unspecified
@@ -257,7 +258,7 @@ class Teacher:
         with open(filepath, 'r') as yaml_file:
             self.hp.update(yaml.load(yaml_file))
 
-    def set_hyper_params(self, **hyper_parameters):
+    def _set_hyper_params(self, hyper_parameters):
         """
             Updates hyper parameters from arguments.
             Will only affect hyper parameters that are provided. Unspecified
@@ -889,8 +890,8 @@ class Teacher:
         """
 
         num_boards = len(game)
-        game_info = [{'value': None,'gradient': None, 'move': None}
-                      for _ in range(num_boards)]
+        game_info = [{'value': None, 'gradient': None, 'move': None}
+                     for _ in range(num_boards)]
 
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
@@ -1023,7 +1024,8 @@ class Teacher:
             # Play a game against yourself
             players = [None] * 2
 
-            guerilla_player = random.randint(0,1)
+            # Randomly select white player
+            guerilla_player = random.randint(0, 1)
             players[guerilla_player] = self.guerilla
             opponent_player = (guerilla_player + 1) % 2
             players[opponent_player] = self.opponent
@@ -1102,17 +1104,19 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2}, load_file='4654.p') as g:
+    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2},
+                  load_file='4790.p') as g, Stockfish('SF', time_limit=1) as sf_player:
+        print eval_sts(g)
         t = Teacher(g, td_training_mode='adagrad')
         # print eval_sts(g)
         t.rnd_seed_shuffle = 123456
         t.set_bootstrap_params(num_bootstrap=2500000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=500, max_length=-1)
+        t.set_gp_params(num_selfplay=500, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=run_time)
+        t.run(['train_gameplay'], training_time=8 * 3600)
         print eval_sts(g)
 
 

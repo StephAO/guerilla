@@ -9,7 +9,7 @@ from guerilla.players import *
 sts_strat_files = ['activity_of_king', 'advancement_of_abc_pawns', 'advancement_of_fgh_pawns', 'bishop_vs_knight',
                    'center_control', 'knight_outposts', 'offer_of_simplification', 'open_files_and_diagonals',
                    'pawn_play_in_the_center', 'queens_and_rooks_to_the_7th_rank',
-                   'recapturing', 'simplification', 'square_vacancy', 'undermining']
+                   'recapturing', 'simplification', 'square_vacancy', 'undermining', 'avoid_pointless_exchange']
 
 sts_piece_files = ['pawn', 'bishop', 'rook', 'knight', 'queen', 'king']
 
@@ -173,9 +173,9 @@ def get_epds(filenames):
 
 
 def sparse_test():
-    with Guerilla('Harambe', 'w', load_file='mm_million_fix.p',
-                  search_type='iterativedeepening',
-                  search_params={'time_limit': 3}) as g:
+    with Guerilla('Harambe', 'w', load_file='4790.p',
+                  search_type='complementmax',
+                  search_params={'max_depth': 1}) as g:
         # g.search.order_moves = True
         # g.search.order_function = material_balance
         # print eval_sts(g, mode=sts_piece_files)

@@ -428,7 +428,7 @@ class IterativeDeepening(Search):
     """
     def __init__(self, evaluation_function, time_limit=10,
                  max_depth=None, h_prune=False, prune_perc=0.0,
-                 ab_prune=True, verbose=True):
+                 ab_prune=True, verbose=True, use_partial_search=False):
 
         """
             Constructor
@@ -445,6 +445,8 @@ class IterativeDeepening(Search):
                     Percent of nodes to prune for heuristic prune
                 ab_prune[bool]:
                     Alpha-beta pruning. Same results on or off, only set to off for td training
+                use_partial_search [Bool]:
+                    Whether or not to use partial search results (i.e. when a timeout occurs during DFS).
         """
         super(IterativeDeepening, self).__init__(evaluation_function)
 
@@ -458,6 +460,8 @@ class IterativeDeepening(Search):
         self.ab_prune = ab_prune
         self.order_fn_fast = material_balance  # The move ordering function to use pre-Guerilla evaluation
         self.order_moves = True
+        self.is_partial_search = False  # Marks if the last DFS call was a partial search
+        self.use_partial_search = use_partial_search
 
         # Holds the Killer Moves by depth. Each Entry is (set of moves, sorted array of (score, moves)).
         self.killer_table = [{'moves': set(), 'scores': list()}]
@@ -504,6 +508,8 @@ class IterativeDeepening(Search):
         self.time_left = (time.time() - self.start_time) <= self.time_limit - self.buff_time
 
         if node.depth >= self.depth_limit or not node.expand or not self.time_left:
+            if not self.time_left:
+                self.is_partial_search = True
             return node.value, None, node.fen
         else:
             # Check if a new killer table entry should be created
@@ -691,8 +697,11 @@ class IterativeDeepening(Search):
                 (self.max_depth is None or self.depth_limit < self.max_depth):
             if self.h_prune:
                 self.prune(self.root)
+            new_results = self.DLS(self.root)
+            if not self.is_partial_search or (self.is_partial_search and self.use_partial_search):
+                score, best_move, leaf_board = new_results
+            self.is_partial_search = False
             self.depth_limit += 1
-            score, best_move, leaf_board = self.DLS(self.root)
 
         return score, best_move, leaf_board
 

@@ -11,18 +11,14 @@ import chess.uci
 class Player:
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, colour=None):
+    def __init__(self, name):
         """
         Initializes the Player abstract class.
         Input:
             name [String]
                 Name of the player.
-            colour [String]
-                Colour of the player. White or Black.
         """
         self.name = name
-        self._colour = colour
-        self.time_taken = 0
 
     @property
     def colour(self):
@@ -74,7 +70,7 @@ class Guerilla(Player):
 
     def __init__(self, name, colour=None, search_type='complementmax', load_file=None,
                  hp_load_file=None, seed=None, verbose=True, nn_params=None, search_params=None):
-        super(Guerilla, self).__init__(name, colour)
+        super(Guerilla, self).__init__(name)
 
         self.nn = NeuralNet(load_file=load_file, hp_load_file=hp_load_file, seed=seed,
                             verbose=verbose, hp=nn_params)
@@ -104,7 +100,7 @@ class Guerilla(Player):
 
 class Human(Player):
     def __init__(self, name, colour=None):
-        super(Human, self).__init__(name, colour)
+        super(Human, self).__init__(name)
         self.gui = None
 
     def __enter__(self):
@@ -167,7 +163,7 @@ else:
                 time_limit [Integer]
                     The time limit for each move search in SECONDS.
             """
-            super(Sunfish, self).__init__(name, colour)
+            super(Sunfish, self).__init__(name)
             self.search = sunfish.Searcher()
             self.time_limit = time_limit
 
@@ -194,7 +190,7 @@ class Stockfish(Player):
             time_limit [Integer]
                 The time limit for each move search in SECONDS.
         """
-        super(Stockfish, self).__init__(name, colour)
+        super(Stockfish, self).__init__(name)
         self.time_limit = time_limit * 1000  # convert to milliseconds
 
         # Setup chess engine

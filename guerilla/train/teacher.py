@@ -1022,19 +1022,17 @@ class Teacher:
                 fen = dh.flip_board(fen)
 
             # Play a game against yourself
-            players = [None] * 2
+            players = {'w': None, 'b': None}
 
             # Randomly select white player
-            guerilla_player = random.randint(0, 1)
+            guerilla_player = random.choice(['w', 'b'])
             players[guerilla_player] = self.guerilla
-            opponent_player = (guerilla_player + 1) % 2
+            opponent_player = 'w' if guerilla_player == 'b' else 'b'
             players[opponent_player] = self.opponent
             game = g.Game(players, use_gui=False)
             game.set_board(fen)
 
-            turn_idx = 0 if fen.split()[1] == 'w' else 1
-
-            game_fens = game.play(turn_idx, moves_left=max_len, verbose=False)
+            game_fens, _ = game.play(dh.strip_fen(fen, keep_idxs=1), moves_left=max_len, verbose=False)
             # [board.fen()]
             # for _ in range(max_len):
             #     # Check if game finished
@@ -1104,19 +1102,20 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', colour='w', search_params={'max_depth': 2},
+    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 1},
                   load_file='4790.p') as g, Stockfish('SF', time_limit=1) as sf_player:
-        print eval_sts(g)
         t = Teacher(g, td_training_mode='adagrad')
         # print eval_sts(g)
         t.rnd_seed_shuffle = 123456
         t.set_bootstrap_params(num_bootstrap=2500000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=500, max_length=-1, opponent=sf_player)
+        t.set_gp_params(num_selfplay=1000, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
+        t.run(['train_gameplay'], training_time=9 * 3600)
+        print eval_sts(g)
+        g.search.max_depth = 2
         print eval_sts(g)
 
 

@@ -34,7 +34,7 @@ def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
 
     for i in range(max_depth + 1):
         # Create Guerilla with Random weights:
-        with Guerilla('curious_george', 'w', verbose=False, seed=rnd_seed, search_params={'max_depth': i}) as g:
+        with Guerilla('curious_george', verbose=False, seed=rnd_seed, search_params={'max_depth': i}) as g:
 
             # Time multiple repetitions
             avg_time = 0.0
@@ -81,7 +81,7 @@ def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
         num_visits = None
         time_taken = num_evals = cache_hits = depth_reached = 0
         for _ in range(num_rep):
-            with Guerilla('curious_george', 'w', search_type=st, seed=rnd_seed, verbose=False, search_params=sp) as g:
+            with Guerilla('curious_george', search_type=st, seed=rnd_seed, verbose=False, search_params=sp) as g:
                 # Time multiple repetitions
                 start_time = time.time()
                 g.get_move(board)
@@ -119,7 +119,7 @@ def nn_evaluation_bench():
     for input_type in input_types:
         for num_fc in xrange(1, 5):
             start_time = time.time()
-            with Guerilla('curious_george', 'w', verbose=False,
+            with Guerilla('curious_george', verbose=False,
                           nn_params={'NUM_FC': num_fc, 'NN_INPUT_TYPE': input_type}) as g:
                 for _ in xrange(100):
                     g.nn.evaluate(fen)

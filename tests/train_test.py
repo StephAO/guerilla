@@ -155,7 +155,7 @@ def training_test(nn_input_type, verbose=False):
             success = True
             error_msg = ""
             try:
-                with Guerilla('Harambe', 'w', verbose=verbose,
+                with Guerilla('Harambe', verbose=verbose,
                               nn_params={'NN_INPUT_TYPE': nn_input_type, 'USE_CONV': use_conv},
                               search_params={'max_depth': 1}) as g:
 
@@ -297,7 +297,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     values = values[:len(fens)]
 
     # Train and Test Guerilla
-    with Guerilla('Harambe', 'w', nn_params={'NN_INPUT_TYPE': nn_input_type}, search_params={'max_depth': 1}) as g:
+    with Guerilla('Harambe', nn_params={'NN_INPUT_TYPE': nn_input_type}, search_params={'max_depth': 1}) as g:
         # Train
         t = Teacher(g, bootstrap_training_mode='adagrad', hp=hp)
         t.train_bootstrap(fens, values)
@@ -395,7 +395,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     err_msg = ''
     for i in range(num_attempt):
         score = 0
-        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}) as g:
             # Train
             t = Teacher(g, bootstrap_training_mode='gradient_descent', verbose=verbose, hp=hp)
@@ -471,7 +471,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run action
-        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type}) as g:
+        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type}) as g:
             g.search.max_depth = 1
             t = Teacher(g, test=True, verbose=verbose, hp=hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
@@ -494,7 +494,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run resume
-        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}) as g:
             t = Teacher(g, test=True, verbose=verbose, hp=hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
@@ -579,7 +579,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
     for td_training_mode in ['gradient_descent', 'adagrad']:
 
-        with Guerilla('Harambe', 'w', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 0}, seed=123) as g:
 
             # Due to differences in initialization distribution

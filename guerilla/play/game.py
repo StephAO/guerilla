@@ -30,12 +30,10 @@ class Game:
                 [player1, player2] [Class that derives Abstract Player Class]
         """
 
-        assert all(isinstance(p, Player) for p in players)
+        assert all(isinstance(p, Player) for p in players.itervalues())
 
         # Initialize players
         self.players = players
-        self.players[0].colour = 'white'
-        self.players[1].colour = 'black'
 
         # Initialize board
         self.board = chess.Board()
@@ -43,30 +41,28 @@ class Game:
         # Initialize statistics
         self.num_games = num_games
         self.data = dict()
-        self.data['wins'] = [0, 0]
+        self.data['wins'] = {p.name: 0 for p in players.itervalues()}
         self.data['draws'] = 0
 
-        self.use_gui = use_gui or any(isinstance(p, Human) for p in players)
+        self.use_gui = use_gui or any(isinstance(p, Human) for p in players.itervalues())
         # Initialize gui
         if use_gui:
             self.gui = ChessGUI()
-            for p in players:
+            for p in players.itervalues():
                 if isinstance(p, Human):
                     p.gui = self.gui
 
     def swap_colours(self):
-        """ Ensure that there is currently a white player and a black player then swaps their colors"""
-        if all(colour in [p.colour for p in self.players] for colour in ['white', 'black']):
-            self.players[0].colour, self.players[1].colour = self.players[1].colour, self.players[0].colour
-        else:
-            raise ValueError('Error: one of the players has an invalid colour. ' +
-                             'Player 1: %s, Player 2: %s' % (self.players[0].colour, self.players[1].colour))
+        """ Swap colours."""
+        self.players['w'], self.players['b'] = self.players['b'], self.players['w']
 
     def set_board(self, fen):
         self.board = chess.Board(fen)
 
-    def play(self, curr_player_idx, game_pgn=None, verbose=True, moves_left=-1):
+    def play(self, curr_player, game_pgn=None, verbose=True, moves_left=-1):
         game_fens = []
+
+        time_taken = {'w': 0, 'b': 0}
 
         # Start game
         while not self.board.is_game_over(claim_draw=True) and moves_left != 0:
@@ -77,20 +73,20 @@ class Game:
 
             # Get move
             st = time.time()
-            move = self.players[curr_player_idx].get_move(self.board)
-            self.players[curr_player_idx].time_taken += time.time() - st
+            move = self.players[curr_player].get_move(self.board)
+            time_taken[curr_player] += time.time() - st
 
             while move not in self.board.legal_moves:
                 if self.use_gui:
                     self.gui.print_msg("Error: Move is not legal, try again")
                 else:
                     print "Error: Move is not legal"
-                move = self.players[curr_player_idx].get_move(self.board)
+                move = self.players[curr_player].get_move(self.board)
             self.board.push(move)
             if self.use_gui:
-                self.gui.print_msg("%s played %s" % (self.players[curr_player_idx].name, move))
+                self.gui.print_msg("%s played %s" % (self.players[curr_player].name, move))
             elif verbose:
-                print "%s played %s" % (self.players[curr_player_idx].name, move)
+                print "%s played %s" % (self.players[curr_player].name, move)
 
             if game_pgn is not None:
                 game_pgn.add_main_variation(move)
@@ -99,60 +95,58 @@ class Game:
                 game_fens.append(self.board.fen())
 
             # Switch sides
-            curr_player_idx = (curr_player_idx + 1) % 2
+            curr_player = 'w' if curr_player == 'b' else 'b'
             moves_left -= 1
 
-        return game_fens
+        return game_fens, time_taken
 
     def start(self):
         """ 
             Run n games. For each game players take turns until game is over.
             Note: draws are claimed automatically asap
         """
-        with self.players[0], self.players[1]:
+        with self.players['w'], self.players['b']:
 
             game = 0
 
-            while True:
+            while game < self.num_games:
 
                 # Print info.
-                print "Game %d - %s [%s] (%s) VS: %s [%s] (%s)" % (game + 1, self.players[0].name,
-                                                                   type(self.players[0]).__name__,
-                                                                   self.players[0].colour,
-                                                                   self.players[1].name,
-                                                                   type(self.players[1]).__name__,
-                                                                   self.players[1].colour)
+                print "Game %d - %s [%s] (White) VS: %s [%s] (Black)" % (game + 1,
+                                                                         self.players['w'].name,
+                                                                         type(self.players['w']).__name__,
+                                                                         self.players['b'].name,
+                                                                         type(self.players['b']).__name__)
                 if self.use_gui:
                     self.gui.print_msg("Game %d:" % (game + 1))
-                    self.gui.print_msg("%s [%s] (%s)" % (self.players[0].name,
-                                                         type(self.players[0]).__name__, self.players[0].colour))
+                    self.gui.print_msg("%s [%s] (White)" % (self.players['w'].name,
+                                                            type(self.players['w']).__name__))
                     self.gui.print_msg("VS:")
-                    self.gui.print_msg("%s [%s] (%s)" % (self.players[1].name,
-                                                         type(self.players[1]).__name__, self.players[1].colour))
+                    self.gui.print_msg("%s [%s] (Black)" % (self.players['b'].name,
+                                                            type(self.players['b']).__name__))
                 # Reset board
                 self.board.reset()
 
                 # Signal to players that a new game is being played.
-                [p.new_game() for p in self.players]
+                [p.new_game() for p in self.players.itervalues()]
 
-                player1_turn = self.players[0].colour == 'white'
-                curr_player_idx = 0 if player1_turn else 1
+                curr_player_idx = 'w'
 
                 game_pgn = chess.pgn.Game()
-                game_pgn.headers["White"] = self.players[curr_player_idx].name
-                game_pgn.headers["Black"] = self.players[(curr_player_idx + 1) % 2].name
+                game_pgn.headers["White"] = self.players['w'].name
+                game_pgn.headers["Black"] = self.players['b'].name
                 game_pgn.headers["Date"] = time.strftime("%Y.%m.%d")
                 game_pgn.headers["Event"] = "Test"
                 game_pgn.headers["Round"] = game
                 game_pgn.headers["Site"] = "My PC"
 
-                self.play(curr_player_idx, game_pgn=game_pgn)
+                _, time_taken = self.play(curr_player_idx, game_pgn=game_pgn)
 
                 result = self.board.result(claim_draw=True)
                 if result == '1-0':
-                    winner = self.players[0] if self.players[0].colour == 'white' else self.players[1]
+                    winner = self.players['w']
                 elif result == '0-1':
-                    winner = self.players[1] if self.players[0].colour == 'white' else self.players[0]
+                    winner = self.players['b']
                 else:
                     winner = None
                     self.data['draws'] += 1
@@ -161,20 +155,19 @@ class Game:
                         print "Draw."                        
 
                 if winner is not None:
-                    winner_idx = (curr_player_idx + 1) % 2
-                    self.data['wins'][winner_idx] += 1
+                    self.data['wins'][winner.name] += 1
                     if self.use_gui:
                         self.gui.print_msg("%s wins." % winner.name)
                         print "%s wins." % winner.name
 
-                for p in self.players:
-                    print "Player %s took %f seconds in total" % (p.name, p.time_taken)
+                for color, p in self.players.iteritems():
+                    print "Player %s took %f seconds in total" % (p.name, time_taken[color])
                     p.time_taken = 0
 
                 game_pgn = game_pgn.root()
                 game_pgn.headers["Result"] = result
-                with open(resource_filename('guerilla', 'data/played_games/') + self.players[0].name + '_' +
-                            self.players[1].name + '_' + str(game) + '.pgn', 'w') as pgn:
+                with open(resource_filename('guerilla', 'data/played_games/') + self.players['w'].name + '_' +
+                                  self.players['b'].name + '_' + str(game) + '.pgn', 'w') as pgn:
                     try:
                         pgn.write(str(game_pgn))
                     except AttributeError as e:
@@ -219,7 +212,7 @@ class Game:
 def main():
     num_inputs = len(sys.argv)
     choose_players = raw_input("Choose players (c) or use defaults (d): ")
-    players = [None] * 2
+    players = {'w': None, 'b': None}
     if choose_players == 'd':
 
         players[0] = Guerilla('Harambe', search_type='complementmax', load_file='4654.p')

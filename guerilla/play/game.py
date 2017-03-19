@@ -23,7 +23,7 @@ class Game:
     except NameError:
         pass
 
-    def __init__(self, players, num_games=None, use_gui=True):
+    def __init__(self, players, num_games=1, use_gui=True):
         """ 
             Note: p1 is white, p2 is black
             Input:

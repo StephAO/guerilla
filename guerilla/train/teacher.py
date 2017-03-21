@@ -928,7 +928,9 @@ class Teacher:
         # self.guerilla.search.ab_prune = True
 
         for t in range(num_boards):
-            if only_own_boards == game[t].split(' ')[1]:
+            color = dh.strip_fen(game[t],
+                                 keep_idxs=1)  # color of the board which is being updated (who's gradient is being used)
+            if only_own_boards is not None and only_own_boards != color:
                 continue
             td_val = 0
             for j in range(t, num_boards - 1):
@@ -937,11 +939,13 @@ class Teacher:
                 dt = game_info[j + 1]['value'] - game_info[j]['value']
 
                 if restrict_td:
-                    # If not predicted and > 0 then set to 0
                     predicted_board = chess.Board(game[j])
                     predicted_board.push(game_info[j]['move'])
                     if predicted_board.fen() != game[j + 1]:
-                        dt = min(dt, 0)
+                        if color == 'w':
+                            dt = min(dt, 0)
+                        else:
+                            dt = max(dt, 0)
 
                 # Add to sum
                 td_val += math.pow(self.hp['TD_DISCOUNT'], j - t) * dt
@@ -1048,7 +1052,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on game %d of %d..." % (i + 1, self.sp_num)
-            self.td_leaf(game_fens)
+            self.td_leaf(game_fens, only_own_boards=guerilla_player)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1083,7 +1087,6 @@ class Teacher:
 
         print "Intervals: " + ",".join(map(str, [(x + 1) * self.sts_interval for x in range(len(scores))]))
         print "Scores: " + ",".join(map(str, score_out))
-
 
 def main():
     run_time = 0

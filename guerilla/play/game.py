@@ -60,7 +60,7 @@ class Game:
         self.board = chess.Board(fen)
 
     def play(self, curr_player, game_pgn=None, verbose=True, moves_left=-1):
-        game_fens = []
+        game_fens = [self.board.fen()]
 
         time_taken = {'w': 0, 'b': 0}
 

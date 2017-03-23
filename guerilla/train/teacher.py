@@ -5,6 +5,7 @@ import random
 import sys
 import time
 from operator import add
+import warnings
 
 import chess
 import chess.pgn
@@ -901,8 +902,8 @@ class Teacher:
             raise ValueError("Invalid td_leaf input combination! If no_leaf is True then restrict_td must be False.")
 
         if only_own_boards is None and restrict_td:
-            raise Warning(
-                "Since restrict_td=True, Guerilla will not learn from good Stockfish moves unless it predicts it.")
+            warnings.warn(
+                "Since restrict_td=True, Guerilla will not learn from good opponent moves unless they are predicted.")
 
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
@@ -960,14 +961,16 @@ class Teacher:
                 dt = game_info[j + step_size]['value'] - game_info[j]['value']
 
                 if restrict_td:
-                    predicted_board = chess.Board(game[j + (step_size - 1)])  # start at opponents board
-                    predicted_board.push(game_info[j + (step_size - 1)]['move'])  # apply move
-                    if predicted_board.fen() != game[j + step_size]:  # Check if move was predicted correctly
-                        # If not then minimize blunder
-                        if color == 'w':
-                            dt = min(dt, 0)
-                        else:
-                            dt = max(dt, 0)
+                    for i in range(step_size):
+                        # Check that all moves to next dt board are correctly predicted
+                        predicted_board = chess.Board(game[j + i])
+                        predicted_board.push(game_info[j + i]['move'])
+                        if predicted_board.fen() != game[j + i + 1]:
+                            # If not then minimize blunder
+                            if color == 'w':
+                                dt = min(dt, 0)
+                            else:
+                                dt = max(dt, 0)
 
                 # Add to sum
                 td_val += math.pow(self.hp['TD_DISCOUNT'], j - t) * dt
@@ -1069,7 +1072,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on game %d of %d..." % (i + 1, self.sp_num)
-            self.td_leaf(game_fens, no_leaf=True, restrict_td=False)  # only_own_boards=guerilla_player)
+            self.td_leaf(game_fens)  # only_own_boards=guerilla_player)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1125,18 +1128,17 @@ def main():
     with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 1},
                   load_file='4790.p') as g, Stockfish('SF', time_limit=1) as sf_player:
         t = Teacher(g, td_training_mode='adagrad')
-        # print eval_sts(g)
         t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=2500000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=3000000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=100, max_length=-1, opponent=sf_player)
+        t.set_gp_params(num_selfplay=50, max_length=5, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=0.5 * 3600)
-        print eval_sts(g)
-        g.search.max_depth = 2
-        print eval_sts(g)
+        t.run(['train_gameplay'], training_time=8 * 3600)
+        # print eval_sts(g)
+        # g.search.max_depth = 2
+        # print eval_sts(g)
 
 
 if __name__ == '__main__':

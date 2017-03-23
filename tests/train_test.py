@@ -657,7 +657,6 @@ def td_checkmate_test(max_iter=100, verbose=False):
     data = [move_test('AVOID', 'r2qkbnr/ppp2ppp/2np4/4N3/2B1P1b1/2N5/PPPP1PPP/R1BQK2R b KQkq - 0 5', 'b',
                       chess.Move.from_uci('g4e4'), chess.Move.from_uci('c6e5')),
             move_test('FORCE', 'r2qkbnr/ppp2ppp/2np4/4N3/2B1P3/2N5/PPPP1PPP/R1BbK2R w KQkq - 0 6', 'b',
-                      # TODO: Maybe white
                       chess.Move.from_uci('g4e4'), chess.Move.from_uci('c4f7'))
             ]
 

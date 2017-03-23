@@ -13,7 +13,7 @@ import yaml
 from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
-import guerilla.play.game as g
+from guerilla.play.game import Game
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
 from guerilla.players import *
@@ -453,8 +453,7 @@ class Teacher:
         elif action == 'train_gameplay':
             if self.verbose:
                 print "Resuming gameplay training..."
-            self.train_gameplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
-                                sts_scores=state['sts_scores'])
+            self.train_gameplay(start_idx=state['start_idx'], sts_scores=state['sts_scores'])
         elif action == 'load_and_resume':
             raise ValueError("Error: Trying to resume on a resume call - This shouldn't happen.")
         else:
@@ -873,7 +872,7 @@ class Teacher:
 
         self.nn.add_to_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
 
-    def td_leaf(self, game, restrict_td=True, only_own_boards=None):
+    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -887,11 +886,23 @@ class Teacher:
                 only_boards[char]:
                     'w' or 'b' or None. If 'w' or 'b', only update (use gradients of) positions
                     where the next move is white or black respectively. If None, update on all boards
+                no_leaf [Boolean]
+                    If True then uses standard TD instead of TD-Leaf. False by default.
+                    If True then restrict_td must be False since with depth 0 there is no predicted move.
+                full_move [Boolean]
+                    If True then trains using full moves instead of half moves. False by default.
         """
 
         num_boards = len(game)
-        game_info = [{'value': None, 'gradient': None, 'move': None}
+        game_info = [{'value': None, 'gradient': None, 'move': None, 'leaf_board': None}
                      for _ in range(num_boards)]
+
+        if no_leaf and restrict_td:
+            raise ValueError("Invalid td_leaf input combination! If no_leaf is True then restrict_td must be False.")
+
+        if only_own_boards is None and restrict_td:
+            raise Warning(
+                "Since restrict_td=True, Guerilla will not learn from good Stockfish moves unless it predicts it.")
 
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
@@ -901,8 +912,18 @@ class Teacher:
         # print "Calculating TD-Leaf values for move ",
         for i, root_board in enumerate(game):
             # Output value is P(winning of current player)
+
+            # turn off leaf evaluation if necessary
+            original_depth = self.guerilla.search.max_depth
+            if no_leaf:
+                self.guerilla.search.max_depth = 0
+
             value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=True)
             game_info[i]['move'] = move
+            game_info[i]['leaf_board'] = leaf_board
+
+            if no_leaf:
+                self.guerilla.search.max_depth = original_depth
 
             # Modify value so that it represents P(white winning)
             if dh.white_is_next(root_board):
@@ -924,8 +945,8 @@ class Teacher:
                 #                                                                = - Grad(P(white win | flip(board)))
                 game_info[i]['gradient'] = np.array(self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))) * -1
 
-        # turn pruning for search back on
-        # self.guerilla.search.ab_prune = True
+        # Modify step size based on full VS half-move
+        step_size = 2 if full_move else 1
 
         for t in range(num_boards):
             color = dh.strip_fen(game[t],
@@ -933,15 +954,16 @@ class Teacher:
             if only_own_boards is not None and only_own_boards != color:
                 continue
             td_val = 0
-            for j in range(t, num_boards - 1):
+            for j in range(t, num_boards - step_size, step_size):  # step size of 2
                 # Calculate temporal difference
-                # TODO see if its worth memoizing this
-                dt = game_info[j + 1]['value'] - game_info[j]['value']
+                # TODO: see if its worth memoizing this
+                dt = game_info[j + step_size]['value'] - game_info[j]['value']
 
                 if restrict_td:
-                    predicted_board = chess.Board(game[j])
-                    predicted_board.push(game_info[j]['move'])
-                    if predicted_board.fen() != game[j + 1]:
+                    predicted_board = chess.Board(game[j + (step_size - 1)])  # start at opponents board
+                    predicted_board.push(game_info[j + (step_size - 1)]['move'])  # apply move
+                    if predicted_board.fen() != game[j + step_size]:  # Check if move was predicted correctly
+                        # If not then minimize blunder
                         if color == 'w':
                             dt = min(dt, 0)
                         else:
@@ -986,7 +1008,7 @@ class Teacher:
         if opponent:
             self.opponent = opponent
 
-    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None):
+    def train_gameplay(self, start_idx=0, sts_scores=None, allow_draw=True):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -999,12 +1021,12 @@ class Teacher:
                 Marks which game index to start training from. Used when loading and resuming.
             sts_scores [List]
                 List of previously of previously calculated STS scores. Used when loading and resuming.
+            allow_draw [Boolean]
+                If False then draws are not allowed in gameplay generation.
+                Has no effect if the end of the game is not reached.
         """
 
         fens = cgp.load_fens(num_values=self.sp_num)
-
-        if game_indices is None:
-            game_indices = np.random.choice(len(fens), self.sp_num)
 
         max_len = sys.maxint if self.sp_length == -1 else self.sp_length
 
@@ -1016,43 +1038,38 @@ class Teacher:
         if self.td_training_mode == 'adagrad':
             self.reset_adagrad()
 
-        for i in xrange(start_idx, len(game_indices)):
+        for i in xrange(start_idx, self.sp_num):
             if self.verbose:
                 print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
 
             # Load random fen and randomly flip board
-            fen = fens[game_indices[i]]
-            if random.random() < 0.5:
-                fen = dh.flip_board(fen)
+            game_fens = None
+            while True:
+                fen = random.choice(fens)
+                if random.random() < 0.5:
+                    fen = dh.flip_board(fen)
 
-            # Play a game against yourself
-            players = {'w': None, 'b': None}
+                # Play a game against yourself
+                players = {'w': None, 'b': None}
 
-            # Randomly select white player
-            guerilla_player = random.choice(['w', 'b'])
-            players[guerilla_player] = self.guerilla
-            opponent_player = 'w' if guerilla_player == 'b' else 'b'
-            players[opponent_player] = self.opponent
-            game = g.Game(players, use_gui=False)
-            game.set_board(fen)
+                # Randomly select white player
+                guerilla_player = random.choice(['w', 'b'])
+                players[guerilla_player] = self.guerilla
+                opponent_player = 'w' if guerilla_player == 'b' else 'b'
+                players[opponent_player] = self.opponent
+                game = Game(players, use_gui=False)
+                game.set_board(fen)
 
-            game_fens, _ = game.play(dh.strip_fen(fen, keep_idxs=1), moves_left=max_len, verbose=False)
-            # [board.fen()]
-            # for _ in range(max_len):
-            #     # Check if game finished
-            #     if board.is_game_over(claim_draw=True):
-            #         break
+                game_fens, _ = game.play(dh.strip_fen(fen, keep_idxs=1), moves_left=max_len, verbose=False)
 
-            #     # Play move
-            #     board.push(self.opponent.get_move(board))
-
-            #     # Store fen
-            #     game_fens.append(board.fen())
+                # If draws are allowed or the game is not a draw then break
+                if allow_draw or not game.board.is_stalemate():
+                    break
 
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on game %d of %d..." % (i + 1, self.sp_num)
-            self.td_leaf(game_fens, only_own_boards=guerilla_player)
+            self.td_leaf(game_fens, no_leaf=True, restrict_td=False)  # only_own_boards=guerilla_player)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1063,11 +1080,10 @@ class Teacher:
                 print "STS Result: %s" % str(sts_scores[-1])
 
             # Check if out of time
-            if self.out_of_time() and i != (len(game_indices) - 1):
+            if self.out_of_time() and i != (self.sp_num - 1):
                 if self.verbose:
                     print "TD-Leaf self-play Timeout: Saving state and quitting."
-                save = {'game_indices': game_indices,
-                        'start_idx': i + 1,
+                save = {'start_idx': i + 1,
                         'sts_scores': sts_scores}
                 self.save_state(save)
                 return
@@ -1087,6 +1103,7 @@ class Teacher:
 
         print "Intervals: " + ",".join(map(str, [(x + 1) * self.sts_interval for x in range(len(scores))]))
         print "Scores: " + ",".join(map(str, score_out))
+
 
 def main():
     run_time = 0
@@ -1112,11 +1129,11 @@ def main():
         t.rnd_seed_shuffle = 123456
         t.set_bootstrap_params(num_bootstrap=2500000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=1000, max_length=-1, opponent=sf_player)
+        t.set_gp_params(num_selfplay=100, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=9 * 3600)
+        t.run(['train_gameplay'], training_time=0.5 * 3600)
         print eval_sts(g)
         g.search.max_depth = 2
         print eval_sts(g)

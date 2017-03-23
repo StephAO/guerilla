@@ -3,6 +3,7 @@ import pickle
 import random as rnd
 import sys
 import traceback
+from collections import namedtuple
 
 import chess
 import numpy as np
@@ -17,6 +18,8 @@ import guerilla.train.sts as sts
 import guerilla.train.chess_game_parser as cgp
 from guerilla.players import Guerilla
 from guerilla.train.teacher import Teacher
+from guerilla.play.game import Game
+
 
 ###############################################################################
 # STOCKFISH TESTS
@@ -73,6 +76,7 @@ def stockfish_test():
         prev_score = score
 
     return True
+
 
 def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_repeat=3):
     """
@@ -139,6 +143,7 @@ def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_
 
     return True
 
+
 ###############################################################################
 # TRAINING TESTS
 ###############################################################################
@@ -151,7 +156,7 @@ def training_test(nn_input_type, verbose=False):
     # Set hyper params for mini-test
     full_success = True
     for t_m in nn.NeuralNet.training_modes:
-        for use_conv in [True,False]:
+        for use_conv in [True, False]:
             success = True
             error_msg = ""
             try:
@@ -219,6 +224,7 @@ def training_test(nn_input_type, verbose=False):
 
     return full_success
 
+
 def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     """
     NOTE: DEPRECATED. The test does not converge quickly (if at all). Replaced with learn_moves_test.
@@ -260,13 +266,12 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
         board, move_scores = sts.parse_epd(epd)
 
         for move, score in move_scores.iteritems():
-
             # Add good moves
-            board.push(move) # apply move
+            board.push(move)  # apply move
             fen = board.fen()
             fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
             values.append(1 if score == 10 else 0)
-            board.pop() # undo move
+            board.pop()  # undo move
 
             # # Add random bad move
             # move = rnd.choice(list(set(board.legal_moves) - set(move_scores.iterkeys())))
@@ -285,7 +290,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     hp['VALIDATION_SIZE'] = 50
     hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.0001
-    hp['LOSS_THRESHOLD'] = -100 # Make it so it never stops by convergence since VALIDATION_SIZE = 0
+    hp['LOSS_THRESHOLD'] = -100  # Make it so it never stops by convergence since VALIDATION_SIZE = 0
 
     # Add extra evaluation boards
     fens += fens[-hp['VALIDATION_SIZE']:]
@@ -305,7 +310,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
         # Run STS Test
         result = sts.eval_sts(g, mode=mode)
 
-    if float(result[0][0])/result[1][0] <= thresh:
+    if float(result[0][0]) / result[1][0] <= thresh:
         print "STS Scores was too low, got a score of %d/%d" % (result[0][0], result[1][0])
         return False
 
@@ -338,7 +343,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     hp['VALIDATION_SIZE'] = 30
     hp['TRAIN_CHECK_SIZE'] = 10
     hp['LEARNING_RATE'] = 0.00005
-    hp['LOSS_THRESHOLD'] = float("-inf") # so that convergence threshold is never met
+    hp['LOSS_THRESHOLD'] = float("-inf")  # so that convergence threshold is never met
     hp['REGULARIZATION_CONST'] = 0.005
     hp['TD_LRN_RATE'] = 0.001
 
@@ -349,10 +354,10 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     # Load fens
     fen_multiplier = 20
     spacing = 100
-    base_fens = cgp.load_fens(num_values=num_test*spacing)[::spacing] # So not all within the same game
+    base_fens = cgp.load_fens(num_values=num_test * spacing)[::spacing]  # So not all within the same game
 
     # For each fen get all moves, score one move's board highly (goal move), the others poorly
-    goal_moves = [] # List of tuples
+    goal_moves = []  # List of tuples
     fens = []
     values = []
     val_fens = []
@@ -367,18 +372,19 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
 
         # Score goal move highly
         board.push(goal_move)
-        fens += [dh.flip_board(board.fen())]*fen_multiplier # Flip board and give low value since NN input must be white next
-        values += [1 - high_value]*fen_multiplier
+        fens += [dh.flip_board(
+            board.fen())] * fen_multiplier  # Flip board and give low value since NN input must be white next
+        values += [1 - high_value] * fen_multiplier
         board.pop()
 
         # Build validation set
-        val_fens += [fens[-1]] * (hp['VALIDATION_SIZE']/num_test)
-        val_values += [1.0 - high_value] * (hp['VALIDATION_SIZE']/num_test)  # values[-hp['VALIDATION_SIZE']:]
+        val_fens += [fens[-1]] * (hp['VALIDATION_SIZE'] / num_test)
+        val_values += [1.0 - high_value] * (hp['VALIDATION_SIZE'] / num_test)  # values[-hp['VALIDATION_SIZE']:]
 
         # score other moves poorly
         for move in (set(board.legal_moves) - {goal_move}):
             board.push(move)
-            fens += [dh.flip_board(board.fen())] # Flip board and give high value since NN input must be white next
+            fens += [dh.flip_board(board.fen())]  # Flip board and give high value since NN input must be white next
             values += [1 - low_value]
             board.pop()
 
@@ -414,8 +420,9 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
                     board.pop()
                     board.push(result_move)
                     result_score = 1 - g.nn.evaluate(dh.flip_board(board.fen()))
-                    err_msg += ('FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
-                                    (goal_move, result_move, goal_move, goal_score, result_move, result_score))
+                    err_msg += (
+                        'FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
+                        (goal_move, result_move, goal_move, goal_score, result_move, result_score))
 
         if score == num_test:
             return True
@@ -424,6 +431,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
 
     print err_msg
     return False
+
 
 def load_and_resume_test(nn_input_type, verbose=False):
     """
@@ -479,7 +487,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             t.set_gp_params(num_selfplay=3, max_length=5)
 
             # Run
-            t.run(set_of_actions, training_time= (0.5 if not isinstance(action, list) else 4))
+            t.run(set_of_actions, training_time=(0.5 if not isinstance(action, list) else 4))
 
             # Save current action
             pause_action = t.actions[t.curr_action_idx]
@@ -503,7 +511,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             t.run(['load_and_resume'])
 
             # Save loaded current action
-            state = t.load_state() # resets weights and training vars to start of resume values
+            state = t.load_state()  # resets weights and training vars to start of resume values
             new_actions = state['actions']
             new_action = new_actions[state['curr_action_idx']]
 
@@ -512,7 +520,6 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
             # Save new training variables
             new_train_vars = g.nn.sess.run(g.nn.get_training_vars())
-
 
         # Compare weight values
         result_msg = dh.diff_dict_helper(weights, new_weights)
@@ -594,7 +601,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
                 else:
                     td_lrn_rate = 0.00001
 
-            t = Teacher(g, TD_LRN_RATE = td_lrn_rate, td_training_mode = td_training_mode, verbose=verbose)
+            t = Teacher(g, hp={'TD_LRN_RATE': td_lrn_rate}, td_training_mode=td_training_mode, verbose=verbose)
             if td_training_mode == 'gradient_descent':
                 t.td_batch_size = 1
             elif td_training_mode == 'adagrad':
@@ -619,7 +626,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
                 t.td_leaf(fens)
 
             final_diff = abs(first - second)
-            perc_change = 1 - final_diff/init_diff
+            perc_change = 1 - final_diff / init_diff
             if perc_change < dec_thresh:
                 err_msg += "Convergence failure on training mode %s: " % td_training_mode
                 err_msg += "Initial Diff: %f Final Diff: %f Percent Change: %f" % (init_diff, final_diff, perc_change)
@@ -630,17 +637,113 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
     return success
 
+
+def td_checkmate_test(max_iter=100, verbose=False):
+    """
+    Tests that Guerilla can learn a checkmate variation.
+    Input:
+        max_iter [Int]
+            The maximum number of TD iterations which will be run in the hopes of learning the correct move.
+        verbose [Boolean]
+            Verbose mode on/off.
+    Output:
+        Result [Boolean]
+            True if test passed, False if test failed.
+    """
+    # Source: https://www.chess.com/forum/view/fun-with-chess/7-move-checkmate-with-queen-sacrifice
+    # Goal of AVOID: Guerilla learns not to play g4e4, should learn to play c6e5 instead
+    # Goal of FORCE: Guerilla should learn to force the checkmate variation by playing c4f7
+    move_test = namedtuple('MoveTest', 'name fen train_color bad_move best_move')
+    data = [move_test('AVOID', 'r2qkbnr/ppp2ppp/2np4/4N3/2B1P1b1/2N5/PPPP1PPP/R1BQK2R b KQkq - 0 5', 'b',
+                      chess.Move.from_uci('g4e4'), chess.Move.from_uci('c6e5')),
+            move_test('FORCE', 'r2qkbnr/ppp2ppp/2np4/4N3/2B1P3/2N5/PPPP1PPP/R1BbK2R w KQkq - 0 6', 'b',
+                      # TODO: Maybe white
+                      chess.Move.from_uci('g4e4'), chess.Move.from_uci('c4f7'))
+            ]
+
+    # Create teacher and Guerilla
+    success = True
+    err_msg = ''
+
+    if verbose:
+        print "All scores are P(Guerilla wins)."
+
+    with Guerilla('Kong', load_file='4790.p', verbose=verbose, nn_params={'NN_INPUT_TYPE': 'movemap'},
+                  search_params={'max_depth': 1}) as g:
+
+        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 0.01, 'TD_DISCOUNT': 0.5})
+        t.td_batch_size = 1
+
+        for move_test in data:
+            if verbose:
+                col = {'w': 'white', 'b': 'black'}
+                print "Learning to %s a checkmate..." % (move_test.name)
+                print "(Guerilla is %s in training, %s in test)..." % (col[move_test.train_color],
+                                                                       col[dh.strip_fen(move_test.fen, keep_idxs=1)])
+            # Define players
+            players = {'w': None, 'b': None}
+            players[move_test.train_color] = t.guerilla
+            players['b' if move_test.train_color == 'w' else 'w'] = t.opponent
+
+            game = Game(players, use_gui=False)
+
+            move = None  # for proper scoping
+            for i in range(max_iter):
+                # Play game
+                game.set_board(move_test.fen)
+                game_fens, _ = game.play(dh.strip_fen(move_test.fen, keep_idxs=1), moves_left=12, verbose=False)
+
+                # print game_fens
+                # print game.board.result()
+                score, move, fen = t.guerilla.search.run(chess.Board(move_test.fen))
+                # print fen
+
+                if verbose:
+                    board = chess.Board(move_test.fen)
+                    board.push(move_test.best_move)
+                    board_fen = board.fen()
+                    best_score = 1 - g.nn.evaluate(
+                        board_fen if dh.white_is_next(board_fen) else dh.flip_board(board_fen))  # Since depth 1
+                    # print g.nn.evaluate(fen if dh.white_is_next(fen) else dh.flip_board(fen))
+                    print "%d: Played move %s yielded a score of %f. Goal move %s yielded a score of %f. Diff: %f" % (
+                        i, str(move), score, str(move_test.best_move), best_score, abs(score - best_score))
+
+                if move == move_test.best_move:
+                    if verbose:
+                        print "It took %d iterations to learn to %s the checkmate." % (i, move_test.name)
+                    break
+
+                # Learn from game
+                t.td_leaf(game_fens, restrict_td=False, no_leaf=True)
+            else:
+                # Didn't learn :(
+                success = False
+                err_msg += '%s: After %d iterations Guerilla played %s instead of %s' % (move_test.name,
+                                                                                         max_iter, move,
+                                                                                         move_test.best_move)
+
+        if not success:
+            print "TD Checkmate Test Failed: \n%s" % err_msg
+
+        return success
+
+
 def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
         'Stockfish Handling': stockfish_test,
-        #'NSV Alignment': nsv_test
+        'NSV Alignment': nsv_test
     }
 
     all_tests["Training Tests"] = {
         'Training': training_test,
         'Load and Resume': load_and_resume_test,
         'Learn Moves': learn_moves_test
+    }
+
+    all_tests["Temporal Difference Tests"] = {
+        # 'td_conv_test': td_conv_test,
+        'td_checkmate_test': td_checkmate_test
     }
 
     success = True
@@ -663,13 +766,22 @@ def run_train_tests():
                 print "%s test failed" % name.capitalize()
                 success = False
 
+    print "--- Temporal Difference Tests --"
+    for name, test in all_tests['Temporal Difference Tests'].iteritems():
+        print "Testing " + name + "..."
+        if not test():
+            print "%s test failed" % name.capitalize()
+            success = False
+
     return success
+
 
 def main():
     if run_train_tests():
         print "All tests passed"
     else:
         print "You broke something - go fix it"
+
 
 if __name__ == '__main__':
     main()

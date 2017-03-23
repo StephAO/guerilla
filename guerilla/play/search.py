@@ -101,8 +101,8 @@ class Search:
             kwargs[dict]:
                 necessary data for evaluation condition and selection
         Outputs:
-            best_score [float]:
-                Score achieved by best move
+            score [float]:
+                Score achieved by the board. P(win of next player to play)
             best_move [chess.Move]:
                 Best move to play
             best_leaf [String]
@@ -211,7 +211,7 @@ class Complementmax(Search):
                     lower bound of layer above, upper bound of current layer (because of alternating signs)
             Outputs:
                 best_score [float]:
-                    Score achieved by best move
+                    Score achieved by best move. P(win of next player to play)
                 best_move [chess.Move]:
                     Best move to play
                 best_leaf [String]

@@ -506,7 +506,7 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
                 full_piece = piece
 
             # Set map
-            mm[r][f][piece_move_slice[full_piece]] = [c_rank, c_file]
+            mm[r][f][piece_move_slice[full_piece]] = [c_rank + 1, c_file + 1]
 
             # End of slide (piece in the way)
             if occupied_bitmap[r][f] != 0:
@@ -815,7 +815,9 @@ def material_score(fen):
     return scores
 
 def main():
-    print flip_board("q5k1/6p1/4RP2/3P1Q1K/2n1pp2/8/3nr3/1N3Bb1 w - - 0 1");
+    a = fen_to_movemap("8/8/8/8/8/3k4/8/r2K4 w - - 0 1");
+    print a[1][0][3]
+    print a[1][0][0]
 
 
 if __name__ == '__main__':

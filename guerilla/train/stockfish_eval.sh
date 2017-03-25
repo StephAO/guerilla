@@ -14,16 +14,17 @@ seconds=${7:-10}
 binary=${8:-linux}
 threads=${9:-12}
 memory=${10:-1024}
-max_depth=9
-echo $seconds
+max_depth=${11:-''}
 (
 echo "setoption name Hash value $memory" ;
 echo "setoption name threads value $threads" ;
 echo "position fen $fen $turn $castling $enpassant $half_move $full_move" ;
 if [ -z "$max_depth" ]; then
+    # max depth not specified
     echo "go infinite";
     sleep $seconds
 else
+    # max depth specified
     echo "go depth $max_depth";
     sleep $seconds
 fi

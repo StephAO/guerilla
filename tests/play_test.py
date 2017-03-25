@@ -193,7 +193,7 @@ def rank_prune_test():
         depth_count[curr_node.depth] += 1
 
         # Compare value to correct evaluation function
-        fen = curr_node.fen if dh.white_is_next(curr_node.fen) else dh.flip_board(curr_node.fen)
+        fen = dh.flip_to_white(curr_node.fen)
         if curr_node.depth == 3 and minimax_test_eval(fen) != curr_node.value:
             print "Rank Prune Test Failed! Was expecting leaf value %f for %s" % (minimax_test_eval(fen), curr_node)
             return False
@@ -237,7 +237,7 @@ def iterative_prune_test():
         for child in curr_layer:
             move = child[0]
             node = child[1]
-            fen = node.fen if node.fen.split()[1] == 'w' else dh.flip_board(node.fen)
+            fen = dh.flip_to_white(node.fen)
             if fen.split()[0] =='7k/8/5P2/8/8/8/P7/3K4':
                 if abs(node.value - 0.8) > 0.0001 or node.depth != 0 or not node.expand:
                     success = False
@@ -468,9 +468,7 @@ def minimaxtree_test():
             board.push(move)
             new_node = SearchNode(board.fen(), curr_node.depth + 1, random.random())
 
-            fen = new_node.fen
-            if dh.black_is_next(fen):
-                fen = dh.flip_board(fen)
+            fen = dh.flip_to_white(new_node.fen)
 
             # Check if max depth
             if new_node.depth == max_depth:
@@ -684,11 +682,11 @@ def run_play_tests():
         'Partition': partition_test,
         'Quickselect': quickselect_test,
         'MinimaxTree': minimaxtree_test,
-        # 'Search Time': search_timing_test,
+        'Search Time': search_timing_test,
     }
 
     all_tests["Neural Net Tests"] = {
-        # 'Weight Save and Load': save_load_weights_test
+        'Weight Save and Load': save_load_weights_test
     }
 
     success = True

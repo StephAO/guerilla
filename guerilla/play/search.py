@@ -121,8 +121,7 @@ class Search:
         kwargs['depth'] = depth
 
         fen = unflipped_fen = board.fen()
-        if dh.black_is_next(fen):
-            fen = dh.flip_board(fen)
+        fen = dh.flip_to_white(fen)
         # Check if draw
         if board.is_checkmate():
             return self.lose_value, None, unflipped_fen
@@ -150,8 +149,8 @@ class Search:
 
 
 class Complementmax(Search):
-    """ 
-        Uses a recursive function to perform a simple minimax with 
+    """
+        Uses a recursive function to perform a simple minimax with
         alpha-beta pruning.
     """
     def __init__(self, leaf_eval, max_depth=2, ab_prune=True):
@@ -198,7 +197,7 @@ class Complementmax(Search):
         return self.complementmax(board)
 
     def complementmax(self, board, depth=0, a=1.0):
-        """ 
+        """
             Recursive function to search for best move using complementmax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
             which is the same as maximizing the reciprocal.
@@ -421,7 +420,7 @@ class RankPrune(Search):
 
 
 class IterativeDeepening(Search):
-    """ 
+    """
     Searches game tree in an Iterative Deepening Depth search.
     At each depth optionally prune from remaining possibilities
     Implements alpha_beta pruning by default
@@ -483,7 +482,7 @@ class IterativeDeepening(Search):
         return True
 
     def DLS(self, node, a=1.0):
-        """ 
+        """
             Recusrive depth limited search with alpha_beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
             which is the same as maximizing the reciprocal.
@@ -632,7 +631,7 @@ class IterativeDeepening(Search):
         return str(move) in self.killer_table[depth]['moves']
 
     def prune(self, node):
-        """ 
+        """
             Recursive pruning of nodes
         """
         if not node.expand or not node.children:
@@ -641,7 +640,7 @@ class IterativeDeepening(Search):
         children = list(node.get_child_nodes())
         # k = number of nodes that I keep
         k = max(min(len(children), 2),
-                int(math.ceil(len(children) * (1 - self.prune_perc) ** self.depth_limit)))
+                int(math.ceil(len(children) * (1 - self.prune_perc))))
         quickselect(children, 0, len(children) - 1, k - 1, key=lambda x: x.value)
 
         for child in children[:k]:
@@ -689,18 +688,21 @@ class IterativeDeepening(Search):
 
         self.root = SearchNode(fen, 0, score)  # Note: store unflipped fen
 
-        # Evaluation Queue. Holds SearchNode
         self.depth_limit = 1
-        cycle_time = 0
-        score, best_move, leaf_board = self.DLS(self.root)
-        while self.time_left and \
-                (self.max_depth is None or self.depth_limit < self.max_depth):
-            if self.h_prune:
-                self.prune(self.root)
+        score = best_move = leaf_board = None
+        while self.time_left and (self.max_depth is None or self.depth_limit <= self.max_depth):
+
+            # Run search
             new_results = self.DLS(self.root)
             if not self.is_partial_search or (self.is_partial_search and self.use_partial_search):
                 score, best_move, leaf_board = new_results
             self.is_partial_search = False
+
+            # Prune if necessary
+            if self.h_prune:
+                self.prune(self.root)
+
+            # Increase depth
             self.depth_limit += 1
 
         return score, best_move, leaf_board

@@ -94,8 +94,7 @@ def get_fens(generate_time, num_random=2, store_prob=0.0):
 
                 for out_fen in out_fens:
                     # flip board if necessary
-                    if dh.black_is_next(out_fen):
-                        out_fen = dh.flip_board(out_fen)
+                    out_fen = dh.flip_to_white(out_fen)
 
                     fen_file.write(out_fen + '\n')
 

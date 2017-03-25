@@ -1,12 +1,11 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
-from guerilla.play.neural_net import NeuralNet
-from guerilla.play.search import Complementmax, RankPrune, IterativeDeepening
 import chess
 import random
-import os
-import sys
 import chess.uci
+from abc import ABCMeta, abstractmethod
 
+import guerilla.data_handler as dh
+from guerilla.play.neural_net import NeuralNet
+from guerilla.play.search import Complementmax, RankPrune, IterativeDeepening
 
 class Player:
     __metaclass__ = ABCMeta
@@ -96,6 +95,34 @@ class Guerilla(Player):
         if move is None:
             raise ValueError("There are no valid moves from this position! FEN: %s" % board.fen())
         return move
+
+    def get_prob_white_win(self, fen):
+        """
+        Returns the probability of white winning given the current fen.
+        Input:
+            fen [String]
+                FEN.
+        Output:
+            probability [Float]
+                P(White wins)
+        """
+        if dh.white_is_next(fen):
+            return self.nn.evaluate(fen)
+        else:
+            # Black plays next
+            return 1 - self.nn.evaluate(dh.flip_board(fen))
+
+    def get_prob_black_win(self, fen):
+        """
+        Returns the probability of black winning given the current fen.
+        Input:
+            fen [String]
+                FEN.
+        Output:
+            probability [Float]
+                P(Black wins)
+        """
+        return 1 - self.get_prob_white_win(fen)
 
 
 class Human(Player):

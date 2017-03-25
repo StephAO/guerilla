@@ -755,6 +755,21 @@ def strip_fen(fen, keep_idxs=0):
     return (' ').join([fen_split[i] for i in keep_idxs])
 
 
+def flip_to_white(fen):
+    """
+    Flips the fen to white playing next if necessary.
+    Inputs:
+        fen [String]
+            Chess board FEN.
+    Output:
+        [String]
+            Output FEN
+    """
+    if black_is_next(fen):
+        return flip_board(fen)
+    return fen
+
+
 def diff_dict_helper(old_dict, new_dict):
     """
     Compares two dictionaries of numpy.arrays. Useful for comparing weights and training variables.

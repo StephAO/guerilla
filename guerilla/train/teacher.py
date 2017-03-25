@@ -90,7 +90,7 @@ class Teacher:
         self.td_training_mode = td_training_mode  # Training mode to use for TD training
         self.td_w_update = None
         self.td_fen_index = 0
-        self.td_batch_size = 5
+        self.td_batch_size = 1
 
         self.hp = {}
         if hp_load_file is None:
@@ -1072,7 +1072,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on game %d of %d..." % (i + 1, self.sp_num)
-            self.td_leaf(game_fens)  # only_own_boards=guerilla_player)
+            self.td_leaf(game_fens)  # , no_leaf=True, restrict_td=False)  # only_own_boards=guerilla_player)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1108,6 +1108,7 @@ class Teacher:
         print "Scores: " + ",".join(map(str, score_out))
 
 
+
 def main():
     run_time = 0
     if len(sys.argv) >= 2:
@@ -1135,8 +1136,8 @@ def main():
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
-        # print eval_sts(g)
+        t.run(['train_gameplay'], training_time=0.5 * 3600)
+        print eval_sts(g)
         # g.search.max_depth = 2
         # print eval_sts(g)
 

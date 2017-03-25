@@ -184,7 +184,7 @@ def training_test(nn_input_type, verbose=False):
 
                     pre_heap_size = hpy().heap().size
                     # No timeout
-                    t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_selfplay'], training_time=None)
+                    t.run(['train_bootstrap', 'train_td_end', 'train_td_full', 'train_gameplay'], training_time=None)
                     post_heap_size = hpy().heap().size
 
                     loss = pickle.load(open(resource_filename('guerilla', 'data/loss/loss_test.p'), 'rb'))
@@ -269,7 +269,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
             # Add good moves
             board.push(move)  # apply move
             fen = board.fen()
-            fens.append(fen if dh.white_is_next(fen) else dh.flip_board(fen))
+            fens.append(dh.flip_to_white(fen))
             values.append(1 if score == 10 else 0)
             board.pop()  # undo move
 
@@ -416,10 +416,10 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
                     score += 1
                 else:
                     board.push(goal_move)
-                    goal_score = 1 - g.nn.evaluate(dh.flip_board(board.fen()))
+                    goal_score = g.get_prob_white_win(fen)
                     board.pop()
                     board.push(result_move)
-                    result_score = 1 - g.nn.evaluate(dh.flip_board(board.fen()))
+                    result_score = g.get_prob_white_win(fen)
                     err_msg += (
                         'FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
                         (goal_move, result_move, goal_move, goal_score, result_move, result_score))
@@ -612,8 +612,8 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
             first = second = init_diff = 0
             for i in range(num_iter):
-                first = g.nn.evaluate(fens[0])
-                second = 1 - g.nn.evaluate(dh.flip_board(fens[1]))
+                first = g.get_prob_white_win(fens[0])
+                second = g.get_prob_white_win(fens[1])
 
                 # store initial evaluations
                 if i == 0:
@@ -623,7 +623,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
                     print "%d,%f,%f,%f" % (i, first, second, abs(first - second))
 
                 # run td leaf
-                t.td_leaf(fens)
+                t.td_leaf(fens, restrict_td=False, )
 
             final_diff = abs(first - second)
             perc_change = 1 - final_diff / init_diff
@@ -701,8 +701,8 @@ def td_checkmate_test(max_iter=100, verbose=False):
                     board = chess.Board(move_test.fen)
                     board.push(move_test.best_move)
                     board_fen = board.fen()
-                    best_score = 1 - g.nn.evaluate(
-                        board_fen if dh.white_is_next(board_fen) else dh.flip_board(board_fen))  # Since depth 1
+                    best_score = g.get_prob_white_win(board_fen) if dh.white_is_next(
+                        move_test.fen) else g.get_prob_black_win(board_fen)
                     # print g.nn.evaluate(fen if dh.white_is_next(fen) else dh.flip_board(fen))
                     print "%d: Played move %s yielded a score of %f. Goal move %s yielded a score of %f. Diff: %f" % (
                         i, str(move), score, str(move_test.best_move), best_score, abs(score - best_score))
@@ -756,6 +756,7 @@ def run_train_tests():
             print "%s test failed" % name.capitalize()
             success = False
 
+
     print "--- Training Tests ---"
     for it in input_types:
         print "Testing using input type", it.upper()
@@ -766,11 +767,22 @@ def run_train_tests():
                 success = False
 
     print "--- Temporal Difference Tests --"
-    for name, test in all_tests['Temporal Difference Tests'].iteritems():
-        print "Testing " + name + "..."
-        if not test():
-            print "%s test failed" % name.capitalize()
-            success = False
+    print "Testing using input type movemap"
+    name = 'td_checkmate_test'
+    test = all_tests['Temporal Difference Tests'][name]
+    print "Testing " + name + "..."
+    if not test():
+        print "%s test failed" % name.capitalize()
+        success = False
+
+    # for it in input_types:
+    #     print "Testing using input type", it.upper()
+    #     name = 'td_conv_test'
+    #     test = all_tests['Temporal Difference Tests'][name]
+    #     print "Testing " + name +"..."
+    #     if not test(it):
+    #         print "%s test failed" % name.capitalize()
+    #         success = False
 
     return success
 

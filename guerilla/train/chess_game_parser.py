@@ -44,14 +44,11 @@ def read_pgn(filename, max_skip=80):
 
 def get_fens(generate_time, num_random=2, store_prob=0.0):
     """
-    Returns a list of fens from games.
-    Will either read from all games in folder /pgn_files/single_game_pgns.
+    Extracts fens from games and saves them.
+    Will read from all games in folder /pgn_files/single_game_pgns.
         Inputs:
             num_games:
-                number of games to read from
-        Output:
-            fens:
-                list of fen strings from games
+                Amount of time to generate games for.
     """
 
     # Set seed so that results are reproducable
@@ -105,6 +102,43 @@ def get_fens(generate_time, num_random=2, store_prob=0.0):
     with open(resource_filename('guerilla', 'data/extracted_data/game_num.txt'), 'w') as num_file:
         num_file.write(str(game_num))
 
+
+def get_checkmate_fens():
+    """
+    Extracts checkmate and pre-mate FEN files from games. Saves them to separate files.
+    Will read from all games in folder /pgn_files/single_game_pgns.
+    """
+    games_path = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
+
+    mate_count = 0
+    with open(resource_filename('guerilla', 'data/extracted_data/checkmate_fens.csv'), 'w') as mate_file, \
+            open(resource_filename('guerilla', 'data/extracted_data/premate_fens.csv'), 'w') as pre_file:
+        print "Opened checkmate and premate fens output file..."
+        for i, file in enumerate(os.listdir(games_path)):
+            if not os.path.isfile(join(games_path, file)):
+                continue
+            with open(games_path + '/' + file, 'r') as pgn:
+                game = chess.pgn.read_game(pgn)
+                result = game.headers['Result']
+                if result != '1/2-1/2':
+                    # Game was not a draw
+                    last_board = game.end().board()
+                    pre_board = game.end().parent.board()
+
+                    if last_board.is_checkmate():
+                        if result == '1-0':
+                            # White checkmated black
+                            mate_file.write(dh.flip_board(last_board.fen()) + '\n')
+                            pre_file.write(pre_board.fen() + '\n')
+                        else:
+                            # Black checkmated white
+                            mate_file.write(last_board.fen() + '\n')
+                            pre_file.write(dh.flip_board(pre_board.fen()) + '\n')
+
+                        mate_count += 1
+
+            if i % 10000 == 0:
+                print "%d %d" % (i, mate_count)
 
 def load_fens(filename='fens.nsv', num_values=None):
     """

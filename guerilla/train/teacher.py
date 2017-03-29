@@ -186,7 +186,7 @@ class Teacher:
                     print "Performing Bootstrap training!"
                     print "Fetching stockfish values..."
 
-                fens, true_values = self.load_data(self.rnd_seed_shuffle)
+                fens, true_values = self.load_data(seed=self.rnd_seed_shuffle)
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_end':
@@ -210,15 +210,22 @@ class Teacher:
                 # If not timed out
                 self.curr_action_idx += 1
 
-    def load_data(self, shuffle=True, seed=None):
+    def load_data(self, shuffle=True, seed=None, load_checkmate=True, load_premate=True, mate_mult=1):
         """
         Loads FENs and corresponding Stockfish values. Optional shuffle.
 
         Input:
             shuffle [Boolean] (Optional)
-                If True then the FENs and corresponding Stockfish values are shuffled.
+                If True then the FENs and corresponding Stockfish values are shuffled. Must be True
+                if load_checkmate=True or load_premate=True.
             seed [Float] (Optional)
                 Seed for the random function. Used for reproducability. If 'None' then the seed is not set.
+            load_checkmate [Boolean]
+                If True then loads FENs from checkmate file. Scores them with 0.
+            load_premate [Boolean]
+                If True then loads FENs from the pre-checkmate files. Scores them with 1.
+            mate_mult [Integer]
+                Number of times the set of checkmate + pre-checkmate FENs is repeated.
 
         Output:
             fens [List of Strings]
@@ -226,6 +233,9 @@ class Teacher:
             sf [List of Floats]
                 List of Stockfish values corresponding to the fens list.
         """
+        if (load_premate or load_checkmate) and not shuffle:
+            raise ValueError('If load_checkmate=True or load_premate=True, then shuffle must be True.'
+                             'Otherwise FEN order isn\'t random. ')
 
         if seed:
             random.seed(seed)
@@ -236,12 +246,28 @@ class Teacher:
             fens = fens[:(-1) * (len(fens) % self.hp['BATCH_SIZE'])]
         true_values = sf.load_stockfish_values(num_values=len(fens))
 
+        if load_checkmate:
+            cm_fens = cgp.load_fens('checkmate_fens.csv')
+            fens.extend(cm_fens * mate_mult)
+            true_values.extend([0] * len(cm_fens) * mate_mult)
+            if self.verbose:
+                print "Checkmate FENs loaded."
+        if load_premate:
+            pre_fens = cgp.load_fens('premate_fens.csv')
+            fens.extend(pre_fens * mate_mult)
+            true_values.extend([1] * len(pre_fens) * mate_mult)
+            if self.verbose:
+                print "Pre-checkmate FENs loaded."
+
         # Optional shuffle
         if shuffle:
             shuffle_idxs = range(len(fens))
             random.shuffle(shuffle_idxs)
             fens = [fens[i] for i in shuffle_idxs]
             true_values = [true_values[i] for i in shuffle_idxs]
+
+        # Slices to size (important if load_checkmate or load_premate is True)
+        fens = fens[:self.num_bootstrap]
 
         return fens, true_values
 
@@ -431,7 +457,7 @@ class Teacher:
             if self.verbose:
                 print "Resuming Bootstrap training..."
 
-            fens, true_values = self.load_data(self.rnd_seed_shuffle)
+            fens, true_values = self.load_data(seed=self.rnd_seed_shuffle)
 
             # finish epoch
             train_fens = fens[:(-1) * self.hp['VALIDATION_SIZE']]  # fens to train on
@@ -1066,7 +1092,7 @@ class Teacher:
                 game_fens, _ = game.play(dh.strip_fen(fen, keep_idxs=1), moves_left=max_len, verbose=False)
 
                 # If draws are allowed or the game is not a draw then break
-                if allow_draw or not game.board.is_stalemate():
+                if allow_draw or not game.board.is_game_over() or game.board.is_checkmate():
                     break
 
             # Send game for TD-leaf training
@@ -1126,20 +1152,21 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 1},
-                  load_file='4790.p') as g, Stockfish('SF', time_limit=1) as sf_player:
-        t = Teacher(g, td_training_mode='adagrad')
-        t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=3000000)  # 488037
+    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 1}) as g, \
+            Stockfish('test', time_limit=1) as sf_player:
+        t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
+        # print eval_sts(g)
+        # t.rnd_seed_shuffle = 123456
+        t.set_bootstrap_params(num_bootstrap=2000000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=50, max_length=5, opponent=sf_player)
+        t.set_gp_params(num_selfplay=500, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=0.5 * 3600)
+        t.run(['train_bootstrap'], training_time=11 * 3600)
         print eval_sts(g)
-        # g.search.max_depth = 2
-        # print eval_sts(g)
+        g.search.max_depth = 2
+        print eval_sts(g)
 
 
 if __name__ == '__main__':

@@ -99,10 +99,11 @@ class Teacher:
         if hp is not None:
             self._set_hyper_params(hp)
 
+        self.loss_fn = self.nn.mse_loss(self.hp['BATCH_SIZE'])
         self.training_mode = bootstrap_training_mode
         self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
                                                 reg_const=self.hp['REGULARIZATION_CONST'],
-                                                loss_fn=self.nn.mse_loss(self.hp['BATCH_SIZE']),
+                                                loss_fn=self.loss_fn,
                                                 decay_rate=self.hp['DECAY_RATE'])
 
         if self.verbose:
@@ -708,7 +709,7 @@ class Teacher:
                                          _true_values, fens, board_num,
                                          range(len(fens)))
             # Get batch loss
-            error += self.nn.sess.run(self.nn.MSE, feed_dict=_feed_dict)
+            error += self.nn.sess.run(self.loss_fn, feed_dict=_feed_dict)
 
         return error
 

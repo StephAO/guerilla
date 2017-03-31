@@ -212,7 +212,7 @@ class Teacher:
                 # If not timed out
                 self.curr_action_idx += 1
 
-    def load_data(self, shuffle=True, seed=None, load_checkmate=True, load_premate=True, mate_mult=1):
+    def load_data(self, shuffle=True, seed=None, load_checkmate=True, load_premate=True, mate_perc=0.5):
         """
         Loads FENs and corresponding Stockfish values. Optional shuffle.
 
@@ -226,8 +226,11 @@ class Teacher:
                 If True then loads FENs from checkmate file. Scores them with 0.
             load_premate [Boolean]
                 If True then loads FENs from the pre-checkmate files. Scores them with 1.
-            mate_mult [Integer]
-                Number of times the set of checkmate + pre-checkmate FENs is repeated.
+            mate_perc [Integer]
+                Percent of bootstrap FENs occupied by checkmates and/or premates.
+                If load_checkmate=load_premate=True then each will occupy mate_perc percent of the FENs.
+                Maximum is dictated by the number of checkmates and premates available.
+                Range: 0 <= mate_perc <= 100
 
         Output:
             fens [List of Strings]
@@ -248,18 +251,26 @@ class Teacher:
             fens = fens[:(-1) * (len(fens) % self.hp['BATCH_SIZE'])]
         true_values = sf.load_stockfish_values(num_values=len(fens))
 
+        new_fens = []
+        new_values = []
         if load_checkmate:
-            cm_fens = cgp.load_fens('checkmate_fens.csv')
-            fens.extend(cm_fens * mate_mult)
-            true_values.extend([0] * len(cm_fens) * mate_mult)
+            cm_fens = cgp.load_fens('checkmate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
+            new_fens.extend(cm_fens)
+            new_values.extend([0] * len(cm_fens))
             if self.verbose:
-                print "Checkmate FENs loaded."
+                print "%d Checkmate FENs loaded." % len(cm_fens)
         if load_premate:
-            pre_fens = cgp.load_fens('premate_fens.csv')
-            fens.extend(pre_fens * mate_mult)
-            true_values.extend([1] * len(pre_fens) * mate_mult)
+            pre_fens = cgp.load_fens('premate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
+            new_fens.extend(pre_fens)
+            new_values.extend([1] * len(pre_fens))
             if self.verbose:
-                print "Pre-checkmate FENs loaded."
+                print "%d Pre-checkmate FENs loaded." % len(pre_fens)
+
+        # Reduce FENs size to make place for pre and check fens
+        fens = fens[:-len(new_fens)]
+        values = fens[:-len(new_values)]
+        fens.extend(new_fens)
+        values.extend(new_values)
 
         # Optional shuffle
         if shuffle:
@@ -267,9 +278,6 @@ class Teacher:
             random.shuffle(shuffle_idxs)
             fens = [fens[i] for i in shuffle_idxs]
             true_values = [true_values[i] for i in shuffle_idxs]
-
-        # Slices to size (important if load_checkmate or load_premate is True)
-        fens = fens[:self.num_bootstrap]
 
         return fens, true_values
 
@@ -709,7 +717,8 @@ class Teacher:
                                          _true_values, fens, board_num,
                                          range(len(fens)))
             # Get batch loss
-            error += self.nn.sess.run(self.loss_fn, feed_dict=_feed_dict)
+            error += self.nn.sess.run(self.loss_fn, feed_dict=_feed_dict) / num_batches
+
 
         return error
 

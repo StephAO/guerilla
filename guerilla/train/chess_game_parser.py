@@ -140,6 +140,7 @@ def get_checkmate_fens():
             if i % 10000 == 0:
                 print "%d %d" % (i, mate_count)
 
+
 def load_fens(filename='fens.nsv', num_values=None):
     """
     Loads the fens file.
@@ -162,6 +163,11 @@ def load_fens(filename='fens.nsv', num_values=None):
             count += 1
             if num_values is not None and count >= num_values:
                 break
+
+    if num_values > count:
+        raise ValueError(
+            "Could not load desired number of fens! File %s only has %d FENs and requested load was %d FENs" % (
+                filename, count, num_values))
     return fens
 
 
@@ -169,6 +175,7 @@ def main():
     generate_time = raw_input("How many seconds do you want to generate fens for?: ")
 
     get_fens(int(generate_time))
+
 
 if __name__ == "__main__":
     main()

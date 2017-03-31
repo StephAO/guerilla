@@ -151,14 +151,6 @@ class NeuralNet:
         # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights_biases)
 
-        # Define loss functions
-        #   Note: Ensures that both inputs are the same shape
-        self.MAE = tf.reduce_sum(tf.abs(tf.sub(
-            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
-
-        self.MSE = tf.reduce_sum(tf.pow(tf.sub(
-            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
-
         # Blank training variables. Call 'init_training' to initialize them
         self.train_optimizer = None
 
@@ -361,6 +353,37 @@ class NeuralNet:
         """
         self.hp.update(hyper_parameters)
 
+    def mae_loss(self, batch_size):
+        """
+        Returns a MAE loss Tensor
+        Input:
+            batch_size [Int]
+                Batch size.
+        Output:
+            mse [Tensor]
+                Mean absolute error loss.
+        """
+
+        err = tf.reduce_sum(tf.abs(tf.sub(
+            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
+
+        return tf.div(err, batch_size)
+
+    def mse_loss(self, batch_size):
+        """
+        Returns a MSE loss Tensor
+        Input:
+            batch_size [Int]
+                Batch size.
+        Output:
+            mse [Tensor]
+                Mean squared error loss.
+        """
+
+        err = tf.reduce_sum(tf.pow(tf.sub(
+            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
+
+        return tf.div(err, batch_size)
 
     def init_training(self, training_mode, learning_rate, reg_const, loss_fn, decay_rate = None):
         """
@@ -372,7 +395,7 @@ class NeuralNet:
                 Learning rate to use in training.
             reg_const [Float]
                 Regularization constant. To not use regularization simply input 0.
-            loss_mode [Tensor]
+            loss_fn [Tensor]
                 Loss function to use.
             decay_rate [String]
                 Decay rate. Input is only necessary when training mode is 'adadelta'.
@@ -384,7 +407,7 @@ class NeuralNet:
                              "for valid inputs.")
 
         # Regularization Term
-        regularization = sum(map(tf.nn.l2_loss, self.all_weights))*reg_const
+        regularization = tf.add_n([tf.nn.l2_loss(w) for w in self.all_weights]) * reg_const
 
         # Set tensorflow training method for bootstrap training
         if training_mode == 'adagrad':

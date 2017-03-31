@@ -147,6 +147,10 @@ class Search:
         else:
             return None
 
+    def clear_cache(self):
+        # Clears the cache
+        self.cache = {}
+
 
 class Complementmax(Search):
     """
@@ -191,7 +195,7 @@ class Complementmax(Search):
     def run(self, board, time_limit=None, clear_cache=False):
         """ Reset some variables, call recursive function """
         if clear_cache:
-            self.cache = {}
+            self.clear_cache()
         self.num_evals = 0
         self.num_visits = []
         return self.complementmax(board)
@@ -353,7 +357,7 @@ class RankPrune(Search):
             self.leaf_estimate = (time.time() - start) / num_estimate
 
         if clear_cache:
-            self.cache = {}
+            self.clear_cache()
         self.num_evals = 0
         self.num_visits = []
 
@@ -674,7 +678,7 @@ class IterativeDeepening(Search):
             time_limit = self.time_limit
 
         if clear_cache:
-            self.cache = {}
+            self.clear_cache()
         self.num_evals = 0
         self.num_visits = []
 

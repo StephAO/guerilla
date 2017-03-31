@@ -101,7 +101,8 @@ class Teacher:
 
         self.training_mode = bootstrap_training_mode
         self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
-                                                reg_const=self.hp['REGULARIZATION_CONST'], loss_fn=self.nn.MSE,
+                                                reg_const=self.hp['REGULARIZATION_CONST'],
+                                                loss_fn=self.nn.mse_loss(self.hp['BATCH_SIZE']),
                                                 decay_rate=self.hp['DECAY_RATE'])
 
         if self.verbose:
@@ -115,8 +116,8 @@ class Teacher:
                 self.weight_shapes.append(weight.get_shape().as_list())
 
         # Self-play parameters
-        self.sp_num = 1  # The number of games to play against itself
-        self.sp_length = 12  # How many moves are included in game playing
+        self.gp_num = 1  # The number of games to play against itself
+        self.gp_length = 12  # How many moves are included in game playing
         self.opponent = Stockfish("Magikarp")
 
         # STS Evaluation Parameters
@@ -368,7 +369,7 @@ class Teacher:
                                 'fen_index': self.td_fen_index,
                                 'adagrad_acc': self.td_adagrad_acc}
 
-        state['gp_param'] = {'num_selfplay': self.sp_num, 'max_length': self.sp_length}
+        state['gp_param'] = {'num_selfplay': self.gp_num, 'max_length': self.gp_length}
 
         # Save STS evaluation parameters
         state['sts_on'] = self.sts_on
@@ -945,7 +946,8 @@ class Teacher:
             if no_leaf:
                 self.guerilla.search.max_depth = 0
 
-            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=True)
+            # Cache gets cleared when weights are updated
+            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
 
@@ -1014,14 +1016,15 @@ class Teacher:
             self.td_update_weights()
             self.td_fen_index = 0
             self.td_w_update = None
+            self.guerilla.search.clear_cache()
 
     # ---------- GAMEPLAY TRAINING METHODS
 
-    def set_gp_params(self, num_selfplay=None, max_length=None, opponent=None):
+    def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None):
         """
         Set the parameteres for self-play.
             Inputs:
-                num_selfplay [Int]
+                num_gameplay [Int]
                     Number of games to play against itself and train using TD-Leaf.
                 max_length [Int]
                     Maximum number of moves in each self-play. (-1 = No max)
@@ -1030,14 +1033,14 @@ class Teacher:
                     version of Guerilla currently being trained (self.guerilla).
         """
 
-        if num_selfplay:
-            self.sp_num = num_selfplay
+        if num_gameplay:
+            self.gp_num = num_gameplay
         if max_length:
-            self.sp_length = max_length
+            self.gp_length = max_length
         if opponent:
             self.opponent = opponent
 
-    def train_gameplay(self, start_idx=0, sts_scores=None, allow_draw=True):
+    def train_gameplay(self, start_idx=0, sts_scores=None, allow_draw=False):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1055,9 +1058,11 @@ class Teacher:
                 Has no effect if the end of the game is not reached.
         """
 
-        fens = cgp.load_fens(num_values=self.sp_num)
+        # Load all fens, then pick the ones to use at random
+        all_fens = cgp.load_fens()
+        fens = np.random.choice(all_fens, size=self.gp_num, replace=False)
 
-        max_len = sys.maxint if self.sp_length == -1 else self.sp_length
+        max_len = sys.maxint if self.gp_length == -1 else self.gp_length
 
         # Initialize STS scores if necessary
         if sts_scores is None and self.sts_on:
@@ -1067,9 +1072,9 @@ class Teacher:
         if self.td_training_mode == 'adagrad':
             self.reset_adagrad()
 
-        for i in xrange(start_idx, self.sp_num):
+        for i in xrange(start_idx, self.gp_num):
             if self.verbose:
-                print "Generating self-play game %d of %d..." % (i + 1, self.sp_num)
+                print "Generating self-play game %d of %d..." % (i + 1, self.gp_num)
 
             # Load random fen and randomly flip board
             game_fens = None
@@ -1097,7 +1102,7 @@ class Teacher:
 
             # Send game for TD-leaf training
             if self.verbose:
-                print "Training on game %d of %d..." % (i + 1, self.sp_num)
+                print "Training on game %d of %d..." % (i + 1, self.gp_num)
             self.td_leaf(game_fens)  # , no_leaf=True, restrict_td=False)  # only_own_boards=guerilla_player)
 
             # Evaluate on STS if necessary
@@ -1109,7 +1114,7 @@ class Teacher:
                 print "STS Result: %s" % str(sts_scores[-1])
 
             # Check if out of time
-            if self.out_of_time() and i != (self.sp_num - 1):
+            if self.out_of_time() and i != (self.gp_num - 1):
                 if self.verbose:
                     print "TD-Leaf self-play Timeout: Saving state and quitting."
                 save = {'start_idx': i + 1,
@@ -1159,7 +1164,7 @@ def main():
         # t.rnd_seed_shuffle = 123456
         t.set_bootstrap_params(num_bootstrap=2000000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_selfplay=500, max_length=-1, opponent=sf_player)
+        t.set_gp_params(num_gameplay=500, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None

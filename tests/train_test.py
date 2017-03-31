@@ -178,7 +178,7 @@ def training_test(nn_input_type, verbose=False):
 
                     t.set_bootstrap_params(num_bootstrap=10500)  # 488037
                     t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
-                    t.set_gp_params(num_selfplay=1, max_length=3)
+                    t.set_gp_params(num_gameplay=1, max_length=3)
                     t.sts_on = False
                     t.sts_interval = 100
 
@@ -484,7 +484,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             t = Teacher(g, test=True, verbose=verbose, hp=hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
-            t.set_gp_params(num_selfplay=3, max_length=5)
+            t.set_gp_params(num_gameplay=3, max_length=5)
 
             # Run
             t.run(set_of_actions, training_time=(0.5 if not isinstance(action, list) else 4))

@@ -200,7 +200,7 @@ class Complementmax(Search):
         self.num_visits = []
         return self.complementmax(board)
 
-    def complementmax(self, board, depth=0, a=1.0):
+    def complementmax(self, board, depth=0, a=5000):
         """
             Recursive function to search for best move using complementmax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -220,7 +220,7 @@ class Complementmax(Search):
                 best_leaf [String]
                     FEN of the board of the leaf node which yielded the highest value.
         """
-        best_score = -1
+        best_score = -5000
         best_move = None
         best_leaf = None
 
@@ -246,9 +246,9 @@ class Complementmax(Search):
             for i, move in enumerate(moves):
                 # recursive call
                 board.push(move)
-                score, next_move, leaf_board = self.complementmax(board, depth + 1, 1 - best_score)
+                score, next_move, leaf_board = self.complementmax(board, depth + 1, (-1) * best_score)
                 # Take reciprocal of score since alternating levels
-                score = 1 - score
+                score = (-1) * score
                 board.pop()
                 if score > best_score:
                     best_score = score

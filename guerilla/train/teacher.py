@@ -254,15 +254,15 @@ class Teacher:
         new_fens = []
         new_values = []
         if load_checkmate:
-            cm_fens = cgp.load_fens('checkmate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
+            cm_fens = cgp.load_fens('checkmate_fens.nsv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(cm_fens)
-            new_values.extend([0] * len(cm_fens))
+            new_values.extend([-5000] * len(cm_fens))
             if self.verbose:
                 print "%d Checkmate FENs loaded." % len(cm_fens)
         if load_premate:
-            pre_fens = cgp.load_fens('premate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
+            pre_fens = cgp.load_fens('premate_fens.nsv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(pre_fens)
-            new_values.extend([1] * len(pre_fens))
+            new_values.extend([5000] * len(pre_fens))
             if self.verbose:
                 print "%d Pre-checkmate FENs loaded." % len(pre_fens)
 
@@ -1167,19 +1167,19 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 1}) as g, \
+    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 2}, load_file='in_training_weight_values.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
         # print eval_sts(g)
         # t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=2000000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=1050000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
         t.set_gp_params(num_gameplay=500, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=11 * 3600)
-        print eval_sts(g)
+        t.run(['train_bootstrap'], training_time=4 * 3600)
+        # print eval_sts(g)
         g.search.max_depth = 2
         print eval_sts(g)
 

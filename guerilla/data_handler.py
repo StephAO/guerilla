@@ -68,6 +68,43 @@ piece_moves = {
     'k': king_moves
 }
 
+# Movemap Global Variables for testing
+piece_type_index = {
+    'wq': 0,
+    'wr': 1,
+    'wb': 2,
+    'wn': 3,
+    'wp': 4,
+    'wk': 5,
+    'bq': 6,
+    'br': 7,
+    'bb': 8,
+    'bn': 9,
+    'bp': 10,
+    'bk': 11
+}
+
+piece_move_slice = {
+    'wq': slice(12, 14, None),
+    'wr1': slice(14, 16, None),
+    'wr2': slice(16, 18, None),
+    'wb': slice(18, 20, None),
+    'wn1': slice(20, 22, None),
+    'wn2': slice(22, 24, None),
+    'wp1': slice(24, 26, None),
+    'wp2': slice(26, 28, None),
+    'wk': slice(28, 30, None),
+    'bq': slice(30, 32, None),
+    'br1': slice(32, 34, None),
+    'br2': slice(34, 36, None),
+    'bb': slice(36, 38, None),
+    'bn1': slice(38, 40, None),
+    'bn2': slice(40, 42, None),
+    'bp1': slice(42, 44, None),
+    'bp2': slice(44, 46, None),
+    'bk': slice(46, 48, None)
+}
+
 
 def flip_board(fen):
     """ switch colors of pieces
@@ -557,42 +594,6 @@ def fen_to_movemap(fen):
     fen = fen.split(' ')
     board_str = fen[0]
     castling = fen[2]
-
-    piece_type_index = {
-        'wq': 0,
-        'wr': 1,
-        'wb': 2,
-        'wn': 3,
-        'wp': 4,
-        'wk': 5,
-        'bq': 6,
-        'br': 7,
-        'bb': 8,
-        'bn': 9,
-        'bp': 10,
-        'bk': 11
-    }
-
-    piece_move_slice = {
-        'wq': slice(12, 14, None),
-        'wr1': slice(14, 16, None),
-        'wr2': slice(16, 18, None),
-        'wb': slice(18, 20, None),
-        'wn1': slice(20, 22, None),
-        'wn2': slice(22, 24, None),
-        'wp1': slice(24, 26, None),
-        'wp2': slice(26, 28, None),
-        'wk': slice(28, 30, None),
-        'bq': slice(30, 32, None),
-        'br1': slice(32, 34, None),
-        'br2': slice(34, 36, None),
-        'bb': slice(36, 38, None),
-        'bn1': slice(38, 40, None),
-        'bn2': slice(40, 42, None),
-        'bp1': slice(42, 44, None),
-        'bp2': slice(44, 46, None),
-        'bk': slice(46, 48, None)
-    }
 
     piece_count = {
         'wq': 1,

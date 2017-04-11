@@ -169,12 +169,12 @@ def training_test(nn_input_type, verbose=False):
                                 test=True, verbose=verbose,
                                 hp_load_file='training_test.yaml')
                     if t_m == 'adagrad':
-                        t.hp['LEARNING_RATE'] = 0.00001
+                        t.hp['LEARNING_RATE'] = 0.001
                     elif t_m == 'adadelta':
                         continue  # TODO remove when adadelta is fully implemented
-                        t.hp['LEARNING_RATE'] = 0.00001
+                        t.hp['LEARNING_RATE'] = 0.001
                     elif t_m == 'bootstrap':
-                        t.hp['LEARNING_RATE'] = 0.00001
+                        t.hp['LEARNING_RATE'] = 0.001
 
                     t.set_bootstrap_params(num_bootstrap=10500)  # 488037
                     t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
@@ -342,7 +342,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 30
     hp['TRAIN_CHECK_SIZE'] = 10
-    hp['LEARNING_RATE'] = 0.00005
+    hp['LEARNING_RATE'] = 0.0005
     hp['LOSS_THRESHOLD'] = float("-inf")  # so that convergence threshold is never met
     hp['REGULARIZATION_CONST'] = 0.005
     hp['TD_LRN_RATE'] = 0.001
@@ -667,7 +667,8 @@ def td_checkmate_test(max_iter=100, verbose=False):
     if verbose:
         print "All scores are P(Guerilla wins)."
 
-    with Guerilla('Kong', load_file='4790.p', verbose=verbose, nn_params={'NN_INPUT_TYPE': 'movemap'},
+    with Guerilla('Kong', load_file='4790.p', verbose=verbose,
+                  nn_params={'NN_INPUT_TYPE': 'movemap', 'NUM_HIDDEN': 1536},
                   search_params={'max_depth': 1}) as g:
 
         t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 0.01, 'TD_DISCOUNT': 0.5})

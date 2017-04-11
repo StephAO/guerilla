@@ -7,8 +7,8 @@ from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
 
-class NeuralNet:
 
+class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
     def __init__(self, load_file=None, hp_load_file=None, seed=None, verbose=True, hp=None):
@@ -56,7 +56,7 @@ class NeuralNet:
         self.total_input_size = 0
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.variable_value = 0.01
-            self.input_sizes = [(dh.STATE_DATA_SIZE,), 
+            self.input_sizes = [(dh.STATE_DATA_SIZE,),
                                 (dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE)]
             # Used for convolution
             self.size_per_tile = dh.MOVEMAP_TILE_SIZE
@@ -75,11 +75,11 @@ class NeuralNet:
 
         # Dropout keep probability placeholder -> By default does not dropout when session is run
         self.kp_default = tf.constant(1.0, dtype=tf.float32)
-        self.keep_prob = tf.placeholder_with_default(self.kp_default,self.kp_default.get_shape())
+        self.keep_prob = tf.placeholder_with_default(self.kp_default, self.kp_default.get_shape())
 
         # declare layer variables
         self.sess = None
-        
+
         # Weights for first layer
         self.W_l1 = []
         self.b_l1 = []
@@ -92,8 +92,8 @@ class NeuralNet:
             self.b_rank = None
             self.b_file = None
             self.b_diag = None
-            
-        # Weights for fully connected layers    
+
+        # Weights for fully connected layers
         self.W_fc = [None] * self.hp['NUM_FC']
         self.b_fc = [None] * self.hp['NUM_FC']
         self.W_final = None
@@ -127,7 +127,7 @@ class NeuralNet:
             _shape = [None] + list(input_size)
 
             self.input_data_placeholders.append(tf.placeholder(
-                                                tf.float32, shape=_shape))
+                tf.float32, shape=_shape))
             if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
                 _shape = [None, 10, 8, self.size_per_tile]
                 self.diagonal_placeholder = tf.placeholder(tf.float32, shape=_shape)
@@ -143,7 +143,7 @@ class NeuralNet:
         self.all_assignments = []
         for i in xrange(len(self.all_weights_biases)):
             self.all_assignments.append(self.all_weights_biases[i].assign(
-                                        self.all_placeholders[i]))
+                self.all_placeholders[i]))
 
         # create neural net graph
         self.neural_net()
@@ -165,11 +165,11 @@ class NeuralNet:
         if self.load_file:
             self.load_weight_values(self.load_file)
             # Initialize un-initialized variables (non-weight variables)
-            self.sess.run(tf.initialize_variables(set(tf.all_variables()) - set(self.all_weights_biases)))
+            self.sess.run(tf.variables_initializer(set(tf.global_variables()) - set(self.all_weights_biases)))
         else:
             if self.verbose:
                 print "Initializing variables from a normal distribution."
-            self.sess.run(tf.initialize_all_variables())
+            self.sess.run(tf.global_variables_initializer())
 
     def start_session(self):
         """ Starts tensorflow session """
@@ -199,19 +199,15 @@ class NeuralNet:
         initial = tf.truncated_normal(shape, stddev=self.variable_value, dtype=tf.float32)
         return tf.Variable(initial)
 
-
     def bias_variable(self, shape):
         initial = tf.constant(self.variable_value, shape=shape, dtype=tf.float32)
         return tf.Variable(initial)
 
-
     def conv5x5_grid(self, x, w):
         return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME')  # Pad or fit? (same is pad, fit is valid)
 
-
     def conv8x1_line(self, x, w):  # includes ranks, files, and diagonals
         return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='VALID')
-
 
     def define_tf_variables(self):
         """
@@ -223,7 +219,7 @@ class NeuralNet:
         nodes_left = self.hp['NUM_HIDDEN']
         for input_size in self.input_sizes:
             # Weight and bias assignment placeholders
-            if input_size[0:2] == (8,8) and self.hp['USE_CONV']:
+            if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
                 # conv weights
                 self.W_grid = self.weight_variable([5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
                 self.W_rank = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
@@ -238,22 +234,26 @@ class NeuralNet:
                 self.b_diag = self.bias_variable([self.hp['NUM_FEAT']])
                 self.b_l1.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
 
-                self.W_grid_placeholder = tf.placeholder(tf.float32, shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_rank_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_file_placeholder = tf.placeholder(tf.float32, shape=[8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_diag_placeholder = tf.placeholder(tf.float32, shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_l1_placeholders.extend([self.W_grid_placeholder, 
-                                               self.W_rank_placeholder, 
-                                               self.W_file_placeholder, 
+                self.W_grid_placeholder = tf.placeholder(tf.float32,
+                                                         shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_rank_placeholder = tf.placeholder(tf.float32,
+                                                         shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_file_placeholder = tf.placeholder(tf.float32,
+                                                         shape=[8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_diag_placeholder = tf.placeholder(tf.float32,
+                                                         shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
+                self.W_l1_placeholders.extend([self.W_grid_placeholder,
+                                               self.W_rank_placeholder,
+                                               self.W_file_placeholder,
                                                self.W_diag_placeholder])
 
                 self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
                 self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
                 self.b_file_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
                 self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-                self.b_l1_placeholders.extend([self.b_grid_placeholder, 
-                                               self.b_rank_placeholder, 
-                                               self.b_file_placeholder, 
+                self.b_l1_placeholders.extend([self.b_grid_placeholder,
+                                               self.b_rank_placeholder,
+                                               self.b_file_placeholder,
                                                self.b_diag_placeholder])
                 nodes_used = self.conv_layer_size * self.hp['NUM_FEAT']
                 nodes_left -= nodes_used
@@ -267,10 +267,10 @@ class NeuralNet:
                 _shape = [int(np.prod(input_size)), int(num_nodes)]
                 self.W_l1.append(self.weight_variable(_shape))
                 self.W_l1_placeholders.append(tf.placeholder(
-                                              tf.float32, shape=_shape))
+                    tf.float32, shape=_shape))
                 self.b_l1.append(self.bias_variable([num_nodes]))
                 self.b_l1_placeholders.append(tf.placeholder(
-                                              tf.float32, shape=[num_nodes]))
+                    tf.float32, shape=[num_nodes]))
                 self.weight_2nd_dim.append(num_nodes)
 
         _shape = [np.sum(self.weight_2nd_dim), self.hp['NUM_HIDDEN']]
@@ -301,7 +301,7 @@ class NeuralNet:
         self.all_weights_biases.extend(self.b_fc)
         self.all_weights_biases.append(self.b_final)
 
-        #Ssame order as all weights/biases
+        # Same order as all weights/biases
         self.all_placeholders.extend(self.W_l1_placeholders)
         self.all_placeholders.extend(self.W_fc_placeholders)
         self.all_placeholders.append(self.W_final_placeholder)
@@ -337,7 +337,7 @@ class NeuralNet:
             Hyper parameters that are used:
                 "NUM_FEAT" - Number of times the output nodes of the convolution
                              are repeated
-                "NN_INPUT_TYPE" - How the state of the chess board is presented 
+                "NN_INPUT_TYPE" - How the state of the chess board is presented
                                   to the neural net. options are:
                                   1. "bitmap"
                                   2. "giraffe"
@@ -364,7 +364,7 @@ class NeuralNet:
                 Mean absolute error loss.
         """
 
-        err = tf.reduce_sum(tf.abs(tf.sub(
+        err = tf.reduce_sum(tf.abs(tf.subtract(
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
 
         return tf.div(err, batch_size)
@@ -380,12 +380,12 @@ class NeuralNet:
                 Mean squared error loss.
         """
 
-        err = tf.reduce_sum(tf.pow(tf.sub(
+        err = tf.reduce_sum(tf.pow(tf.subtract(
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
 
         return tf.div(err, batch_size)
 
-    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, decay_rate = None):
+    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, decay_rate=None):
         """
         Initializes the training optimizer, loss function and training step.
         Input:
@@ -425,7 +425,7 @@ class NeuralNet:
         # initialize training variables if necessary
         train_vars = self.get_training_vars()
         if train_vars is not None:
-            self.sess.run(tf.initialize_variables(train_vars.values()))
+            self.sess.run(tf.variables_initializer(train_vars.values()))
 
         return train_step
 
@@ -487,11 +487,10 @@ class NeuralNet:
         if self.verbose:
             print "Loaded training vars from %s " % filename
 
-
     def load_weight_values(self, _filename='weight_values.p'):
         """
             Sets all variables to values loaded from a file
-            Input: 
+            Input:
                 filename[String]:
                     Name of the file to load weight values from
         """
@@ -502,7 +501,7 @@ class NeuralNet:
         values_dict = pickle.load(open(pickle_path, 'rb'))
 
         weight_values = []
-        
+
         weight_values.extend(values_dict['W_l1'])
         weight_values.extend(values_dict['W_fc'])
         weight_values.append(values_dict['W_final'])
@@ -515,7 +514,7 @@ class NeuralNet:
     def save_weight_values(self, _filename='weight_values.p'):
         """
             Saves all variable values a pickle file
-            Input: 
+            Input:
                 filename[String]:
                     Name of the file to save weight values to
         """
@@ -526,7 +525,7 @@ class NeuralNet:
             print "Weights saved to %s" % _filename
 
     def get_weight_values(self):
-        """ 
+        """
             Returns values of weights as a dictionary
         """
         weight_values = dict()
@@ -569,23 +568,23 @@ class NeuralNet:
 
         o_fc = [None] * self.hp['NUM_FC']
         o_l1 = []
-        W_i = 0 # Weight index
-        b_i = 0 # bias index
+        W_i = 0  # Weight index
+        b_i = 0  # bias index
         for i, input_size in enumerate(self.input_sizes):
             # convolve layer if you can and desired
-            if input_size[0:2] == (8,8) and self.hp['USE_CONV']:
+            if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
                 o_grid = tf.nn.relu(self.conv5x5_grid(
                     self.input_data_placeholders[i], self.W_grid) \
-                    + self.b_grid)
+                                    + self.b_grid)
                 o_rank = tf.nn.relu(self.conv8x1_line(
                     self.input_data_placeholders[i], self.W_rank) \
-                    + self.b_rank)
+                                    + self.b_rank)
                 o_file = tf.nn.relu(self.conv8x1_line(
                     self.input_data_placeholders[i], self.W_file) \
-                    + self.b_file)
+                                    + self.b_file)
                 o_diag = tf.nn.relu(self.conv8x1_line(
                     self.diagonal_placeholder, self.W_diag) \
-                    + self.b_diag)
+                                    + self.b_diag)
                 W_i += 4
                 b_i += 4
 
@@ -595,12 +594,12 @@ class NeuralNet:
                 o_diag = tf.reshape(o_diag, [batch_size, 10 * self.hp['NUM_FEAT']])
 
                 # output of convolutional layer
-                o_l1.append(tf.concat(1, [o_grid, o_rank, o_file, o_diag]))
+                o_l1.append(tf.concat(values=[o_grid, o_rank, o_file, o_diag], axis=1))
             else:
                 _input_shape = [batch_size, np.prod(input_size)]
                 _input = tf.reshape(self.input_data_placeholders[i], _input_shape)
                 output = tf.nn.relu(tf.matmul(_input, self.W_l1[W_i]) \
-                                       + self.b_l1[b_i])
+                                    + self.b_l1[b_i])
                 _shape = [batch_size, self.weight_2nd_dim[i]]
                 output = tf.reshape(output, _shape)
                 W_i += 1
@@ -608,7 +607,7 @@ class NeuralNet:
 
                 o_l1.append(output)
         # output of first layer
-        o_conn = tf.concat(1, o_l1)
+        o_conn = tf.concat(values=o_l1, axis=1)
         # output of fully connected layers
         o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
         for i in xrange(1, self.hp['NUM_FC']):
@@ -722,6 +721,7 @@ class NeuralNet:
             raise ValueError("Invalid evaluate input, white must be next to play.")
 
         return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
+
 
 if __name__ == 'main':
     pass

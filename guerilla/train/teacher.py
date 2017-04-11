@@ -378,7 +378,7 @@ class Teacher:
                                 'fen_index': self.td_fen_index,
                                 'adagrad_acc': self.td_adagrad_acc}
 
-        state['gp_param'] = {'num_selfplay': self.gp_num, 'max_length': self.gp_length}
+        state['gp_param'] = {'num_gameplay': self.gp_num, 'max_length': self.gp_length}
 
         # Save STS evaluation parameters
         state['sts_on'] = self.sts_on
@@ -1172,7 +1172,7 @@ def main():
         t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
         # print eval_sts(g)
         # t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=2000000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=1050000)  # 488037
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
         t.set_gp_params(num_gameplay=500, max_length=-1, opponent=sf_player)
         # t.sts_on = False

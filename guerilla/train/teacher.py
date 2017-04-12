@@ -256,13 +256,13 @@ class Teacher:
         if load_checkmate:
             cm_fens = cgp.load_fens('checkmate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(cm_fens)
-            new_values.extend([0] * len(cm_fens))
+            new_values.extend([-5000] * len(cm_fens))
             if self.verbose:
                 print "%d Checkmate FENs loaded." % len(cm_fens)
         if load_premate:
             pre_fens = cgp.load_fens('premate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(pre_fens)
-            new_values.extend([1] * len(pre_fens))
+            new_values.extend([5000] * len(pre_fens))
             if self.verbose:
                 print "%d Pre-checkmate FENs loaded." % len(pre_fens)
 
@@ -1167,7 +1167,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 1}) as g, \
+    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 2}, load_file='in_training_weight_values.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
         # print eval_sts(g)
@@ -1178,8 +1178,8 @@ def main():
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=11 * 3600)
-        print eval_sts(g)
+        t.run(['train_bootstrap'], training_time=8 * 3600)
+        # print eval_sts(g)
         g.search.max_depth = 2
         print eval_sts(g)
 

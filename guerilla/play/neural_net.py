@@ -618,7 +618,7 @@ class NeuralNet:
                 + self.b_fc[i]), self.keep_prob)
 
         # final_output
-        self.pred_value = tf.sigmoid(tf.matmul(o_fc[-1], self.W_final) + self.b_final)
+        self.pred_value = tf.matmul(o_fc[-1], self.W_final) + self.b_final
 
     def get_weights(self, weight_vars):
         """

@@ -82,7 +82,6 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
         num_file.write(str(sf_num))
 
-
 def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, max_depth=None):
     """
     Input:
@@ -160,7 +159,28 @@ def sigmoid_array(values):
     return 1. / (1. + np.exp(-0.00547 * values))
 
 
-def load_stockfish_values(filename='sf_values.nsv', num_values=None):
+def logit(value):
+    if value <= 0.0000000000015:
+        return -5000.
+    elif value >= 0.999999999999:
+        return 5000.
+    else:
+        return (1. / 0.00547) * (np.log(value) - np.log(1. - value))
+
+
+def reverse_true_values_to_cp():
+    with open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as input_file, \
+         open(resource_filename('guerilla', 'data/extracted_data/cp_values.nsv'), 'w') as output_file:
+        stime = time.time()
+        for line in input_file:
+            # print line
+            pw = float(line)
+            cp = int(logit(pw))
+            output_file.write(str(cp) + "\n")
+        print time.time() - stime
+
+
+def load_stockfish_values(filename='cp_values.nsv', num_values=None):
     """
         Load stockfish values from a file
         Inputs:
@@ -203,11 +223,13 @@ def stockfish_eval_fn(fen, seconds=0.3, max_depth=1, num_attempt=3):
 
 def main():
 
-    generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
+    # generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
 
-    print "Evaluating fens for %d seconds, spending 1 second on each" % (generate_time)
+    # print "Evaluating fens for %d seconds, spending 1 second on each" % (generate_time)
 
-    stockfish_scores(generate_time)
+    # stockfish_scores(generate_time)
+
+    reverse_true_values_to_cp()
 
 if __name__ == "__main__":
 

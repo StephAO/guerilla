@@ -19,9 +19,9 @@ class Search:
                 function to evaluate leaf nodes (usually the neural net)
         """
         self.evaluation_function = evaluation_function
-        self.win_value = 1
-        self.lose_value = 0
-        self.draw_value = 0.5
+        self.win_value = 5000
+        self.lose_value = -5000
+        self.draw_value = 0
         self.num_evals = 0
         self.num_visits = []  # Index: depth, Value: Number of vists at that depth
         self.depth_reached = 0

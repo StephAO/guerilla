@@ -254,13 +254,13 @@ class Teacher:
         new_fens = []
         new_values = []
         if load_checkmate:
-            cm_fens = cgp.load_fens('checkmate_fens.nsv', num_values=self.num_bootstrap * mate_perc / 100)
+            cm_fens = cgp.load_fens('checkmate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(cm_fens)
             new_values.extend([-5000] * len(cm_fens))
             if self.verbose:
                 print "%d Checkmate FENs loaded." % len(cm_fens)
         if load_premate:
-            pre_fens = cgp.load_fens('premate_fens.nsv', num_values=self.num_bootstrap * mate_perc / 100)
+            pre_fens = cgp.load_fens('premate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(pre_fens)
             new_values.extend([5000] * len(pre_fens))
             if self.verbose:
@@ -1178,7 +1178,7 @@ def main():
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=4 * 3600)
+        t.run(['train_bootstrap'], training_time=8 * 3600)
         # print eval_sts(g)
         g.search.max_depth = 2
         print eval_sts(g)

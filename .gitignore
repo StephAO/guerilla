@@ -8,6 +8,7 @@ checkpoint
 
 # Chess data files
 *.pgn
+*.csv
 *.nsv
 
 # Pickle files

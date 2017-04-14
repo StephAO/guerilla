@@ -80,7 +80,7 @@ def stockfish_test():
 
 def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_repeat=3):
     """
-    Tests that fens.nsv and sf_values.nsv file are properly aligned. Also checks that the FENS are "white plays next".
+    Tests that fens.csv and cp_values.csv file are properly aligned. Also checks that the FENS are "white plays next".
     NOTE: Need at least num_check*max_step stockfish and fens stored in the nsv's.
     Input:
         num_check [Int]
@@ -102,10 +102,10 @@ def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_
     # Number of seconds spent on each stockfish score
     seconds = 1
     wrong = []
-    max_wrong = num_check * allow_err
+    max_wrong = int(num_check * allow_err)
 
-    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fens_file, \
-            open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as sf_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/fens.csv'), 'r') as fens_file, \
+            open(resource_filename('guerilla', 'data/extracted_data/cp_values.csv'), 'r') as sf_file:
         fens_count = 0
         line_count = 0
         while fens_count < num_check and len(wrong) <= max_wrong:
@@ -120,8 +120,7 @@ def nsv_test(num_check=40, max_step=10000, tolerance=2e-2, allow_err=0.3, score_
             for i in range(score_repeat):
                 median_arr.append(sf.get_stockfish_score(fen, seconds=seconds))
 
-            # Convert to probability of winning
-            expected = sf.sigmoid_array(np.median(median_arr))
+            expected = np.median(median_arr)
             actual = float(sf_file.readline().rstrip())
 
             if abs(expected - actual) > tolerance:
@@ -156,10 +155,14 @@ def training_test(nn_input_type, verbose=False):
     # Set hyper params for mini-test
     full_success = True
     for t_m in nn.NeuralNet.training_modes:
+        if t_m == 'adadelta':
+            # TODO: Remove when adadelta is fully implemented
+            continue
         for use_conv in [True, False]:
             success = True
             error_msg = ""
             try:
+                learn_rate = 1e-5 if nn_input_type == 'movemap' else 1e-7
                 with Guerilla('Harambe', verbose=verbose,
                               nn_params={'NN_INPUT_TYPE': nn_input_type, 'USE_CONV': use_conv},
                               search_params={'max_depth': 1}) as g:
@@ -167,14 +170,8 @@ def training_test(nn_input_type, verbose=False):
                     t = Teacher(g, bootstrap_training_mode=t_m,
                                 td_training_mode=t_m,
                                 test=True, verbose=verbose,
-                                hp_load_file='training_test.yaml')
-                    if t_m == 'adagrad':
-                        t.hp['LEARNING_RATE'] = 0.001
-                    elif t_m == 'adadelta':
-                        continue  # TODO remove when adadelta is fully implemented
-                        t.hp['LEARNING_RATE'] = 0.001
-                    elif t_m == 'bootstrap':
-                        t.hp['LEARNING_RATE'] = 0.001
+                                hp_load_file='training_test.yaml',
+                                hp={'LEARNING_RATE': learn_rate})
 
                     t.set_bootstrap_params(num_bootstrap=10500)  # 488037
                     t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
@@ -317,7 +314,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     return True
 
 
-def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
+def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=True):
     """
     Tests that Guerilla can learn the best moves of a few boards, thus demonstrating that the input Guerilla converge
     to learning chess moves.
@@ -342,9 +339,9 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 30
     hp['TRAIN_CHECK_SIZE'] = 10
-    hp['LEARNING_RATE'] = 0.0005
+    hp['LEARNING_RATE'] = 1e-4 if nn_input_type == 'giraffe' else 0.1
     hp['LOSS_THRESHOLD'] = float("-inf")  # so that convergence threshold is never met
-    hp['REGULARIZATION_CONST'] = 0.005
+    hp['REGULARIZATION_CONST'] = 0.001 if nn_input_type == 'giraffe' else 0.0001
     hp['TD_LRN_RATE'] = 0.001
 
     # Probability value Constants (0 <= x <= 1)
@@ -416,10 +413,10 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
                     score += 1
                 else:
                     board.push(goal_move)
-                    goal_score = g.get_prob_white_win(fen)
+                    goal_score = g.get_cp_adv_white(fen)
                     board.pop()
                     board.push(result_move)
-                    result_score = g.get_prob_white_win(fen)
+                    result_score = g.get_cp_adv_white(fen)
                     err_msg += (
                         'FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
                         (goal_move, result_move, goal_move, goal_score, result_move, result_score))
@@ -487,7 +484,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             t.set_gp_params(num_gameplay=3, max_length=5)
 
             # Run
-            t.run(set_of_actions, training_time=(0.5 if not isinstance(action, list) else 4))
+            t.run(set_of_actions, training_time=(0.25 if not isinstance(action, list) else 4))
 
             # Save current action
             pause_action = t.actions[t.curr_action_idx]
@@ -591,15 +588,10 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
             # Due to differences in initialization distribution
             if td_training_mode == 'gradient_descent':
-                if nn_input_type == 'bitmap':
-                    td_lrn_rate = 0.001
-                else:
-                    td_lrn_rate = 0.1
+                td_lrn_rate = 0.01
             else:
-                if nn_input_type == 'bitmap':
-                    td_lrn_rate = 0.000001
-                else:
-                    td_lrn_rate = 0.00001
+                td_lrn_rate = 0.0001
+
 
             t = Teacher(g, hp={'TD_LRN_RATE': td_lrn_rate}, td_training_mode=td_training_mode, verbose=verbose)
             if td_training_mode == 'gradient_descent':
@@ -612,8 +604,8 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
             first = second = init_diff = 0
             for i in range(num_iter):
-                first = g.get_prob_white_win(fens[0])
-                second = g.get_prob_white_win(fens[1])
+                first = g.get_cp_adv_white(fens[0])
+                second = g.get_cp_adv_white(fens[1])
 
                 # store initial evaluations
                 if i == 0:
@@ -626,7 +618,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
                 t.td_leaf(fens, restrict_td=False, )
 
             final_diff = abs(first - second)
-            perc_change = 1 - final_diff / init_diff
+            perc_change = 1.0 - final_diff / init_diff
             if perc_change < dec_thresh:
                 err_msg += "Convergence failure on training mode %s: " % td_training_mode
                 err_msg += "Initial Diff: %f Final Diff: %f Percent Change: %f" % (init_diff, final_diff, perc_change)
@@ -671,7 +663,7 @@ def td_checkmate_test(max_iter=100, verbose=False):
                   nn_params={'NN_INPUT_TYPE': 'movemap', 'NUM_HIDDEN': 1536},
                   search_params={'max_depth': 1}) as g:
 
-        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 0.01, 'TD_DISCOUNT': 0.5})
+        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 0.0001, 'TD_DISCOUNT': 0.5})
         t.td_batch_size = 1
 
         for move_test in data:
@@ -702,8 +694,8 @@ def td_checkmate_test(max_iter=100, verbose=False):
                     board = chess.Board(move_test.fen)
                     board.push(move_test.best_move)
                     board_fen = board.fen()
-                    best_score = g.get_prob_white_win(board_fen) if dh.white_is_next(
-                        move_test.fen) else g.get_prob_black_win(board_fen)
+                    best_score = g.get_cp_adv_white(board_fen) if dh.white_is_next(
+                        move_test.fen) else g.get_cp_adv_black(board_fen)
                     # print g.nn.evaluate(fen if dh.white_is_next(fen) else dh.flip_board(fen))
                     print "%d: Played move %s yielded a score of %f. Goal move %s yielded a score of %f. Diff: %f" % (
                         i, str(move), score, str(move_test.best_move), best_score, abs(score - best_score))
@@ -718,9 +710,9 @@ def td_checkmate_test(max_iter=100, verbose=False):
             else:
                 # Didn't learn :(
                 success = False
-                err_msg += '%s: After %d iterations Guerilla played %s instead of %s' % (move_test.name,
-                                                                                         max_iter, move,
-                                                                                         move_test.best_move)
+                err_msg += '%s: After %d iterations Guerilla played %s instead of %s\n' % (move_test.name,
+                                                                                           max_iter, move,
+                                                                                           move_test.best_move)
 
         if not success:
             print "TD Checkmate Test Failed: \n%s" % err_msg
@@ -732,7 +724,7 @@ def run_train_tests():
     all_tests = {}
     all_tests["Stockfish Tests"] = {
         'Stockfish Handling': stockfish_test,
-        'NSV Alignment': nsv_test
+        # 'NSV Alignment': nsv_test
     }
 
     all_tests["Training Tests"] = {
@@ -742,7 +734,7 @@ def run_train_tests():
     }
 
     all_tests["Temporal Difference Tests"] = {
-        # 'td_conv_test': td_conv_test,
+        'td_conv_test': td_conv_test,
         'td_checkmate_test': td_checkmate_test
     }
 
@@ -760,7 +752,7 @@ def run_train_tests():
 
     print "--- Training Tests ---"
     for it in input_types:
-        print "Testing using input type", it.upper()
+        print "\nTesting using input type %s \n" % it.upper()
         for name, test in all_tests["Training Tests"].iteritems():
             print "Testing " + name + "..."
             if not test(it):
@@ -768,7 +760,7 @@ def run_train_tests():
                 success = False
 
     print "--- Temporal Difference Tests --"
-    print "Testing using input type movemap"
+    print "Testing using input type MOVEMAP"
     name = 'td_checkmate_test'
     test = all_tests['Temporal Difference Tests'][name]
     print "Testing " + name + "..."
@@ -776,14 +768,14 @@ def run_train_tests():
         print "%s test failed" % name.capitalize()
         success = False
 
-    # for it in input_types:
-    #     print "Testing using input type", it.upper()
-    #     name = 'td_conv_test'
-    #     test = all_tests['Temporal Difference Tests'][name]
-    #     print "Testing " + name +"..."
-    #     if not test(it):
-    #         print "%s test failed" % name.capitalize()
-    #         success = False
+    for it in input_types:
+        print "\nTesting using input type %s \n" % it.upper()
+        name = 'td_conv_test'
+        test = all_tests['Temporal Difference Tests'][name]
+        print "Testing " + name + "..."
+        if not test(it):
+            print "%s test failed" % name.capitalize()
+            success = False
 
     return success
 

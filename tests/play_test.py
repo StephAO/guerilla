@@ -176,7 +176,7 @@ def rank_prune_test():
             True if test passed, False if test failed.
     """
 
-    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w - - 0 1"
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
@@ -269,25 +269,25 @@ def iterative_prune_test():
                     node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='8/p3k3/8/8/8/5p2/8/7K':
-                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - (-0.7)) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 8/p3k3/8/8/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
                     node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/8/p7/8/8/5p2/8/7K':
-                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - (-0.7)) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 3k4/8/p7/8/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
                     node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/p7/8/8/8/8/5p2/7K':
-                if abs(node.value - 0.2) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - (-0.8)) > 0.0001 or node.depth != 1 or not node.expand:
                     success = False
                     print "Error: Node with fen 3k4/p7/8/8/8/8/5p2/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
                     node.value, node.depth, node.expand)
 
             elif fen.split()[0] =='3k4/8/8/p7/8/5p2/8/7K':
-                if abs(node.value - 0.3) > 0.0001 or node.depth != 1 or not node.expand:
+                if abs(node.value - (-0.7)) > 0.0001 or node.depth != 1 or not node.expand:
                     # Note: that h8g8 is checked before h8h7 due to KILLER move ordering
                     success = False
                     print "Error: Node with fen 3k4/8/8/p7/8/5p2/8/7K is incorrect (value: %f, depth: %d, expand: %s)" % (
@@ -441,7 +441,7 @@ def minimaxtree_test():
             True if test passed, False if test failed.
     """
 
-    root_fen = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+    root_fen = "8/p7/1p6/8/8/1P6/P7/8 w - - 0 1"
     max_depth = 3
 
     # list of fens which should not be reached since they should be pruned
@@ -452,7 +452,7 @@ def minimaxtree_test():
                    "8/8/1p6/p7/PP6/8/8/8"  # a2a4 -> a7a5 ->b3b4
                    ]
 
-    pruned_flipped = map(lambda x: dh.strip_fen(dh.flip_board(x + ' w ---- - 0 1')), pruned_fens)
+    pruned_flipped = map(lambda x: dh.strip_fen(dh.flip_board(x + ' w - - 0 1')), pruned_fens)
 
     # Built SearchNode tree based on this root_fen and the corresponding minimax_basic_eval()
 
@@ -488,7 +488,7 @@ def minimaxtree_test():
     if (score == 0.6) and (str(move) == "b3b4") and (fen == "8/8/pp6/8/1P6/P7/8/8 b - - 0 2"):
         return True
     else:
-        print "Mimimaxree Test Failed: Expected [Score, Move]: [6, b3b4, 8/8/pp6/8/1P6/P7/8/8 b - - 0 2]" \
+        print "Mimimaxtree Test Failed: Expected [Score, Move]: [0.6, b3b4, 8/8/pp6/8/1P6/P7/8/8 b - - 0 2]" \
               " got: [%.1f, %s, %s]" % (score, move, fen)
         return False
 
@@ -503,14 +503,14 @@ def basic_search_test(search_modes=None):
                 True if test passed, False if test failed.
                 """
 
-    search_modes = [Complementmax(basic_test_eval, max_depth=1),
+    search_modes = [Minimax(basic_test_eval, max_depth=1),
                     RankPrune(basic_test_eval, prune_perc=0, time_limit=10, max_depth=1)]
 
     success = True
 
     fens = [None] * 2
-    fens[0] = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"  # White plays next
-    fens[1] = "8/p7/1p6/8/8/1P6/P7/8 b ---- - 0 1"  # Black plays next
+    fens[0] = "8/p7/1p6/8/8/1P6/P7/8 w - - 0 1"  # White plays next
+    fens[1] = "8/p7/1p6/8/8/1P6/P7/8 b - - 0 1"  # Black plays next
 
     expected = [(0.6, "b3b4"), (0.6, "b6b5")]
 
@@ -522,7 +522,7 @@ def basic_search_test(search_modes=None):
             score, move, _ = search_mode.run(board)
             exp_score, exp_move = expected[i]
             if (score != exp_score) or (str(move) != exp_move):
-                print "%s White Search Test Failed. Expected [Score, Move]: [0.6, b3b4] got: [%.1f, %s]" % \
+                print "%s White Seafrch Test Failed. Expected [Score, Move]: [0.6, b3b4] got: [%.1f, %s]" % \
                       (str(search_mode).capitalize(), score, move)
                 success = False
 
@@ -532,15 +532,12 @@ def basic_search_test(search_modes=None):
 def checkmate_search_test():
     """
     Tests that checkmates are working.
-    Input:
-        search_modes [String or List of Strings] (Optional)
-            Can optionally specify the search modes to test. If 'None' then test all search modes.
     Output:
         Result [Boolean]
             True if test passed, False if test failed.
     """
 
-    search_modes = [Complementmax((lambda x: 0.5), max_depth=1),
+    search_modes = [Minimax((lambda x: 0.5), max_depth=1),
                     RankPrune((lambda x: 0.5), prune_perc=0, time_limit=10, max_depth=2)]
 
     success = True
@@ -551,11 +548,11 @@ def checkmate_search_test():
         black_loses = chess.Board('R5k1/5ppp/8/8/8/8/8/4K3 b - - 0 1')
         white_loses = chess.Board('8/8/8/8/8/2k5/1p6/rK6 w - - 0 1')
         result, _, _ = search_mode.run(black_loses)
-        if result != 0:
+        if result != dh.LOSE_VALUE:
             print "%s Checkmate Search Test failed, invalid result for black checkmate." % search_mode
             success = False
         result, _, _ = search_mode.run(white_loses)
-        if result != 0:
+        if result != dh.LOSE_VALUE:
             print "%s Checkmate search test failed, invalid result for white checkmate." % search_mode
             success = False
 
@@ -564,28 +561,28 @@ def checkmate_search_test():
         black_wins_next = chess.Board('8/8/8/8/8/2k5/rp6/1K6 b - - 0 1')
 
         result, move, _ = search_mode.run(white_wins_next)
-        if result != 1 or str(move) != 'a7a8':
+        if result != dh.WIN_VALUE or str(move) != 'a7a8':
             print "%s Checkmate Search test failed, invalid result for white checkmating black." % search_mode
             success = False
         result, move, _ = search_mode.run(black_wins_next)
-        if result != 1 or str(move) != 'a2a1':
+        if result != dh.WIN_VALUE or str(move) != 'a2a1':
             print "%s Checkmate Search test failed, invalid result for black checkmating white." % search_mode
             success = False
 
     return success
 
 
-def complementmax_test():
-    """ Runs a basic minimax and pruning test on the Complemenetmax. """
+def minimax_test():
+    """ Runs a basic minimax and pruning test on the Minimax. """
 
     # Made up starting positions with white pawns in a2 & b3 and black pawns in a7 & b6 (no kings haha)
     # This allows for only 3 nodes at depth 1, 9 nodes at depth 2, and 21 nodes at depth 3 (max)
 
-    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w ---- - 0 1"
+    fen_str = "8/p7/1p6/8/8/1P6/P7/8 w - - 0 1"
 
     board = chess.Board(fen=fen_str)
     # Can't run deeper due to restricted evaluatoin function.
-    shallow = Complementmax(minimax_test_eval, max_depth=3)
+    shallow = Minimax(minimax_test_eval, max_depth=3)
     score, move, fen = shallow.run(board)
     if (score == 0.6) and (str(move) == "b3b4"):
         return True
@@ -603,11 +600,11 @@ def basic_test_eval(fen):
 
     # from white plays next
     if board_state == dh.strip_fen(dh.flip_board("8/p7/1p6/8/8/PP6/8/8 w KQkq - 0 1")):  # a2a3
-        return 0.5
+        return -0.5
     elif board_state == dh.strip_fen(dh.flip_board("8/p7/1p6/8/1P6/8/P7/8 w KQkq - 0 1")):  # b3b4
-        return 0.4
+        return -0.6
     elif board_state == dh.strip_fen(dh.flip_board("8/p7/1p6/8/P7/1P6/8/8 w KQkq - 0 1")):  # a2a4
-        return 0.7
+        return -0.3
     # from black plays next
     elif board_state == "8/8/pp6/8/8/1P6/P7/8":  # b7b6
         return 0.5
@@ -666,7 +663,7 @@ def minimax_test_eval(fen):
     else:
         raise RuntimeError("This definitely should not happen! Invalid board: %s" % board_state)
 
-    return 1 - score
+    return -score
 
 
 def run_play_tests():
@@ -675,7 +672,7 @@ def run_play_tests():
     all_tests["Search Tests"] = {
         'Basic Search': basic_search_test,
         'Checkmate Search': checkmate_search_test,
-        'Complementmax Search': complementmax_test,
+        'Minimax Search': minimax_test,
         'Rank-Prune Search': rank_prune_test,
         'Iterative-Prune Search' : iterative_prune_test,
         'Top k-items': k_bot_test,

@@ -6,7 +6,6 @@ import os
 import time
 from os.path import isfile, join
 import random as rnd
-import pickle
 
 import chess.pgn
 from pkg_resources import resource_filename
@@ -66,7 +65,7 @@ def get_fens(generate_time, num_random=2, store_prob=0.0):
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
 
     start_time = time.clock()
-    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'a') as fen_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/fens.csv'), 'a') as fen_file:
         print "Opened fens output file..."
         while (time.clock() - start_time) < generate_time:
             fens = read_pgn(games_path + '/' + files[game_num])
@@ -141,7 +140,7 @@ def get_checkmate_fens():
                 print "%d %d" % (i, mate_count)
 
 
-def load_fens(filename='fens.nsv', num_values=None):
+def load_fens(filename='fens.csv', num_values=None):
     """
     Loads the fens file.
         Input:

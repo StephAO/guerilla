@@ -215,7 +215,7 @@ def main():
     players = {'w': None, 'b': None}
     if choose_players == 'd':
 
-        players[0] = Guerilla('Harambe', search_type='complementmax', load_file='4654.p')
+        players[0] = Guerilla('Harambe', search_type='minimax', load_file='4654.p')
         players[1] = Human('You')
 
     elif choose_players == 'c':

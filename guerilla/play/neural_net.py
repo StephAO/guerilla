@@ -55,18 +55,18 @@ class NeuralNet:
         # fen_to_<nn_input_type>
         self.total_input_size = 0
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
-            self.variable_value = 0.01
+            self.weight_stddev = 0.01
             self.input_sizes = [(dh.STATE_DATA_SIZE,),
                                 (dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE)]
             # Used for convolution
             self.size_per_tile = dh.MOVEMAP_TILE_SIZE
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
-            self.variable_value = 0.001
+            self.weight_stddev = 0.001
             self.input_sizes = [(dh.STATE_DATA_SIZE,), \
                                 (dh.BOARD_DATA_SIZE,), (dh.PIECE_DATA_SIZE,)]
             self.hp['USE_CONV'] = False
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
-            self.variable_value = 0.1
+            self.weight_stddev = 0.01
             self.input_sizes = [(dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.BITMAP_TILE_SIZE)]
             # Used for convolution
             self.size_per_tile = dh.BITMAP_TILE_SIZE
@@ -196,11 +196,11 @@ class NeuralNet:
             print "Default graph reset."
 
     def weight_variable(self, shape):
-        initial = tf.truncated_normal(shape, stddev=self.variable_value, dtype=tf.float32)
+        initial = tf.truncated_normal(shape, stddev=self.weight_stddev, dtype=tf.float32)
         return tf.Variable(initial)
 
     def bias_variable(self, shape):
-        initial = tf.constant(self.variable_value, shape=shape, dtype=tf.float32)
+        initial = tf.constant(self.weight_stddev, shape=shape, dtype=tf.float32)
         return tf.Variable(initial)
 
     def conv5x5_grid(self, x, w):
@@ -641,7 +641,7 @@ class NeuralNet:
                     List of values with which to update weights. Must be in desired order.
         """
         if len(weight_vals) != len(self.all_weights_biases):
-            raise ValueError("Error: There are an uneven number of " \
+            raise ValueError("Error: There are a different number of " \
                              "weights(%d) and weight values(%d)" % \
                              (len(self.all_weights_biases), len(weight_vals)))
 
@@ -720,7 +720,12 @@ class NeuralNet:
         if dh.black_is_next(fen):
             raise ValueError("Invalid evaluate input, white must be next to play.")
 
-        return self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
+        output = self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
+
+        if np.isnan(output):
+            raise RuntimeError("Neural network output NaN! Most likely due to bad training parameters.")
+
+        return output
 
 
 if __name__ == 'main':

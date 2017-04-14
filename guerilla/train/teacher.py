@@ -256,13 +256,13 @@ class Teacher:
         if load_checkmate:
             cm_fens = cgp.load_fens('checkmate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(cm_fens)
-            new_values.extend([-5000] * len(cm_fens))
+            new_values.extend([dh.LOSE_VALUE] * len(cm_fens))
             if self.verbose:
                 print "%d Checkmate FENs loaded." % len(cm_fens)
         if load_premate:
             pre_fens = cgp.load_fens('premate_fens.csv', num_values=self.num_bootstrap * mate_perc / 100)
             new_fens.extend(pre_fens)
-            new_values.extend([5000] * len(pre_fens))
+            new_values.extend([dh.WIN_VALUE] * len(pre_fens))
             if self.verbose:
                 print "%d Pre-checkmate FENs loaded." % len(pre_fens)
 
@@ -408,6 +408,7 @@ class Teacher:
                     action [string]
                     epoch_num [int]
                     remaining_boards [list of ints]
+                    loss [list of floats]
                     loss [list of floats]
         """
         pickle_path = resource_filename('guerilla', 'data/train_checkpoint/' + filename)
@@ -949,7 +950,6 @@ class Teacher:
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
         for i, root_board in enumerate(game):
-            # Output value is P(winning of current player)
 
             # turn off leaf evaluation if necessary
             original_depth = self.guerilla.search.max_depth
@@ -964,11 +964,11 @@ class Teacher:
             if no_leaf:
                 self.guerilla.search.max_depth = original_depth
 
-            # Modify value so that it represents P(white winning)
+            # Modify value so that it represents cp advantage of white
             if dh.white_is_next(root_board):
                 game_info[i]['value'] = value
             else:
-                game_info[i]['value'] = 1 - value
+                game_info[i]['value'] = -value
 
             # Get gradient of prediction on leaf board
             if dh.white_is_next(leaf_board):
@@ -976,12 +976,13 @@ class Teacher:
             else:
                 # Get NEGATIVE gradient of a flipped board
                 # Explanation:
-                #   P(white win | board) = 1 - P(black win | board)
-                #   P(white win | board) = P(black win | flip(board))
+                #   CP(player) := Centipawn Advantage of player
+                #   CP(white | board) = - CP(black | board)
+                #   CP(white | board) = CP(black | flip(board))
                 #   Thus:
-                #   Grad(P(white win | board )) = Grad(1 - P(black win | board))
-                #                                   = - Grad(P(black win | board))
-                #                                                                = - Grad(P(white win | flip(board)))
+                #   Grad(CP(white | board )) = Grad(-CP(black | board))
+                #                            = - Grad(CP(black | board))
+                #                            = - Grad(CP(white | flip(board)))
                 game_info[i]['gradient'] = np.array(self.nn.get_all_weights_gradient(dh.flip_board(leaf_board))) * -1
 
         # Modify step size based on full VS half-move
@@ -1167,7 +1168,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='complementmax', search_params={'max_depth': 2}, load_file='in_training_weight_values.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
         # print eval_sts(g)

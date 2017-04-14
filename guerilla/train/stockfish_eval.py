@@ -7,10 +7,8 @@ import time
 import psutil
 import os
 import numpy as np
-import math
-import pickle
+import guerilla.data_handler as dh
 from pkg_resources import resource_filename
-import guerilla.train.chess_game_parser as cgp
 
 
 # Modification from notbanker's stockfish.py https://gist.github.com/notbanker/3af51fd2d11ddcad7f16
@@ -40,8 +38,8 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
 
     batch_size = 5
 
-    with open(resource_filename('guerilla', 'data/extracted_data/fens.nsv'), 'r') as fen_file:
-        with open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'a') as sf_file:
+    with open(resource_filename('guerilla', 'data/extracted_data/fens.csv'), 'r') as fen_file:
+        with open(resource_filename('guerilla', 'data/extracted_data/cp_values.csv'), 'a') as sf_file:
 
             for i in xrange(sf_num):
                 fen_file.readline()
@@ -66,16 +64,14 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                 sf_num += 1
 
                 if (sf_num + 1) % batch_size == 0:
-                    mapped_scores = sigmoid_array(np.array(scores))  # type: np.ndarray
-                    for mscore in mapped_scores:
+                    for mscore in scores:
                         sf_file.write(str(mscore) + '\n')
                     scores = []
 
                     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
                         num_file.write(str(sf_num))
 
-            mapped_scores = sigmoid_array(np.array(scores))  # type: np.ndarray
-            for mscore in mapped_scores:
+            for mscore in scores:
                 sf_file.write(str(mscore) + '\n')
 
     # Write out the index of the next fen to score
@@ -103,7 +99,7 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
     """
 
     # Base for mate scoring
-    MATE_BASE = 5000 # 50 pawn advantage (>5 queens)
+    MATE_BASE = dh.WIN_VALUE  # 50 pawn advantage (>5 queens)
 
     memory = memory or psutil.virtual_memory().available / (2 * 1024 * 1024)
     threads = threads or psutil.cpu_count() - 2
@@ -150,7 +146,8 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
     return score
 
 def sigmoid_array(values):
-    """ From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
+    """ NOTE: Not in use since switched to linear output.
+        From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
         1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a
         few data points and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided
         on (by me, deal with it).
@@ -160,17 +157,23 @@ def sigmoid_array(values):
 
 
 def logit(value):
+    """
+    Inverse of sigmoid array function. Converts from P(win) to centipawn advantage.
+    """
     if value <= 0.0000000000015:
-        return -5000.
+        return dh.LOSE_VALUE
     elif value >= 0.999999999999:
-        return 5000.
+        return dh.WIN_VALUE
     else:
         return (1. / 0.00547) * (np.log(value) - np.log(1. - value))
 
 
 def reverse_true_values_to_cp():
-    with open(resource_filename('guerilla', 'data/extracted_data/sf_values.nsv'), 'r') as input_file, \
-         open(resource_filename('guerilla', 'data/extracted_data/cp_values.nsv'), 'w') as output_file:
+    """
+    Converts sf_values file where scores are P(win) to cp_values file where scores are centipawn advantage. 
+    """
+    with open(resource_filename('guerilla', 'data/extracted_data/sf_values.csv'), 'r') as input_file, \
+            open(resource_filename('guerilla', 'data/extracted_data/cp_values.csv'), 'w') as output_file:
         stime = time.time()
         for line in input_file:
             # print line
@@ -180,7 +183,7 @@ def reverse_true_values_to_cp():
         print time.time() - stime
 
 
-def load_stockfish_values(filename='cp_values.nsv', num_values=None):
+def load_stockfish_values(filename='cp_values.csv', num_values=None):
     """
         Load stockfish values from a file
         Inputs:
@@ -192,7 +195,7 @@ def load_stockfish_values(filename='cp_values.nsv', num_values=None):
         Outpus:
             stockfish_values[list of floats]:
                 list of stockfish_values corresponding to the order of
-                fens in fens.nsv
+                fens in fens.csv
     """
     stockfish_values = []
     count = 0
@@ -208,7 +211,7 @@ def load_stockfish_values(filename='cp_values.nsv', num_values=None):
 
 def stockfish_eval_fn(fen, seconds=0.3, max_depth=1, num_attempt=3):
     """
-    Evaluates the given fen using stockfish. Returns P(win).
+    Evaluates the given fen using stockfish. Returns centipawn advantage.
     Input:
         fen [String]
             FEN to evaluate.
@@ -219,7 +222,7 @@ def stockfish_eval_fn(fen, seconds=0.3, max_depth=1, num_attempt=3):
 
     raw_value = get_stockfish_score(fen, seconds=seconds, max_depth=max_depth, num_attempt=num_attempt)
 
-    return sigmoid_array(raw_value)
+    return raw_value
 
 def main():
 

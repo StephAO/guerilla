@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 
 import guerilla.data_handler as dh
 from guerilla.play.neural_net import NeuralNet
-from guerilla.play.search import Complementmax, RankPrune, IterativeDeepening
+from guerilla.play.search import Minimax, RankPrune, IterativeDeepening
 
 class Player:
     __metaclass__ = ABCMeta
@@ -62,12 +62,12 @@ class Player:
 
 class Guerilla(Player):
     search_types = {
-        "complementmax": Complementmax,
+        "minimax": Minimax,
         "rankprune": RankPrune,
         "iterativedeepening": IterativeDeepening
     }
 
-    def __init__(self, name, colour=None, search_type='complementmax', load_file=None,
+    def __init__(self, name, colour=None, search_type='minimax', load_file=None,
                  hp_load_file=None, seed=None, verbose=True, nn_params=None, search_params=None):
         super(Guerilla, self).__init__(name)
 
@@ -91,38 +91,39 @@ class Guerilla(Player):
 
     def get_move(self, board):
         # print "Guerilla is thinking..."
-        move = self.search.run(board)[1]
+        score, move, leaf = self.search.run(board)
         if move is None:
-            raise ValueError("There are no valid moves from this position! FEN: %s" % board.fen())
+            raise ValueError("There are no valid moves from this position! FEN: %s "
+                             "\n\t Debug Info: Score: %f Move: %s Leaf Board: %s" % (board.fen(), score, move, leaf))
         return move
 
-    def get_prob_white_win(self, fen):
+    def get_cp_adv_white(self, fen):
         """
-        Returns the probability of white winning given the current fen.
+        Returns the centipawn advantage of white given the current fen.
         Input:
             fen [String]
                 FEN.
         Output:
-            probability [Float]
-                P(White wins)
+            centipawn advantage [Float]
+                Centipawn advantage of white.
         """
         if dh.white_is_next(fen):
             return self.nn.evaluate(fen)
         else:
             # Black plays next
-            return 1 - self.nn.evaluate(dh.flip_board(fen))
+            return -self.nn.evaluate(dh.flip_board(fen))
 
-    def get_prob_black_win(self, fen):
+    def get_cp_adv_black(self, fen):
         """
-        Returns the probability of black winning given the current fen.
+        Returns the centipawn advantage of black given the current fen.
         Input:
             fen [String]
                 FEN.
         Output:
-            probability [Float]
-                P(Black wins)
+            centipawn advantage [Float]
+                Centipawn advantage of black.
         """
-        return 1 - self.get_prob_white_win(fen)
+        return -self.get_cp_adv_white(fen)
 
 
 class Human(Player):

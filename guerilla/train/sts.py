@@ -174,7 +174,7 @@ def get_epds(filenames):
 
 def sparse_test():
     with Guerilla('Harambe', load_file='4790.p',
-                  search_type='complementmax',
+                  search_type='minimax',
                   search_params={'max_depth': 1}) as g:
         # g.search.order_moves = True
         # g.search.order_function = material_balance

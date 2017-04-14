@@ -1,6 +1,11 @@
-import time
-import chess
 import numpy as np
+
+# WIN/LOSE/DRAW CONSTANTS
+WIN_VALUE = 5000
+LOSE_VALUE = -5000
+DRAW_VALUE = 0
+
+# Data handler constants + Variables
 
 piece_indices = {
     'q': 0,
@@ -69,6 +74,7 @@ piece_moves = {
 }
 
 # Movemap Global Variables for testing
+
 piece_type_index = {
     'wq': 0,
     'wr': 1,
@@ -104,7 +110,6 @@ piece_move_slice = {
     'bp2': slice(44, 46, None),
     'bk': slice(46, 48, None)
 }
-
 
 def flip_board(fen):
     """ switch colors of pieces

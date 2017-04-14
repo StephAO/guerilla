@@ -76,8 +76,8 @@ def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
 
     # Create Guerilla with Random weights:
 
-    for st in ['iterativedeepening', 'complementmax', 'rankprune']:
-        sp = {'max_depth': max_depth} if st == 'complementmax' else {'time_limit': time_limit}
+    for st in ['iterativedeepening', 'minimax', 'rankprune']:
+        sp = {'max_depth': max_depth} if st == 'minimax' else {'time_limit': time_limit}
         num_visits = None
         time_taken = num_evals = cache_hits = depth_reached = 0
         for _ in range(num_rep):

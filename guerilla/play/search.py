@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 import time
 import Queue
 import chess
@@ -6,7 +6,6 @@ import random
 import math
 
 import guerilla.data_handler as dh
-
 
 class Search:
     __metaclass__ = ABCMeta
@@ -19,9 +18,9 @@ class Search:
                 function to evaluate leaf nodes (usually the neural net)
         """
         self.evaluation_function = evaluation_function
-        self.win_value = 5000
-        self.lose_value = -5000
-        self.draw_value = 0
+        self.win_value = dh.WIN_VALUE
+        self.lose_value = dh.LOSE_VALUE
+        self.draw_value = dh.DRAW_VALUE
         self.num_evals = 0
         self.num_visits = []  # Index: depth, Value: Number of vists at that depth
         self.depth_reached = 0
@@ -152,7 +151,7 @@ class Search:
         self.cache = {}
 
 
-class Complementmax(Search):
+class Minimax(Search):
     """
         Uses a recursive function to perform a simple minimax with
         alpha-beta pruning.
@@ -168,7 +167,7 @@ class Complementmax(Search):
                 ab_prune[bool]:
                     Alpha-beta pruning. Same results on or off, only set to off for td training
         """
-        super(Complementmax, self).__init__(leaf_eval)
+        super(Minimax, self).__init__(leaf_eval)
 
         self.evaluation_function = leaf_eval
         self.order_function = material_balance
@@ -178,7 +177,7 @@ class Complementmax(Search):
         self.depth_reached = max_depth  # By definition
 
     def __str__(self):
-        return "Complementmax"
+        return "Minimax"
 
     def _evaluation_condition(self, **kwargs):
         """ Condition on which to evaluate """
@@ -198,13 +197,13 @@ class Complementmax(Search):
             self.clear_cache()
         self.num_evals = 0
         self.num_visits = []
-        return self.complementmax(board)
+        return self.minimax(board)
 
-    def complementmax(self, board, depth=0, a=5000):
+    def minimax(self, board, depth=0, a=float("inf")):
         """
-            Recursive function to search for best move using complementmax with alpha-beta pruning.
+            Recursive function to search for best move using minimax with alpha-beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
-            which is the same as maximizing the reciprocal.
+            which is the same as maximizing the negative value.
             Inputs:
                 board [chess.Board]:
                     current state of board
@@ -214,13 +213,13 @@ class Complementmax(Search):
                     lower bound of layer above, upper bound of current layer (because of alternating signs)
             Outputs:
                 best_score [float]:
-                    Score achieved by best move. P(win of next player to play)
+                    Score achieved by best move. Centipawn advantage of next player to play.
                 best_move [chess.Move]:
                     Best move to play
                 best_leaf [String]
                     FEN of the board of the leaf node which yielded the highest value.
         """
-        best_score = -5000
+        best_score = float("-inf")
         best_move = None
         best_leaf = None
 
@@ -246,9 +245,9 @@ class Complementmax(Search):
             for i, move in enumerate(moves):
                 # recursive call
                 board.push(move)
-                score, next_move, leaf_board = self.complementmax(board, depth + 1, (-1) * best_score)
+                score, next_move, leaf_board = self.minimax(board, depth + 1, -best_score)
                 # Take reciprocal of score since alternating levels
-                score = (-1) * score
+                score = -score
                 board.pop()
                 if score > best_score:
                     best_score = score
@@ -487,7 +486,7 @@ class IterativeDeepening(Search):
 
     def DLS(self, node, a=1.0):
         """
-            Recusrive depth limited search with alpha_beta pruning.
+            Recursive depth limited search with alpha_beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
             which is the same as maximizing the reciprocal.
             Inputs:
@@ -553,7 +552,7 @@ class IterativeDeepening(Search):
                 fast_order.sort(key=lambda x: x[1])
 
                 # Favor killer moves the most
-                # Always favor node ordering, mark whether
+                # Always favor node ordering, mark whether node needs to be evaluated
                 moves = [(x[0], x[2]) for x in killers + node_order + fast_order]
 
             for move, new_move in moves:
@@ -562,8 +561,8 @@ class IterativeDeepening(Search):
                     node.gen_child(move, eval_fn=self.conditional_eval)
 
                 # print move
-                score, next_move, lf = self.DLS(node.children[move], 1.0 - best_score)
-                score = 1.0 - score
+                score, next_move, lf = self.DLS(node.children[move], -best_score)
+                score = -score
                 # Best child is the one one which has the lowest value
                 if best_move is None or score > best_score:
                     best_score = score
@@ -886,7 +885,7 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
     """
         Recursive function to find for best move in a game tree using minimax with alpha-beta pruning.
         Assumes that the layer above the leaves are trying to minimize the positive value,
-        which is the same as maximizing the reciprocal.
+        which is the same as maximizing the negative value.
         Inputs:
             board [chess.Board]:
                 current state of board
@@ -919,9 +918,9 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
 
     else:
         for move, child in root.children.iteritems():
-            score, next_move, leaf_board = minimaxtree(child, 1 - best_score, forbidden_fens=forbidden_fens)
+            score, next_move, leaf_board = minimaxtree(child, -best_score, forbidden_fens=forbidden_fens)
             # Take reciprocal of score since alternating levels
-            score = 1 - score
+            score = -score
             if score > best_score:
                 best_score, best_move, best_leaf = score, move, leaf_board
 
@@ -936,7 +935,7 @@ def minimaxtree(root, a=1.0, forbidden_fens=None):
     return best_score, best_move, best_leaf
 
 
-def material_balance(fen, normalize=True):
+def material_balance(fen, normalize=False):
     """
     Returns the material advantage of a given FEN.
     Material Imbalance = Score[side to move] - Score[not side to move].

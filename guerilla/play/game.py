@@ -215,14 +215,15 @@ def main():
     players = {'w': None, 'b': None}
     if choose_players == 'd':
 
-        players[0] = Guerilla('Harambe', search_type='minimax', load_file='4654.p')
-        players[1] = Human('You')
+        players['w'] = Human('You')
+        players['b'] = Guerilla('Harambe', search_type='minimax', load_file='default.p', search_params={'max_depth': 2})
 
     elif choose_players == 'c':
-        for i in xrange(2):
+        for i in ['w', 'b']:
             print "Player 1 will start as white the first game. Each game players will swap colours"
-            player_name = raw_input("Player %d name: " % (i))
-            player_type = raw_input("Player %d type %s : " % (i, Game.player_types.keys()))
+            color = 'White' if i == 'w' else 'Black'
+            player_name = raw_input("%s player name: " % (color))
+            player_type = raw_input("%s player type %s : " % (color, Game.player_types.keys()))
             if player_type == 'guerilla':
                 weight_file = raw_input(
                     "Load_file or (d) for default. (File must be located in the pickles directory):\n")

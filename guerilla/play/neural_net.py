@@ -2,7 +2,7 @@ import pickle
 
 import numpy as np
 import tensorflow as tf
-import yaml
+import ruamel.yaml
 from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
@@ -324,7 +324,7 @@ class NeuralNet:
         relative_filepath = 'data/hyper_params/neural_net/' + file
         filepath = resource_filename('guerilla', relative_filepath)
         with open(filepath, 'r') as yaml_file:
-            self.hp.update(yaml.load(yaml_file))
+            self.hp.update(ruamel.yaml.safe_load(yaml_file))
 
     def _set_hyper_params(self, hyper_parameters):
         """
@@ -724,6 +724,9 @@ class NeuralNet:
 
         if np.isnan(output):
             raise RuntimeError("Neural network output NaN! Most likely due to bad training parameters.")
+        if np.isinf(output):
+            raise RuntimeError("Neural network output %s infinity! Most likely due to bad training parameters." %
+                               'positive' if output > 0 else 'negative')
 
         return output
 

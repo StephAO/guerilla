@@ -10,7 +10,7 @@ import warnings
 import chess
 import chess.pgn
 import numpy as np
-import yaml
+import ruamel.yaml
 from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
@@ -78,7 +78,8 @@ class Teacher:
         # Bootstrap parameters
         self.num_bootstrap = -1
         self.conv_loss_thresh = 0.0001
-        self.conv_window_size = 10  # Number of epochs to consider when checking for convergence
+        self.conv_window_size = 5  # Number of epochs to consider when checking for convergence
+        self.use_check_pre = True
 
         # TD-Leaf parameters
         self.td_pgn_folder = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
@@ -188,7 +189,8 @@ class Teacher:
                     print "Performing Bootstrap training!"
                     print "Fetching stockfish values..."
 
-                fens, true_values = self.load_data(seed=self.rnd_seed_shuffle)
+                fens, true_values = self.load_data(seed=self.rnd_seed_shuffle, load_checkmate=self.use_check_pre,
+                                                   load_premate=self.use_check_pre)
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_end':
@@ -250,6 +252,8 @@ class Teacher:
         if (len(fens) % self.hp['BATCH_SIZE']) != 0:
             fens = fens[:(-1) * (len(fens) % self.hp['BATCH_SIZE'])]
         true_values = sf.load_stockfish_values(num_values=len(fens))
+        if self.verbose:
+            print "%d Standard FENs loaded." % len(fens)
 
         new_fens = []
         new_values = []
@@ -267,10 +271,10 @@ class Teacher:
                 print "%d Pre-checkmate FENs loaded." % len(pre_fens)
 
         # Reduce FENs size to make place for pre and check fens
-        fens = fens[:-len(new_fens)]
-        values = fens[:-len(new_values)]
+        fens = fens[:-len(new_fens)] if len(new_fens) > 0 else fens
+        true_values = true_values[:-len(new_values)] if len(new_values) > 0 else true_values
         fens.extend(new_fens)
-        values.extend(new_values)
+        true_values.extend(new_values)
 
         # Optional shuffle
         if shuffle:
@@ -293,7 +297,7 @@ class Teacher:
         relative_filepath = 'data/hyper_params/teacher/' + file
         filepath = resource_filename('guerilla', relative_filepath)
         with open(filepath, 'r') as yaml_file:
-            self.hp.update(yaml.load(yaml_file))
+            self.hp.update(ruamel.yaml.safe_load(yaml_file))
 
     def _set_hyper_params(self, hyper_parameters):
         """
@@ -468,7 +472,8 @@ class Teacher:
             if self.verbose:
                 print "Resuming Bootstrap training..."
 
-            fens, true_values = self.load_data(seed=self.rnd_seed_shuffle)
+            fens, true_values = self.load_data(seed=self.rnd_seed_shuffle, load_checkmate=self.use_check_pre,
+                                               load_premate=self.use_check_pre)
 
             # finish epoch
             train_fens = fens[:(-1) * self.hp['VALIDATION_SIZE']]  # fens to train on
@@ -517,8 +522,9 @@ class Teacher:
         return self.checkpoint_interval is not None and time.time() - self.prev_checkpoint >= self.checkpoint_interval
 
     # ---------- BOOTSTRAP TRAINING METHODS
-    def set_bootstrap_params(self, num_bootstrap=None):
+    def set_bootstrap_params(self, num_bootstrap=None, use_check_pre=True):
         self.num_bootstrap = num_bootstrap
+        self.use_check_pre = use_check_pre
 
     def train_bootstrap(self, fens, true_values, start_epoch=0, loss=None, train_loss=None):
         """
@@ -1114,7 +1120,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on game %d of %d..." % (i + 1, self.gp_num)
-            self.td_leaf(game_fens)  # , no_leaf=True, restrict_td=False)  # only_own_boards=guerilla_player)
+            self.td_leaf(game_fens, no_leaf=True, restrict_td=False)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1173,13 +1179,13 @@ def main():
         t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
         # print eval_sts(g)
         # t.rnd_seed_shuffle = 123456
-        t.set_bootstrap_params(num_bootstrap=1050000)  # 488037
+        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
         t.set_gp_params(num_gameplay=500, max_length=-1, opponent=sf_player)
         # t.sts_on = False
         # t.sts_interval = 100
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=8 * 3600)
+        t.run(['train_bootstrap'], training_time=4 * 3600)
         # print eval_sts(g)
         g.search.max_depth = 2
         print eval_sts(g)

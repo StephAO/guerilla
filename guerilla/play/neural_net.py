@@ -444,7 +444,7 @@ class NeuralNet:
             for var in train_vars:
                 val = self.train_optimizer.get_slot(var, name)
                 if val:
-                    var_dict[var.name] = val
+                    var_dict[val.name] = val
 
         if var_dict == {}:
             return None
@@ -696,9 +696,10 @@ class NeuralNet:
         feed_dict = {}
         input_data = dh.fen_to_nn_input(fen, self.hp['NN_INPUT_TYPE'])
         if len(input_data) != len(self.input_data_placeholders):
-            raise ValueError("The length of input data(%d) does not equal the " \
+            raise ValueError("The length of input data (%d) does not equal the " \
                              "length of input data place holders(%d)" % \
-                             len(input_data), len(self.input_data_placeholders))
+                             (len(input_data), len(self.input_data_placeholders)))
+
         for i in xrange(len(input_data)):
             feed_dict[self.input_data_placeholders[i]] = np.array([input_data[i]])
             if np.shape(input_data[i])[0:2] == (8, 8) and self.hp['USE_CONV']:
@@ -726,7 +727,7 @@ class NeuralNet:
             raise RuntimeError("Neural network output NaN! Most likely due to bad training parameters.")
         if np.isinf(output):
             raise RuntimeError("Neural network output %s infinity! Most likely due to bad training parameters." %
-                               'positive' if output > 0 else 'negative')
+                               ('positive' if output > 0 else 'negative'))
 
         return output
 

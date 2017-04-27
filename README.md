@@ -10,15 +10,15 @@ Packages and programs required for things to work.
 ### Required Packages to Play
 - python-chess:
   - `sudo pip install python-chess`
-- tensorflow:
-  - https://www.tensorflow.org/versions/r0.10/get_started/os_setup.html
+- tensorflow 1.0:
+  - https://www.tensorflow.org/install/
 - numpy
   - `sudo apt-get install python-numpy`
 - pygame (for gui):
   - `sudo apt-get build-dep python-pygame`
   - `sudo apt-get install python-pygame`
-- pyYAML:
-  - `pip install pyYAML`
+- ruamel.yaml:
+  - `pip install ruamel.yaml`
 
 ### Required Packages to Train
 - stockfish:

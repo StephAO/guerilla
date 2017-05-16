@@ -169,12 +169,13 @@ def fen_to_nn_input(fen, nn_type):
             nn_input[varies]:
                 correct neural net inputs type
     """
-    try:
-        nn_input = globals()['fen_to_' + nn_type](fen)
-    except:
-        raise NotImplementedError("Error: No fen_to_%s function exists." % (nn_type))
-    return nn_input
 
+    key = 'fen_to_' + nn_type
+    global_vars = globals()
+    if key in global_vars:
+        return global_vars['fen_to_' + nn_type](fen)
+
+    raise NotImplementedError("Error: No fen_to_%s function exists." % (nn_type))
 
 # TODO: deal with en passant and castling
 def fen_to_bitmap(fen):

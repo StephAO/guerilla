@@ -33,7 +33,7 @@ BOARD_DATA_SIZE = 128
 PIECE_DATA_SIZE = 208
 GF_FULL_SIZE = 350
 
-MOVEMAP_TILE_SIZE = 48
+MOVEMAP_TILE_SIZE = 30
 BITMAP_TILE_SIZE = 12
 
 crosswise_fn = [
@@ -90,25 +90,25 @@ piece_type_index = {
     'bk': 11
 }
 
-piece_move_slice = {
-    'wq': slice(12, 14, None),
-    'wr1': slice(14, 16, None),
-    'wr2': slice(16, 18, None),
-    'wb': slice(18, 20, None),
-    'wn1': slice(20, 22, None),
-    'wn2': slice(22, 24, None),
-    'wp1': slice(24, 26, None),
-    'wp2': slice(26, 28, None),
-    'wk': slice(28, 30, None),
-    'bq': slice(30, 32, None),
-    'br1': slice(32, 34, None),
-    'br2': slice(34, 36, None),
-    'bb': slice(36, 38, None),
-    'bn1': slice(38, 40, None),
-    'bn2': slice(40, 42, None),
-    'bp1': slice(42, 44, None),
-    'bp2': slice(44, 46, None),
-    'bk': slice(46, 48, None)
+piece_move_idx = {
+    'wq': 12,
+    'wr1': 13,
+    'wr2': 14,
+    'wb': 15,
+    'wn1': 16,
+    'wn2': 17,
+    'wp1': 18,
+    'wp2': 19,
+    'wk': 20,
+    'bq': 21,
+    'br1': 22,
+    'br2': 23,
+    'bb': 24,
+    'bn1': 25,
+    'bn2': 26,
+    'bp1': 27,
+    'bp2': 28,
+    'bk': 29
 }
 
 def flip_board(fen):
@@ -504,11 +504,9 @@ def fen_to_giraffe(fen):
     return np.array(state_data), np.array(board_data), np.array(piece_data)
 
 
-def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
+def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_idx, mm):
     """
         Finds the range of motion of a sliding piece (Queen, Rook, or Bishop).
-        Set slide range for piece for giraffe input data structure.
-        Updates attack defend maps.
 
         Inputs:
             c_rank[int]:
@@ -516,10 +514,10 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
             c_file[int]:
                 file of piece (0-7)
             piece[String]:
-                piece type (e.g. 'wq', 'br1', 'bk', ... see piece_move_slice)
+                piece type (e.g. 'wq', 'br1', 'bk', ... see piece_move_idx)
             occupied bitmap[String[8][8]]:
                 bitmap of occupied tiles. each tile has a piece (see above)
-            piece_move_slice[Dict]:
+            piece_move_idx[Dict]:
                 slice of move_map tile list for a given piece type
             mm[list]:
                 move map input
@@ -548,7 +546,9 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_slice, mm):
                 full_piece = piece
 
             # Set map
-            mm[r][f][piece_move_slice[full_piece]] = [c_rank + 1, c_file + 1]
+            # TODO Remove assert
+            assert(mm[r][f][piece_move_idx[full_piece]] != 1)
+            mm[r][f][piece_move_idx[full_piece]] = 1
 
             # End of slide (piece in the way)
             if occupied_bitmap[r][f] != 0:
@@ -668,7 +668,7 @@ def fen_to_movemap(fen):
                 # There exists a piece, and it isn't extra
                 piece = occupied_bitmap[c_rank][c_file]
                 set_move_map(c_rank, c_file, piece, occupied_bitmap,
-                             piece_move_slice, mm)
+                             piece_move_idx, mm)
 
     return bs, mm
 

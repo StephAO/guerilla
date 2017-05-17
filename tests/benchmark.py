@@ -32,7 +32,7 @@ def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
     if verbose:
         print "Each timing is the average of %d runs" % num_rep
 
-    for i in range(max_depth + 1):
+    for i in range(1, max_depth + 1):
         # Create Guerilla with Random weights:
         with Guerilla('curious_george', verbose=False, seed=rnd_seed, search_params={'max_depth': i}) as g:
 
@@ -130,9 +130,9 @@ def nn_evaluation_bench():
 def run_benchmark_tests():
     benchmarks = {
         'Complimentmax Search': complimentmax_search_bench,
-        'Search Types': search_types_bench,
-        'Data Processing': data_processing_bench,
-        'Evaluation': nn_evaluation_bench
+        # 'Search Types': search_types_bench,
+        # 'Data Processing': data_processing_bench,
+        # 'Evaluation': nn_evaluation_bench
     }
 
     print "\nRunning Benchmarks..."

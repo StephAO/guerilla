@@ -56,14 +56,12 @@ class NeuralNet:
         self.total_input_size = 0
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.weight_stddev = 0.01
-            self.input_sizes = [(dh.STATE_DATA_SIZE,),
-                                (dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE)]
+            self.input_sizes = [(dh.STATE_DATA_SIZE,), (dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE)]
             # Used for convolution
             self.size_per_tile = dh.MOVEMAP_TILE_SIZE
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.weight_stddev = 0.001
-            self.input_sizes = [(dh.STATE_DATA_SIZE,), \
-                                (dh.BOARD_DATA_SIZE,), (dh.PIECE_DATA_SIZE,)]
+            self.input_sizes = [(dh.STATE_DATA_SIZE,), (dh.BOARD_DATA_SIZE,), (dh.PIECE_DATA_SIZE,)]
             self.hp['USE_CONV'] = False
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             self.weight_stddev = 0.01
@@ -573,18 +571,10 @@ class NeuralNet:
         for i, input_size in enumerate(self.input_sizes):
             # convolve layer if you can and desired
             if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
-                o_grid = tf.nn.relu(self.conv5x5_grid(
-                    self.input_data_placeholders[i], self.W_grid) \
-                                    + self.b_grid)
-                o_rank = tf.nn.relu(self.conv8x1_line(
-                    self.input_data_placeholders[i], self.W_rank) \
-                                    + self.b_rank)
-                o_file = tf.nn.relu(self.conv8x1_line(
-                    self.input_data_placeholders[i], self.W_file) \
-                                    + self.b_file)
-                o_diag = tf.nn.relu(self.conv8x1_line(
-                    self.diagonal_placeholder, self.W_diag) \
-                                    + self.b_diag)
+                o_grid = tf.nn.relu(self.conv5x5_grid(self.input_data_placeholders[i], self.W_grid) + self.b_grid)
+                o_rank = tf.nn.relu(self.conv8x1_line(self.input_data_placeholders[i], self.W_rank) + self.b_rank)
+                o_file = tf.nn.relu(self.conv8x1_line(self.input_data_placeholders[i], self.W_file) + self.b_file)
+                o_diag = tf.nn.relu(self.conv8x1_line(self.diagonal_placeholder, self.W_diag) + self.b_diag)
                 W_i += 4
                 b_i += 4
 
@@ -598,8 +588,7 @@ class NeuralNet:
             else:
                 _input_shape = [batch_size, np.prod(input_size)]
                 _input = tf.reshape(self.input_data_placeholders[i], _input_shape)
-                output = tf.nn.relu(tf.matmul(_input, self.W_l1[W_i]) \
-                                    + self.b_l1[b_i])
+                output = tf.nn.relu(tf.matmul(_input, self.W_l1[W_i]) + self.b_l1[b_i])
                 _shape = [batch_size, self.weight_2nd_dim[i]]
                 output = tf.reshape(output, _shape)
                 W_i += 1
@@ -613,9 +602,7 @@ class NeuralNet:
         for i in xrange(1, self.hp['NUM_FC']):
             # output of fully connected layer n
             # Includes dropout
-            o_fc[i] = tf.nn.dropout(tf.nn.relu(
-                tf.matmul(o_fc[i - 1], self.W_fc[i]) \
-                + self.b_fc[i]), self.keep_prob)
+            o_fc[i] = tf.nn.dropout(tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i]), self.keep_prob)
 
         # final_output
         self.pred_value = tf.matmul(o_fc[-1], self.W_final) + self.b_final

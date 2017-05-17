@@ -645,11 +645,11 @@ def td_checkmate_test(max_iter=100, verbose=False):
     # Source: https://www.chess.com/forum/view/fun-with-chess/7-move-checkmate-with-queen-sacrifice
     # Goal of AVOID: Guerilla learns not to play g4e4, should learn to play c6e5 instead
     # Goal of FORCE: Guerilla should learn to force the checkmate variation by playing c4f7
-    move_test = namedtuple('MoveTest', 'name fen train_color bad_move best_move')
+    move_test = namedtuple('MoveTest', 'name fen train_color best_move')
     data = [move_test('AVOID', 'r2qkbnr/ppp2ppp/2np4/4N3/2B1P1b1/2N5/PPPP1PPP/R1BQK2R b KQkq - 0 5', 'b',
-                      chess.Move.from_uci('g4e4'), chess.Move.from_uci('c6e5')),
+                      chess.Move.from_uci('c6e5')),
             move_test('FORCE', 'r2qkbnr/ppp2ppp/2np4/4N3/2B1P3/2N5/PPPP1PPP/R1BbK2R w KQkq - 0 6', 'b',
-                      chess.Move.from_uci('g4e4'), chess.Move.from_uci('c4f7'))
+                      chess.Move.from_uci('c4f7'))
             ]
 
     # Create teacher and Guerilla
@@ -659,11 +659,11 @@ def td_checkmate_test(max_iter=100, verbose=False):
     if verbose:
         print "All scores are P(Guerilla wins)."
 
-    with Guerilla('Kong', load_file='4790.p', verbose=verbose,
-                  nn_params={'NN_INPUT_TYPE': 'movemap', 'NUM_HIDDEN': 1536},
+    with Guerilla('Kong', load_file='5240.p', verbose=verbose,
+                  nn_params={'NN_INPUT_TYPE': 'movemap'},
                   search_params={'max_depth': 1}) as g:
 
-        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 0.0001, 'TD_DISCOUNT': 0.5})
+        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 1e-7, 'TD_DISCOUNT': 0.7})
         t.td_batch_size = 1
 
         for move_test in data:

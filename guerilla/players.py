@@ -94,7 +94,8 @@ class Guerilla(Player):
         score, move, leaf = self.search.run(board)
         if move is None:
             raise ValueError("There are no valid moves from this position! FEN: %s "
-                             "\n\t Debug Info: Score: %f Move: %s Leaf Board: %s" % (board.fen(), score, move, leaf))
+                             "\n\t Debug Info: Score: %f Move: %s Leaf Board: %s" % (
+                             board.fen(), score, str(move), leaf))
         return move
 
     def get_cp_adv_white(self, fen):

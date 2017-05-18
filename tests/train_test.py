@@ -162,7 +162,7 @@ def training_test(nn_input_type, verbose=False):
             success = True
             error_msg = ""
             try:
-                learn_rate = 1e-5 if nn_input_type == 'movemap' else 1e-7
+                learn_rate = 1e-2 if nn_input_type != 'giraffe' else 1e-5
                 with Guerilla('Harambe', verbose=verbose,
                               nn_params={'NN_INPUT_TYPE': nn_input_type, 'USE_CONV': use_conv},
                               search_params={'max_depth': 1}) as g:
@@ -174,7 +174,7 @@ def training_test(nn_input_type, verbose=False):
                                 hp={'LEARNING_RATE': learn_rate})
 
                     t.set_bootstrap_params(num_bootstrap=10500)  # 488037
-                    t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3, batch_size=5)
+                    t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=3, full_length=3)
                     t.set_gp_params(num_gameplay=1, max_length=3)
                     t.sts_on = False
                     t.sts_interval = 100
@@ -314,7 +314,7 @@ def learn_sts_test(nn_input_type, mode='strategy', thresh=0.9):
     return True
 
 
-def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=True):
+def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     """
     Tests that Guerilla can learn the best moves of a few boards, thus demonstrating that the input Guerilla converge
     to learning chess moves.
@@ -456,6 +456,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
     hp['BATCH_SIZE'] = 5
     hp['VALIDATION_SIZE'] = 5
     hp['TRAIN_CHECK_SIZE'] = 5
+    hp['LOSS_THRESHOLD'] = float("-inf")  # So it never converges
+    hp['TD_BATCH_SIZE'] = 1
     hp['TD_LRN_RATE'] = 0.00001  # Learning rate
     hp['TD_DISCOUNT'] = 0.7  # Discount rate
     hp['LEARNING_RATE'] = 0.00001
@@ -476,7 +478,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         tf.reset_default_graph()
 
         # Run action
-        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type}) as g:
+        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+                      search_params={'max_depth': 1}) as g:
             g.search.max_depth = 1
             t = Teacher(g, test=True, verbose=verbose, hp=hp)
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
@@ -588,9 +591,9 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
             # Due to differences in initialization distribution
             if td_training_mode == 'gradient_descent':
-                td_lrn_rate = 0.01
+                td_lrn_rate = 1e-4 if nn_input_type == 'giraffe' else 1e-1
             else:
-                td_lrn_rate = 0.0001
+                td_lrn_rate = 1e-5
 
 
             t = Teacher(g, hp={'TD_LRN_RATE': td_lrn_rate}, td_training_mode=td_training_mode, verbose=verbose)

@@ -14,7 +14,7 @@ class Search:
         """
         Initializes the Player abstract class.
         Input:
-            leaf_evaluation_function [function]:
+            evaluation_function [function]:
                 function to evaluate leaf nodes (usually the neural net)
         """
         self.evaluation_function = evaluation_function
@@ -284,7 +284,6 @@ class RankPrune(Search):
         """
         super(RankPrune, self).__init__(leaf_eval)
 
-        self.evaluation_function = None
         self.leaf_eval = leaf_eval
         self.internal_eval = internal_eval if internal_eval is not None else leaf_eval
         self.prune_perc = prune_perc
@@ -452,7 +451,6 @@ class IterativeDeepening(Search):
         """
         super(IterativeDeepening, self).__init__(evaluation_function)
 
-        self.evaluation_function = evaluation_function
         self.time_limit = time_limit
         self.buff_time = time_limit * 0.02
         self.depth_limit = 1

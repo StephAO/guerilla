@@ -403,7 +403,7 @@ def internal_test_eval(fen):
 
 def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
     """
-    Tests that Rank-Prune searching abides by the input time limit.
+    Tests that Rank-Prune and ID searching abide by the input time limit.
     Input:
         min_time [Int] (Optional)
             Minimum search time to test.
@@ -418,18 +418,21 @@ def search_timing_test(min_time=5, max_time=20, time_step=5, verbose=False):
             True if test passed, False if test failed.
     """
     # TODO: Add varying prune_perc
-    search = RankPrune(leaf_eval=lambda x: random.random(), prune_perc=0.9, buff_time=3)
+    search_modes = {
+        "RankPrune": RankPrune(leaf_eval=lambda x: random.random(), prune_perc=0.9, buff_time=3),
+        "IterativeDeepening": IterativeDeepening(evaluation_function=lambda x: random.random(), max_depth=None)}
     board = chess.Board(fen="2bq2R1/3P1PP1/3k3P/pP6/7N/NP1B3p/p1pQn2p/3nB2K w - - 0 1")  # Random FEN
 
-    for t in xrange(min_time, max_time + 1, time_step):
-        start_time = time.time()
-        search.run(board, time_limit=t)
-        time_taken = time.time() - start_time
-        if verbose:
-            print "Timing Test: Time Limit %f. Time Taken %f." % (float(t), time_taken)
-        if time_taken > t:
-            print "Error: time allowed: %f, time taken: %f" % (float(t), time_taken)
-            return False
+    for name, search in search_modes.iteritems():
+        for t in xrange(min_time, max_time + 1, time_step):
+            start_time = time.time()
+            search.run(board, time_limit=t)
+            time_taken = time.time() - start_time
+            if verbose:
+                print "Timing Test: Time Limit %f. Time Taken %f." % (float(t), time_taken)
+            if time_taken > t:
+                print "Error in %s: time allowed: %f, time taken: %f" % (name, float(t), time_taken)
+                return False
     return True
 
 

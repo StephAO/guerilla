@@ -1,6 +1,6 @@
 "NN_INPUT_TYPE" : "movemap"
 "USE_CONV" : false
-"NUM_FC" : 3
+"NUM_FC" : 2
 "NUM_HIDDEN" : 1024
 "NUM_FEAT" : 10
 "MIN_NUM_NODES" : 128

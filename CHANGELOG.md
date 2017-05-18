@@ -16,7 +16,7 @@
   - Human player
   - Game GUI
   - Guerilla player type
-  - Complementmax search
+  - Minimax search
   - Self play training
   - TD Training
   - Bootstrap training

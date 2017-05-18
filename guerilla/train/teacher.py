@@ -77,8 +77,7 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
-        self.conv_loss_thresh = 0.0001
-        self.conv_window_size = 5  # Number of epochs to consider when checking for convergence
+        self.conv_window_size = 2  # Number of epochs to consider when checking for convergence
         self.use_check_pre = True
 
         # TD-Leaf parameters
@@ -90,8 +89,7 @@ class Teacher:
         self.td_full_length = -1  # Maximum number of moves for full game training (-1 = All)
         self.td_training_mode = td_training_mode  # Training mode to use for TD training
         self.td_w_update = None
-        self.td_fen_index = 0
-        self.td_batch_size = 1
+        self.td_game_index = 0
 
         self.hp = {}
         if hp_load_file is None:
@@ -100,7 +98,7 @@ class Teacher:
         if hp is not None:
             self._set_hyper_params(hp)
 
-        self.loss_fn = self.nn.mse_loss(self.hp['BATCH_SIZE'])
+        self.loss_fn = self.nn.mae_loss(self.hp['BATCH_SIZE'])
         self.training_mode = bootstrap_training_mode
         self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
                                                 reg_const=self.hp['REGULARIZATION_CONST'],
@@ -369,20 +367,20 @@ class Teacher:
         state['rnd_seed_shuffle'] = self.rnd_seed_shuffle
         state['rnd_state'] = self.rnd_state
 
-        # Save training parameters
+        # Save TD parameters
         state['td_leaf_param'] = {'randomize': self.td_rand_file,
                                   'num_end': self.td_num_endgame,
                                   'num_full': self.td_num_full,
                                   'end_length': self.td_end_length,
                                   'full_length': self.td_full_length,
-                                  'batch_size': self.td_batch_size,
                                   }
-        if self.td_training_mode == 'adagrad':
-            state['adagrad'] = {'w_update': self.td_w_update,
-                                'fen_index': self.td_fen_index,
-                                'adagrad_acc': self.td_adagrad_acc}
-
         state['gp_param'] = {'num_gameplay': self.gp_num, 'max_length': self.gp_length}
+
+        # Save TD training data
+        state['training'] = {'game_index': self.td_game_index,
+                             'w_update': self.td_w_update}
+        if self.td_training_mode == 'adagrad':
+            state['training']['adagrad_acc'] = self.td_adagrad_acc
 
         # Save STS evaluation parameters
         state['sts_on'] = self.sts_on
@@ -425,15 +423,16 @@ class Teacher:
         self.rnd_seed_shuffle = state['rnd_seed_shuffle']
         random.setstate(state['rnd_state'])
 
-        # Load training parameters
+        # Load TD parameters
         self.set_td_params(**state.pop('td_leaf_param'))
         self.set_gp_params(**state.pop('gp_param'))
 
-        # Load adagrad params
+        # Load general parameters
+        self.td_game_index = state['training']['game_index']
+        self.td_w_update = state['training']['w_update']
         if self.td_training_mode == 'adagrad':
-            self.td_w_update = state['adagrad']['w_update']
-            self.td_fen_index = state['adagrad']['fen_index']
-            self.td_adagrad_acc = state['adagrad']['adagrad_acc']
+            self.td_adagrad_acc = state['training']['adagrad_acc']
+
 
         # Load STS evaluation parameters
         self.sts_on = state['sts_on']
@@ -631,12 +630,11 @@ class Teacher:
         true_values = np.zeros(self.hp['BATCH_SIZE'])
         return input_data, diagonals, true_values
 
-    def get_batch_feed_dict(self, input_data, diagonals, true_values, \
-                            _true_values, fens, board_num, game_indices):
+    def get_batch_feed_dict(self, input_data, diagonals, true_values, _true_values, fens, board_num, game_indices):
         """
             Generate batch feed dict.
-            Note: true values with a _ prefix contains values, without it is just
-                  the true values struct
+            Note: "_true_values contains" ground truth values. "true_values" is simply the structure to be used for
+                  output.
         """
         for j in xrange(self.hp['BATCH_SIZE']):
             nn_input_data = dh.fen_to_nn_input(fens[game_indices[board_num]],
@@ -645,8 +643,7 @@ class Teacher:
             for k in xrange(len(nn_input_data)):
                 input_data[k][j] = nn_input_data[k]
                 if np.shape(input_data[k][j])[0:2] == (8, 8) and self.nn.hp['USE_CONV']:
-                    diagonals[j] = dh.get_diagonals(input_data[k][j],
-                                                    self.nn.size_per_tile)
+                    diagonals[j] = dh.get_diagonals(input_data[k][j], self.nn.size_per_tile)
 
             true_values[j] = _true_values[game_indices[board_num]]
             board_num += 1
@@ -655,9 +652,9 @@ class Teacher:
                       self.nn.keep_prob: self.hp['KEEP_PROB']}
 
         if len(input_data) != len(self.nn.input_data_placeholders):
-            raise ValueError("The length of input data(%d) does not equal the " \
-                             "length of input data place holders(%s)" % \
-                             len(input_data), len(self.nn.input_data_placeholders))
+            raise ValueError("The length of input data(%d) does not equal the length of input data place holders(%s)" \
+                             % (len(input_data), len(self.nn.input_data_placeholders)))
+
         for j in xrange(len(input_data)):
             _feed_dict[self.nn.input_data_placeholders[j]] = input_data[j]
         if self.nn.hp['USE_CONV']:
@@ -754,7 +751,7 @@ class Teacher:
     # ---------- TD-LEAF TRAINING METHODS
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
-                      end_length=None, full_length=None, batch_size=None):
+                      end_length=None, full_length=None):
         """
         Set the parameters for TD-Leaf.
             Inputs:
@@ -767,9 +764,9 @@ class Teacher:
                 pgn_folder [String]
                     Folder containing chess games in PGN format.
                 end_depth [Int]
-                    Length of endgames.
+                    Length of endgames. (halfmoves)
                 full_depth [Int]
-                    Maximum length of full games. (-1 for no max)
+                    Maximum length of full games. (halfmoves) (-1 for no max)
         """
         if num_end:
             self.td_num_endgame = num_end
@@ -783,8 +780,6 @@ class Teacher:
             self.td_end_length = end_length
         if full_length:
             self.td_full_length = full_length
-        if batch_size:
-            self.td_batch_size = batch_size
 
     def reset_adagrad(self):
         """ Resets adagrad accumulator """
@@ -827,7 +822,7 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
-        self.td_fen_index = 0
+        self.td_game_index = 0
         if self.td_training_mode == 'adagrad':
             self.reset_adagrad()
 
@@ -904,7 +899,7 @@ class Teacher:
         Updates weights.
         Note: The plurality of gradients is a function of the number nodes not the number of actual gradients.
         """
-        avg_gradients = [grad / self.td_batch_size for grad in self.td_w_update]
+        avg_gradients = [grad / self.hp['TD_BATCH_SIZE'] for grad in self.td_w_update]
         if self.td_training_mode == 'adagrad':
             self.td_adagrad_acc = map(add, self.td_adagrad_acc, [grad ** 2 for grad in avg_gradients])
             learning_rates = [self.hp['TD_LRN_RATE'] / (np.sqrt(grad) + 1.0e-8) for grad in self.td_adagrad_acc]
@@ -939,7 +934,7 @@ class Teacher:
         """
 
         num_boards = len(game)
-        game_info = [{'value': None, 'gradient': None, 'move': None, 'leaf_board': None}
+        game_info = [{'value': 0, 'gradient': 0, 'move': None, 'leaf_board': None}
                      for _ in range(num_boards)]
 
         if no_leaf and restrict_td:
@@ -1026,12 +1021,12 @@ class Teacher:
             else:
                 self.td_w_update += game_info[t]['gradient'] * td_val
 
-            self.td_fen_index += 1
+        self.td_game_index += 1
 
         # Only update at the end of a game
-        if self.td_fen_index >= self.td_batch_size:
+        if self.td_game_index >= self.hp['TD_BATCH_SIZE']:
             self.td_update_weights()
-            self.td_fen_index = 0
+            self.td_game_index = 0
             self.td_w_update = None
             self.guerilla.search.clear_cache()
 
@@ -1044,7 +1039,7 @@ class Teacher:
                 num_gameplay [Int]
                     Number of games to play against itself and train using TD-Leaf.
                 max_length [Int]
-                    Maximum number of moves in each self-play. (-1 = No max)
+                    Maximum number of moves in each self-play. (Halfmoves) (-1 = No max)
                 opponent [Player or None]
                     The opponent to play when generating the gameplay for training. By default the opponent is the
                     version of Guerilla currently being trained (self.guerilla).
@@ -1085,7 +1080,7 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
-        self.td_fen_index = 0
+        self.td_game_index = 0
         if self.td_training_mode == 'adagrad':
             self.reset_adagrad()
 
@@ -1100,7 +1095,7 @@ class Teacher:
                 if random.random() < 0.5:
                     fen = dh.flip_board(fen)
 
-                # Play a game against yourself
+                # Play a game against opponent
                 players = {'w': None, 'b': None}
 
                 # Randomly select white player
@@ -1174,20 +1169,21 @@ def main():
     if run_time == 0:
         run_time = None
 
+
     with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adagrad', td_training_mode='adagrad')
-        # print eval_sts(g)
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adagrad')
         # t.rnd_seed_shuffle = 123456
+        # print eval_sts(g) # [4414], 4378,4319,4381,4408
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=500, max_length=-1, opponent=sf_player)
-        # t.sts_on = False
-        # t.sts_interval = 100
+        t.set_gp_params(num_gameplay=200, max_length=12, opponent=sf_player)
+        t.sts_on = True
+        t.sts_interval = 50
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=4 * 3600)
+        t.run(['train_bootstrap'], training_time=7 * 3600)
         # print eval_sts(g)
-        g.search.max_depth = 2
+        # g.search.max_depth = 2
         print eval_sts(g)
 
 

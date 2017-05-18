@@ -27,6 +27,7 @@ piece_values = {
 
 BOARD_LENGTH = 8
 BOARD_SIZE = 64
+NUM_PIECE_TYPE = len(piece_indices) * 2
 
 STATE_DATA_SIZE = 14
 BOARD_DATA_SIZE = 128
@@ -34,7 +35,7 @@ PIECE_DATA_SIZE = 208
 GF_FULL_SIZE = 350
 
 MOVEMAP_TILE_SIZE = 30
-BITMAP_TILE_SIZE = 12
+BITMAP_TILE_SIZE = NUM_PIECE_TYPE
 
 crosswise_fn = [
     lambda x: np.array([0, -x - 1]),  # left
@@ -548,7 +549,7 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_idx, mm):
 
             # Set map
             # TODO Remove assert
-            assert(mm[r][f][piece_move_idx[full_piece]] != 1)
+            # assert(mm[r][f][piece_move_idx[full_piece]] != 1)
             mm[r][f][piece_move_idx[full_piece]] = 1
 
             # End of slide (piece in the way)
@@ -564,15 +565,15 @@ def set_move_map(c_rank, c_file, piece, occupied_bitmap, piece_move_idx, mm):
 
 def fen_to_movemap(fen):
     """ 
-        Move map is a 64 x (12 + 18 + 18) representation of the board. Each
+        Move map is a 64 x (12 + 9 + 9) representation of the board. Each
         tile (64) on the board contains:
             1. One hot encoding of the piece type (12)
-            2. White tiles that can move to that square (18)
-            3. Black tiles that can move to that square (18)
+            2. White pieces that can move to that square (9)
+            3. Black pieces that can move to that square (9)
         One hot encoding order is wq, wr, wb, wn, wp, wk, bq, br, bb, bn, bp, bk
-        18 is chosen because a piece can only be attacked/defended by 9 pieces
+        9 is chosen because a piece can only be attacked/defended by 9 pieces
         at a time without having had a pawn promotion. Each piece is defined by
-        its tile square, which requires 2 coordinates (2 * 9 = 18).
+        its presence as an attacking or defending piece (1 if present, 0 if not present)
     
         Order for pieces attacking is 
         wq, wr*2, wb, wn*2, wp*2, wk, bq, br*2, bb*2, bn, bp*2, bk

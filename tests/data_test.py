@@ -346,90 +346,94 @@ def move_map_input_test():
 
     if not (board_state == np.array([0,0,0,0,0,3,1,1,3,1,0,2,1,1])).all():
         print "Failure: Info of board_state is incorrect"
-        success = False 
+        success = False
 
-    if move_map.shape != ((8, 8, 48)):
+    if move_map.shape != ((8, 8, 30)):
         print "Failure: shape of move_map is incorrect"
         success = False 
 
     move_map = move_map.tolist()
 
-    correct = [(None, ('wr1', [1, 2])),  # Row 0
-               ('wr', [('bq', [1, 6]), ('bn1', [3, 3])]),
-               (None, [('wn1', [3, 4]), ('wr1', [1, 2]), ('bq', [1, 6])]),
-               (None, [('wr1', [1, 2]), ('bn1', [3, 3]), ('bb', [4, 1]), ('bq', [1, 6])]),
-               (None, [('wn1', [3, 4]), ('wr1', [1, 2]), ('bq', [1, 6])]),
-               ('bq', [('wr1', [1, 2])]),
-               (None, [('wr2', [2, 7]), ('bq', [1, 6]), ('bb', [5, 3])]),
-               (None, [('bq', [1, 6])]),
-               (None, [('bn1', [3, 3])]),  # Row 1
-               (None, [('wr1', [1, 2]), ('wn1', [3, 4])]),
-               (None, [('bb', [4, 1])]),
-               ('wp', [('wr2', [2, 7])]),
-               (None, [('wr2', [2, 7]), ('bn1', [3, 3]), ('bq', [1, 6])]),
-               (None, [('wr2', [2, 7]), ('wn1', [3, 4]), ('bq', [1, 6]), ('bb', [5, 3])]),
-               ('wr', [('wk', [3, 8]), ('bq', [1, 6])]),
-               ('wr', [('wr2', [2, 7]), ('wk', [3, 8])]),
+    # Should be of length 64
+    # Format is: (Piece at tile i, List of pieces which can move to tile i)
+    correct = [(None, ['wr1']),  # Row 0
+               ('wr', ['bq', 'bn1']),
+               (None, ['wn1', 'wr1', 'bq']),
+               (None, ['wr1', 'bn1', 'bb', 'bq']),
+               (None, ['wn1', 'wr1', 'bq']),
+               ('bq', ['wr1']),
+               (None, ['wr2', 'bq', 'bb']),
+               (None, ['bq']),
+               (None, ['bn1']),  # Row 1
+               (None, ['wr1', 'wn1']),
+               (None, ['bb']),
+               ('wp', ['wr2']),
+               (None, ['wr2', 'bn1', 'bq']),
+               (None, ['wr2', 'wn1', 'bq', 'bb']),
+               ('wr', ['wk', 'bq']),
+               ('wr', ['wr2', 'wk']),
                (None, None),  # Row 2
-               (None, [('wr1', [1, 2]), ('bb', [4, 1])]),
-               ('bn', ('wp2', [2, 4])),
-               ('wn', ('bq', [1, 6])),
-               (None, [('bb', [5, 3]), ('wp1', [2, 4])]),
-               (None, ('bq', [1, 6])),
-               (None, [('wr2', [2, 7]), ('wk', [3, 8])]),
+               (None, ['wr1', 'bb']),
+               ('bn', ['wp2']),
+               ('wn', ['bq']),
+               (None, ['bb', 'wp1']),
+               (None, ['bq']),
+               (None, ['wr2', 'wk']),
                ('wk', None),
-               ('bb', ('bn1', [3, 3])),  # Row 3
-               ('wp', [('wr1', [1, 2]), ('wn1', [3, 4]), ('bb', [5, 3])]),
+               ('bb', ['bn1']),  # Row 3
+               ('wp', ['wr1', 'wn1', 'bb']),
                (None, None),
-               (None, ('bb', [5, 3])),
-               (None, ('bn1', [3, 3])),
-               (None, [('wn1', [3, 4]), ('bq', [1, 6])]),
-               (None, [('wr2', [2, 7]), ('wk', [3, 8])]),
-               (None, ('wk', [3, 8])),
-               (None, ('wp2', [4, 2])),  # Row 4
-               (None, [('bb', [4, 1]), ('bn1', [3, 3])]),
-               ('bb', [('wp1', [4, 2]), ('wn1', [3, 4]), ('wb', [8, 6])]),
-               (None, [('bn1', [3, 3]), ('bp2', [6, 5])]),
-               (None, ('wn1', [3, 4])),
-               (None, [('bq', [1, 6]), ('bp1', [6, 5])]),
-               ('wp', ('wr2', [2, 7])),
+               (None, ['bb']),
+               (None, ['bn1']),
+               (None, ['wn1', 'bq']),
+               (None, ['wr2', 'wk']),
+               (None, ['wk']),
+               (None, ['wp2']),  # Row 4
+               (None, ['bb', 'bn1']),
+               ('bb', ['wp1', 'wn1', 'wb']),
+               (None, ['bn1', 'bp2']),
+               (None, ['wn1']),
+               (None, ['bq', 'bp1']),
+               ('wp', ['wr2']),
                (None, None),
                (None, None),
-               (None, ('bb', [5, 3])),
-               (None, ('bb', [4, 1])),
-               (None, [('wb', [8, 6]), ('bb', [5, 3])]),
+               (None, ['bb']),
+               (None, ['bb']),
+               (None, ['wb', 'bb']),
                ('bp', None),
-               (None, [('bq', [1, 6]), ('wp2', [5, 7])]),
+               (None, ['bq', 'wp2']),
                (None, None),
-               (None, [('wp1', [5, 7]), ('wb', [8, 6])]),
-               (None, ('bb', [5, 3])),  # Row 6
+               (None, ['wp1', 'wb']),
+               (None, ['bb']),  # Row 6
                (None, None),
-               (None, ('bk', [8, 4])),
-               (None, [('bb', [4, 1]), ('bk', [8, 4])]),
-               (None, [('wb', [8, 6]), ('bb', [5, 3]), ('bk', [8, 4])]),
-               (None, ('bq', [1, 6])),
-               (None, ('wb', [8, 6])),
+               (None, ['bk']),
+               (None, ['bb', 'bk']),
+               (None, ['wb', 'bb', 'bk']),
+               (None, ['bq']),
+               (None, ['wb']),
                (None, None),
                (None, None),
                (None, None),
-               (None, ('bk', [8, 4])),
+               (None, ['bk']),
                ('bk', None),
-               (None, [('bb', [4, 1]), ('bk', [8, 4])]),
-               ('wb', [('bb', [5, 3]), ('bq', [1, 6])]),
+               (None, ['bb', 'bk']),
+               ('wb', ['bb', 'bq']),
                (None, None),
                (None, None)
                ]
 
+    assert (len(correct) == dh.BOARD_SIZE)
+
     for i in range(len(correct)):
-        piece, move_pairs = correct[i]
-        if not tile_check(move_map[i / 8][i % 8], piece, move_pairs):
-            print "Failure: info for tile %d, %d is incorrect." % (i / 8, i % 8)
+        piece, candidates = correct[i]
+        if not tile_check(move_map[i / dh.BOARD_LENGTH][i % dh.BOARD_LENGTH], piece, candidates):
+            print "Failure: info for tile %d, %d is incorrect." % (i / dh.BOARD_LENGTH, i % dh.BOARD_LENGTH)
             success = False
 
     return success
 
 
-def tile_check(tile, piece=None, move_pairs=None):
+def tile_check(tile, piece=None, candidates=None):
     """
     Helper for the movemap test. Checks the input tile movemap with the expected movemap.
     Input:
@@ -437,25 +441,25 @@ def tile_check(tile, piece=None, move_pairs=None):
             Tile movemap.
         piece [String]
             The piece which occupies the square. If no piece then 'None'.
-        move_pairs [List ofTuples]
-            (Piece type, coordinate)
+        candidates [List of Strings]
+            The pieces which can move to the square the square.
             All non-specified entries are set to 0.
     Output:
         [Boolean]
             True if tile movemap matches expected movemap.
     """
 
-    if not move_pairs:
-        move_pairs = []
-    elif type(move_pairs) != list:
-        move_pairs = [move_pairs]
+    if candidates is None:
+        candidates = []
+    elif type(candidates) != list:
+        candidates = [candidates]
 
     # Create 0 array + piece
-    truth = [1 if (piece and i == dh.piece_type_index[piece]) else 0 for i in range(48)]
+    truth = [1 if (piece and i == dh.piece_type_index[piece]) else 0 for i in range(dh.MOVEMAP_TILE_SIZE)]
 
     # Attacking/defending pieces
-    for piece, coordinates in move_pairs:
-        truth[dh.piece_move_slice[piece]] = coordinates
+    for candidate in candidates:
+        truth[dh.piece_move_idx[candidate]] = 1
 
     return (tile == truth)
 

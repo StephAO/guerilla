@@ -51,7 +51,7 @@ def save_load_weights_test(verbose=False):
     os.remove(resource_filename('guerilla', 'data/weights/' + test_file))
 
     # Compare saved and loaded weights
-    result_msg = dh.diff_dict_helper(weights, new_weights)
+    result_msg = dh.diff_dict_helper([weights, new_weights])
     if result_msg:
         print "Weight did not match."
         print result_msg

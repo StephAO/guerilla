@@ -778,37 +778,40 @@ def flip_to_white(fen):
     return fen
 
 
-def diff_dict_helper(old_dict, new_dict):
+def diff_dict_helper(list_of_dicts):
     """
     Compares two dictionaries of numpy.arrays. Useful for comparing weights and training variables.
     Input
         old_dict [Dictionary of numpy.arrays]
-            One of the dictionary you'd like to compare.
-        new_dict [Dictionary of numpy.arrays]
-            The other dictionary you'd like to compare.
+            List of dictionaries you would like to compare.
     Output:
         Result [None or String]
             Returns None if identical, otherwise returns error message.
     """
 
-    for weight in old_dict.iterkeys():
-        if isinstance(new_dict[weight], list) and isinstance(old_dict[weight], list):
-            success = all([np.array_equal(old_dict[weight][i], new_dict[weight][i])
-                           for i in range(len(old_dict[weight]))])
-            success = success and (len(old_dict[weight]) == len(new_dict[weight]))
-        elif type(new_dict[weight]) == type(old_dict[weight]):
-            success = np.array_equal(np.array(old_dict[weight]), np.array(new_dict[weight]))
-        else:
-            success = False
+    for i in range(len(list_of_dicts) - 1):
+        old_dict = list_of_dicts[i]
+        new_dict = list_of_dicts[i + 1]
+        for weight in old_dict.iterkeys():
+            if isinstance(new_dict[weight], list) and isinstance(old_dict[weight], list):
+                success = all([
+                    np.array_equal(old_dict[weight][j], new_dict[weight][j])
+                    for j in range(len(old_dict[weight]))
+                ])
+                success = success and (len(old_dict[weight]) == len(new_dict[weight]))
+            elif type(new_dict[weight]) == type(old_dict[weight]):
+                success = np.array_equal(np.array(old_dict[weight]), np.array(new_dict[weight]))
+            else:
+                success = False
 
-        if not success:
-            return "Mismatching entries for '%s': Expected:\n %s \n Received:\n %s\n" % (weight,
-                                                                                         str(old_dict[weight]),
-                                                                                         str(new_dict[weight]))
+            if not success:
+                return "Mismatching entries for dicts (%d, %d) key '%s': " \
+                       "Expected:\n %s \n Received:\n %s\n" % (i, i + 1, weight,
+                                                               str(old_dict[weight]), str(new_dict[weight]))
 
-    if len(old_dict) != len(new_dict):
-        return "Different number of entries for '%s': Expected Length:\n %s \n Received Length:\n %s\n" % (
-        weight, len(old_dict), len(new_dict))
+        if len(old_dict) != len(new_dict):
+            return "Different number of entries for dicts (%d, %d) : First Length:\n %s \n Second Length:\n %s\n" % (
+                i, i + 1, len(old_dict), len(new_dict))
 
     return None
 

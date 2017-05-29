@@ -33,6 +33,7 @@ class Teacher:
     def __init__(self, guerilla, hp_load_file=None,
                  bootstrap_training_mode='adagrad',
                  td_training_mode='gradient_descent',
+                 seed=None,
                  test=False, verbose=True, hp=None):
         """
             Initialize teacher, sets member variables.
@@ -44,6 +45,8 @@ class Teacher:
                     Training mode to be used for bootstrap. Defaults to Adagrad.
                 td_training_mode [String]:
                     Training mode to be used for TD. Defaults to gradient descent.
+                seed [Float] (Optional)
+                    Seed for the random function. Used for reproducability. If 'None' then the seed is not set.
                 test [Bool]:
                     Set to true if its a test. If true, doesn't save weights.
                 verbose [Bool]:
@@ -65,12 +68,13 @@ class Teacher:
         self.actions = None
         self.curr_action_idx = None
         self.saved = None
-        # Random seed used for the FEN shuffle (passed as input to load_data). Specify for reproducibility.
-        #   Note: automatically saved and loaded
-        self.rnd_seed_shuffle = None
+
+        # Random seed. Specify for reproducibility.
+        random.seed(seed)
         # Holds the state of the random number generator on the initial Teacher call. If load_and_resume is called then
-        #   the generator state is restored to its state at the original call. This is important for the FEN shuffle.
-        self.rnd_state = random.getstate()
+        #   the generator state is restored to its state at the BEGINNING of the initial call. This is important for the FEN shuffle.
+        #   A separate variable holds the random state at the END of the initial call. That is important for the index shuffle.
+        self.start_rnd_state = random.getstate()
 
         self.test = test
         self.verbose = verbose
@@ -118,7 +122,7 @@ class Teacher:
         # Self-play parameters
         self.gp_num = 1  # The number of games to play against itself
         self.gp_length = 12  # How many moves are included in game playing
-        self.opponent = Stockfish("Magikarp")
+        self.opponent = self.guerilla
 
         # STS Evaluation Parameters
         self.sts_on = False  # Whether STS evaluation occurs during training
@@ -187,8 +191,7 @@ class Teacher:
                     print "Performing Bootstrap training!"
                     print "Fetching stockfish values..."
 
-                fens, true_values = self.load_data(seed=self.rnd_seed_shuffle, load_checkmate=self.use_check_pre,
-                                                   load_premate=self.use_check_pre)
+                fens, true_values = self.load_data(load_checkmate=self.use_check_pre, load_premate=self.use_check_pre)
 
                 self.train_bootstrap(fens, true_values)
             elif action == 'train_td_end':
@@ -212,7 +215,7 @@ class Teacher:
                 # If not timed out
                 self.curr_action_idx += 1
 
-    def load_data(self, shuffle=True, seed=None, load_checkmate=True, load_premate=True, mate_perc=0.5):
+    def load_data(self, shuffle=True, rnd_state=None, load_checkmate=True, load_premate=True, mate_perc=0.5):
         """
         Loads FENs and corresponding Stockfish values. Optional shuffle.
 
@@ -220,8 +223,8 @@ class Teacher:
             shuffle [Boolean] (Optional)
                 If True then the FENs and corresponding Stockfish values are shuffled. Must be True
                 if load_checkmate=True or load_premate=True.
-            seed [Float] (Optional)
-                Seed for the random function. Used for reproducability. If 'None' then the seed is not set.
+            rnd_state [tuple] (Optional)
+                Random state used for shuffle. Prior random state is restored once shuffle is performed.
             load_checkmate [Boolean]
                 If True then loads FENs from checkmate file. Scores them with 0.
             load_premate [Boolean]
@@ -241,9 +244,6 @@ class Teacher:
         if (load_premate or load_checkmate) and not shuffle:
             raise ValueError('If load_checkmate=True or load_premate=True, then shuffle must be True.'
                              'Otherwise FEN order isn\'t random. ')
-
-        if seed:
-            random.seed(seed)
 
         # load
         fens = cgp.load_fens(num_values=self.num_bootstrap)
@@ -276,10 +276,20 @@ class Teacher:
 
         # Optional shuffle
         if shuffle:
+
+            # Set random state
+            old_rnd_state = random.getstate()
+            if rnd_state:
+                random.setstate(rnd_state)
+
             shuffle_idxs = range(len(fens))
             random.shuffle(shuffle_idxs)
             fens = [fens[i] for i in shuffle_idxs]
             true_values = [true_values[i] for i in shuffle_idxs]
+
+            # Restore state
+            if rnd_state:
+                random.setstate(old_rnd_state)
 
         return fens, true_values
 
@@ -362,10 +372,14 @@ class Teacher:
 
         state['curr_action_idx'] = self.curr_action_idx
         state['actions'] = self.actions
+        state['mid_action'] = 'mid_action' in state
         state['prev_checkpoint'] = self.prev_checkpoint
         state['save_time'] = self.prev_checkpoint if is_checkpoint else time.time()
-        state['rnd_seed_shuffle'] = self.rnd_seed_shuffle
-        state['rnd_state'] = self.rnd_state
+        state['start_rnd_state'] = self.start_rnd_state
+        state['end_rnd_state'] = random.getstate()
+
+        # Save bootstrap parameters
+        state['num_bootstrap'] = self.num_bootstrap
 
         # Save TD parameters
         state['td_leaf_param'] = {'randomize': self.td_rand_file,
@@ -420,8 +434,10 @@ class Teacher:
         self.prev_checkpoint = time.time() - (state['save_time'] - state['prev_checkpoint'])
 
         # set random info
-        self.rnd_seed_shuffle = state['rnd_seed_shuffle']
-        random.setstate(state['rnd_state'])
+        random.setstate(state['end_rnd_state'])
+
+        # Load bootstrap parameters
+        self.num_bootstrap = state['num_bootstrap']
 
         # Load TD parameters
         self.set_td_params(**state.pop('td_leaf_param'))
@@ -461,7 +477,7 @@ class Teacher:
         self.start_time = time.time()
         self.training_time = training_time
 
-        if 'game_indices' not in state:
+        if not state['mid_action']:
             # Stopped between actions.
             return
 
@@ -471,7 +487,8 @@ class Teacher:
             if self.verbose:
                 print "Resuming Bootstrap training..."
 
-            fens, true_values = self.load_data(seed=self.rnd_seed_shuffle, load_checkmate=self.use_check_pre,
+            fens, true_values = self.load_data(rnd_state=state['start_rnd_state'],
+                                               load_checkmate=self.use_check_pre,
                                                load_premate=self.use_check_pre)
 
             # finish epoch
@@ -495,7 +512,8 @@ class Teacher:
         elif action == 'train_gameplay':
             if self.verbose:
                 print "Resuming gameplay training..."
-            self.train_gameplay(start_idx=state['start_idx'], sts_scores=state['sts_scores'])
+            self.train_gameplay(game_indices=state['game_indices'], start_idx=state['start_idx'],
+                                sts_scores=state['sts_scores'])
         elif action == 'load_and_resume':
             raise ValueError("Error: Trying to resume on a resume call - This shouldn't happen.")
         else:
@@ -521,6 +539,7 @@ class Teacher:
         return self.checkpoint_interval is not None and time.time() - self.prev_checkpoint >= self.checkpoint_interval
 
     # ---------- BOOTSTRAP TRAINING METHODS
+
     def set_bootstrap_params(self, num_bootstrap=None, use_check_pre=True):
         self.num_bootstrap = num_bootstrap
         self.use_check_pre = use_check_pre
@@ -584,6 +603,7 @@ class Teacher:
                 state['epoch_num'] = epoch
                 state['loss'] = loss
                 state['train_loss'] = train_loss
+                state['mid_action'] = True
 
                 # Timeout
                 if timeout:
@@ -679,6 +699,7 @@ class Teacher:
             if self.out_of_time():
                 if self.verbose:
                     print "Bootstrap Timeout: Saving state and quitting"
+
                 return True, {'game_indices': game_indices[(i * self.hp['BATCH_SIZE']):]}
 
             _feed_dict, board_num = \
@@ -884,7 +905,8 @@ class Teacher:
                     print "TD-Leaf " + ("endgame" if endgame else "fullgame") + " Timeout: Saving state and quitting."
                 save = {'game_indices': game_indices,
                         'start_idx': i + 1,
-                        'sts_scores': sts_scores}
+                        'sts_scores': sts_scores,
+                        'mid_action': True}
                 self.save_state(save)
                 return
 
@@ -1052,7 +1074,7 @@ class Teacher:
         if opponent:
             self.opponent = opponent
 
-    def train_gameplay(self, start_idx=0, sts_scores=None, allow_draw=False):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=False):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1070,9 +1092,10 @@ class Teacher:
                 Has no effect if the end of the game is not reached.
         """
 
-        # Load all fens, then pick the ones to use at random
-        all_fens = cgp.load_fens()
-        fens = np.random.choice(all_fens, size=self.gp_num, replace=False)
+        # Load fens and randomly sample
+        fens = cgp.load_fens()
+        if game_indices is None:
+            game_indices = random.sample(range(len(fens)), self.gp_num)
 
         max_len = sys.maxint if self.gp_length == -1 else self.gp_length
 
@@ -1086,12 +1109,11 @@ class Teacher:
 
         for i in xrange(start_idx, self.gp_num):
             if self.verbose:
-                print "Generating self-play game %d of %d..." % (i + 1, self.gp_num)
+                print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
 
             # Load random fen and randomly flip board
-            game_fens = None
             while True:
-                fen = random.choice(fens)
+                fen = fens[game_indices[i]]
                 if random.random() < 0.5:
                     fen = dh.flip_board(fen)
 
@@ -1114,8 +1136,8 @@ class Teacher:
 
             # Send game for TD-leaf training
             if self.verbose:
-                print "Training on game %d of %d..." % (i + 1, self.gp_num)
-            self.td_leaf(game_fens, no_leaf=True, restrict_td=False)
+                print "Training..."
+            self.td_leaf(game_fens, no_leaf=False, restrict_td=True)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1123,14 +1145,16 @@ class Teacher:
                 self.guerilla.search.max_depth = self.sts_depth
                 sts_scores.append(eval_sts(self.guerilla, mode=self.sts_mode)[0])
                 self.guerilla.search.max_depth = original_depth
-                print "STS Result: %s" % str(sts_scores[-1])
+                print "[Games Played: %d] STS Result: %s" % (i + 1, str(sts_scores[-1]))
 
             # Check if out of time
             if self.out_of_time() and i != (self.gp_num - 1):
                 if self.verbose:
                     print "TD-Leaf self-play Timeout: Saving state and quitting."
-                save = {'start_idx': i + 1,
-                        'sts_scores': sts_scores}
+                save = {'game_indices': game_indices,
+                        'start_idx': i + 1,
+                        'sts_scores': sts_scores,
+                        'mid_action': True}
                 self.save_state(save)
                 return
 
@@ -1169,21 +1193,23 @@ def main():
     if run_time == 0:
         run_time = None
 
-
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='5416.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adagrad')
-        # t.rnd_seed_shuffle = 123456
+        # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
+        # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=200, max_length=12, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
+
+        # Gameplay STS aparams
         t.sts_on = True
         t.sts_interval = 50
+        t.sts_depth = 2
+
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=7 * 3600)
-        # print eval_sts(g)
-        # g.search.max_depth = 2
+        t.run(['train_gameplay'], training_time=8 * 3600)
         print eval_sts(g)
 
 

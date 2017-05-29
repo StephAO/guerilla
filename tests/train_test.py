@@ -440,6 +440,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         (4) Correct action is loaded.
         (5) Correct set of actions is loaded.
         (6) Correct number of epochs.
+        (7) Load and resume is equivalent to not pausing the training.
     Does not check (among other things):
         (-) That all the necessary components of the training state are stored.
         (-) That the correct sequence of training actions is taken.
@@ -448,6 +449,9 @@ def load_and_resume_test(nn_input_type, verbose=False):
         Result [Boolean]
             True if test passed, False if test failed.
     """
+
+    # Seed for random libraries
+    seed = 123456
 
     # Modify hyperparameters for a small training example.
     success = True
@@ -460,7 +464,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
     hp['TD_BATCH_SIZE'] = 1
     hp['TD_LRN_RATE'] = 0.00001  # Learning rate
     hp['TD_DISCOUNT'] = 0.7  # Discount rate
-    hp['LEARNING_RATE'] = 0.00001
+    hp['LEARNING_RATE'] = 0.001
 
     # Pickle path
     loss_path = resource_filename('guerilla', 'data/loss/')
@@ -470,6 +474,10 @@ def load_and_resume_test(nn_input_type, verbose=False):
     train_actions.append(Teacher.actions[:-1])
     for action in train_actions:
         set_of_actions = action if isinstance(action, list) else [action]
+        action_success = True
+
+        if verbose:
+            print "\nTesting on actions: %s \n" % str(set_of_actions)
 
         # Error message:
         error_msg = ''
@@ -479,9 +487,10 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
         # Run action
         with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
-                      search_params={'max_depth': 1}) as g:
+                      search_params={'max_depth': 1}, seed=seed) as g:
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose, hp=hp)
+            t = Teacher(g, test=True, verbose=verbose, hp=hp, seed=seed)
+
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
             t.set_gp_params(num_gameplay=3, max_length=5)
@@ -505,10 +514,15 @@ def load_and_resume_test(nn_input_type, verbose=False):
         with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}) as g:
             t = Teacher(g, test=True, verbose=verbose, hp=hp)
-            t.set_bootstrap_params(num_bootstrap=50)  # 488037
 
             # Run
             t.run(['load_and_resume'])
+
+            # Save final weight data
+            final_w_lr = g.nn.get_weight_values()
+
+            # Save final training variables
+            final_train_vars_lr = g.nn.sess.run(g.nn.get_training_vars())
 
             # Save loaded current action
             state = t.load_state()  # resets weights and training vars to start of resume values
@@ -521,42 +535,73 @@ def load_and_resume_test(nn_input_type, verbose=False):
             # Save new training variables
             new_train_vars = g.nn.sess.run(g.nn.get_training_vars())
 
-        # Compare weight values
-        result_msg = dh.diff_dict_helper(weights, new_weights)
-        if result_msg:
-            error_msg += "Weight did not match.\n"
-            error_msg += result_msg
-            success = False
+        with open(loss_path + 'loss_test.p', 'r') as f:
+            loss_data_lr = pickle.load(f)
 
-        # Compare graph training variable values
-        result_msg = dh.diff_dict_helper(train_vars, new_train_vars)
-        if result_msg:
-            error_msg += "Training variables did not match.\n"
-            error_msg += result_msg
-            success = False
+        # Run same test but without pausing
+        with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
+                      search_params={'max_depth': 1}, seed=seed) as g:
+            t = Teacher(g, test=True, verbose=verbose, hp=hp, seed=seed)
+            t.set_bootstrap_params(num_bootstrap=50)
+
+            t.set_bootstrap_params(num_bootstrap=50)
+            t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
+            t.set_gp_params(num_gameplay=3, max_length=5)
+
+            # Run
+            t.run(set_of_actions, training_time=None)
+
+            # Save Weights
+            final_w = g.nn.get_weight_values()
+
+            # Save graph training variables
+            final_train_vars = g.nn.sess.run(g.nn.get_training_vars())
+
+        with open(loss_path + 'loss_test.p', 'r') as f:
+            loss_data = pickle.load(f)
+
+        DictComp = namedtuple('DictComp', 'description dicts error_msg')
+        comparisons = [
+            DictComp('Compare load/resume weight values', [weights, new_weights], "Weight did not match.\n"),
+            DictComp('Compare final weight values', [final_w_lr, final_w],
+                     "Load and resume did not yield the same weights as normal training.\n"),
+            DictComp('Compare load/resume training variables', [train_vars, new_train_vars],
+                     "Training variables did not match.\n"),
+            DictComp('Compare final training variables', [final_train_vars_lr, final_train_vars],
+                     "Load and resume did not yield the same training variables as normal training.\n"),
+            DictComp('Compare loss and training loss', [loss_data_lr, loss_data],
+                     "Load and resume did not yield the same loss as normal training.")
+        ]
+
+        for comp in comparisons:
+            result_msg = dh.diff_dict_helper(comp.dicts)
+            if result_msg:
+                error_msg += comp.error_msg
+                error_msg += result_msg
+                action_success = False
 
         # Compare the action
         if pause_action != new_action:
             error_msg += "Current action was not saved and loaded properly. \n"
             error_msg += "Saved:\n %s \n Loaded:\n %s\n" % (pause_action, new_action)
-            success = False
+            action_success = False
 
         # Compare the set of actions
         if set_of_actions != new_actions:
             error_msg += "Set of actions was not saved and loaded properly. \n"
             error_msg += "Saved:\n %s \n Loaded:\n %s\n" % (str(set_of_actions), str(new_actions))
-            success = False
+            action_success = False
 
         # Check that correct number of epochs is run
-        with open(loss_path + 'loss_test.p', 'r') as f:
-            loss = pickle.load(f)
-            if hp['NUM_EPOCHS'] != (len(loss['loss']) - 1):
-                error_msg += "On action %s there was the wrong number of epochs. " % action
-                error_msg += "Expected %d epochs, but got %d epochs." % (hp['NUM_EPOCHS'], len(loss['loss']) - 1)
-                success = False
+        if hp['NUM_EPOCHS'] != (len(loss_data_lr['loss']) - 1):
+            error_msg += "On action %s there was the wrong number of epochs. " % action
+            error_msg += "Expected %d epochs, but got %d epochs." % (hp['NUM_EPOCHS'], len(loss_data_lr['loss']) - 1)
+            action_success = False
 
-        if not success:
+        if not action_success:
             print "Load and resume with action %s fails:\n%s" % (str(action), error_msg)
+
+        success = success and action_success
 
     return success
 

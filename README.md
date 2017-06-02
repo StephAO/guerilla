@@ -16,6 +16,7 @@ Packages and programs required for things to work.
   - `sudo apt-get install python-numpy`
 - pygame (for gui):
   - `sudo apt-get build-dep python-pygame`
+    - If this does not work check the 2nd answer here: https://askubuntu.com/questions/312767/installing-pygame-with-pip
   - `sudo apt-get install python-pygame`
 - ruamel.yaml:
   - `pip install ruamel.yaml`

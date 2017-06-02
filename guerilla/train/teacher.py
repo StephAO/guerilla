@@ -113,11 +113,16 @@ class Teacher:
             print "Bootstrap training neural net using %s." % self.training_mode
             print "TD training neural net using %s." % self.td_training_mode
 
-        if self.td_training_mode == 'adagrad':
-            self.td_adagrad_acc = None
+        if self.td_training_mode in ['adagrad', 'adadelta']:
+            self.td_grad_acc = None
+            self.td_param_acc = None
             self.weight_shapes = []
             for weight in self.nn.all_weights_biases:
                 self.weight_shapes.append(weight.get_shape().as_list())
+
+        if self.td_training_mode == 'adadelta' and self.hp['TD_LRN_RATE'] != 1.0:
+            warnings.warn("Training mode is adadelta and initial learning rate is %d != 1.0" % self.hp['TD_LRN_RATE'])
+
 
         # Self-play parameters
         self.gp_num = 1  # The number of games to play against itself
@@ -393,8 +398,9 @@ class Teacher:
         # Save TD training data
         state['training'] = {'game_index': self.td_game_index,
                              'w_update': self.td_w_update}
-        if self.td_training_mode == 'adagrad':
-            state['training']['adagrad_acc'] = self.td_adagrad_acc
+        if self.td_training_mode in ['adagrad', 'adadelta']:
+            state['training']['grad_acc'] = self.td_grad_acc
+            state['training']['param_acc'] = self.td_param_acc
 
         # Save STS evaluation parameters
         state['sts_on'] = self.sts_on
@@ -446,8 +452,9 @@ class Teacher:
         # Load general parameters
         self.td_game_index = state['training']['game_index']
         self.td_w_update = state['training']['w_update']
-        if self.td_training_mode == 'adagrad':
-            self.td_adagrad_acc = state['training']['adagrad_acc']
+        if self.td_training_mode in ['adagrad', 'adadelta']:
+            self.td_grad_acc = state['training']['grad_acc']
+            self.td_param_acc = state['training']['param_acc']
 
 
         # Load STS evaluation parameters
@@ -802,11 +809,13 @@ class Teacher:
         if full_length:
             self.td_full_length = full_length
 
-    def reset_adagrad(self):
-        """ Resets adagrad accumulator """
-        self.td_adagrad_acc = []
+    def reset_accumulators(self):
+        """ Resets adagrad and adadelta accumulator """
+        self.td_grad_acc = []
+        self.td_param_acc = []
         for weight_shape in self.weight_shapes:
-            self.td_adagrad_acc.append(np.zeros(weight_shape))
+            self.td_grad_acc.append(np.zeros(weight_shape))
+            self.td_param_acc.append(np.zeros(weight_shape))
 
     def train_td(self, endgame, game_indices=None, start_idx=0, sts_scores=None):
         """
@@ -844,8 +853,8 @@ class Teacher:
             sts_scores = []
 
         self.td_game_index = 0
-        if self.td_training_mode == 'adagrad':
-            self.reset_adagrad()
+        if self.td_training_mode in ['adagrad', 'adadelta']:
+            self.reset_accumulators()
 
         for i in xrange(start_idx, len(game_indices)):
 
@@ -915,24 +924,59 @@ class Teacher:
 
         return
 
+    def _squared_update(self, old, new):
+        return old + pow(new, 2)
+
+    def _squared_update_decay(self, old, new):
+        return self.hp['TD_DECAY_RATE'] * old + (1 - self.hp['TD_DECAY_RATE']) * pow(new, 2)
+
+    def _sqrt_smooth(self, x, smoothing=1e-8):
+        return np.sqrt(x + smoothing)
+
     def td_update_weights(self):
         """
-        From batch of weight updates (gradients * discout values), find average. Updates adagrad accumulator.
+        From batch of weight updates (gradients * discount values), find average. Updates adagrad accumulator.
         Updates weights.
         Note: The plurality of gradients is a function of the number nodes not the number of actual gradients.
         """
-        avg_gradients = [grad / self.hp['TD_BATCH_SIZE'] for grad in self.td_w_update]
+
+        # Calculate average update
+        avg_update = np.divide(self.td_w_update, self.hp['TD_BATCH_SIZE'])
+
+        weight_update = None
         if self.td_training_mode == 'adagrad':
-            self.td_adagrad_acc = map(add, self.td_adagrad_acc, [grad ** 2 for grad in avg_gradients])
-            learning_rates = [self.hp['TD_LRN_RATE'] / (np.sqrt(grad) + 1.0e-8) for grad in self.td_adagrad_acc]
+            # Accumulate gradient
+            self.td_grad_acc = map(self._squared_update, self.td_grad_acc, avg_update)
+
+            # Compute update
+            learning_rates = [self.hp['TD_LRN_RATE'] / self._sqrt_smooth(grad) for grad in self.td_grad_acc]
+            weight_update = [learning_rates[i] * avg_update[i] for i in xrange(len(avg_update))]
+
+            print learning_rates[0]
+
         elif self.td_training_mode == 'adadelta':
-            raise NotImplementedError("TD leaf adadelta training has not yet been implemented")
+            # Accumulate gradient
+            self.td_grad_acc = map(self._squared_update_decay, self.td_grad_acc, avg_update)
+
+            # Compute update
+            learning_rates = [self.hp['TD_LRN_RATE'] * self._sqrt_smooth(self.td_param_acc[i]) / self._sqrt_smooth(
+                self.td_grad_acc[i])
+                              for i in xrange(len(self.td_grad_acc))]
+
+            # print learning_rates
+
+            weight_update = [learning_rates[i] * avg_update[i] for i in xrange(len(avg_update))]
+
+            # Calculate parameter accumulator
+            self.td_param_acc = map(self._squared_update_decay, self.td_param_acc, weight_update)
+
         elif self.td_training_mode == 'gradient_descent':
-            learning_rates = [self.hp['TD_LRN_RATE']] * len(avg_gradients)
+            weight_update = [self.hp['TD_LRN_RATE'] * update for update in avg_update]
         else:
             raise NotImplementedError("Unrecognized training type")
 
-        self.nn.add_to_all_weights([learning_rates[i] * avg_gradients[i] for i in xrange(len(avg_gradients))])
+        self.nn.add_to_all_weights(weight_update)
+
 
     def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False):
         """
@@ -1011,12 +1055,15 @@ class Teacher:
         # Modify step size based on full VS half-move
         step_size = 2 if full_move else 1
 
+        # Iterate over boards
         for t in range(num_boards):
             color = dh.strip_fen(game[t],
                                  keep_idxs=1)  # color of the board which is being updated (who's gradient is being used)
             if only_own_boards is not None and only_own_boards != color:
                 continue
             td_val = 0
+
+            # Sum the decayed error for each board
             for j in range(t, num_boards - step_size, step_size):  # step size of 2
                 # Calculate temporal difference
                 # TODO: see if its worth memoizing this
@@ -1034,10 +1081,10 @@ class Teacher:
                             else:
                                 dt = max(dt, 0)
 
-                # Add to sum
+                # Sum
                 td_val += math.pow(self.hp['TD_DISCOUNT'], j - t) * dt
 
-            # Use gradient to update sum
+            # Sum the total TD error
             if self.td_w_update is None:
                 self.td_w_update = game_info[t]['gradient'] * td_val
             else:
@@ -1074,7 +1121,7 @@ class Teacher:
         if opponent:
             self.opponent = opponent
 
-    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=False):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1104,8 +1151,8 @@ class Teacher:
             sts_scores = []
 
         self.td_game_index = 0
-        if self.td_training_mode == 'adagrad':
-            self.reset_adagrad()
+        if self.td_training_mode in ['adagrad', 'adadelta']:
+            self.reset_accumulators()
 
         for i in xrange(start_idx, self.gp_num):
             if self.verbose:
@@ -1193,24 +1240,24 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='5416.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='5240.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adagrad')
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
+        t.set_gp_params(num_gameplay=1500, max_length=12, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 50
+        t.sts_interval = 100
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
-        print eval_sts(g)
+        t.run(['load_and_resume'], training_time=2 * 3600)
+        # print eval_sts(g)
 
 
 if __name__ == '__main__':

@@ -640,17 +640,14 @@ class Teacher:
     def get_nn_input_shapes(self):
         """ Generate shapes of nn input types """
         input_data = []
-        diagonals = None
         for input_size in self.nn.input_sizes:
             _shape = [self.hp['BATCH_SIZE']] + list(input_size)
             input_data.append(np.zeros(_shape))
 
-            if input_size[0:2] == (8, 8) and self.nn.hp['USE_CONV']:
-                diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.size_per_tile))
         true_values = np.zeros(self.hp['BATCH_SIZE'])
-        return input_data, diagonals, true_values
+        return input_data, true_values
 
-    def get_batch_feed_dict(self, input_data, diagonals, true_values, _true_values, fens, board_num, game_indices):
+    def get_batch_feed_dict(self, input_data, true_values, _true_values, fens, board_num, game_indices):
         """
             Generate batch feed dict.
             Note: "_true_values contains" ground truth values. "true_values" is simply the structure to be used for
@@ -662,8 +659,6 @@ class Teacher:
 
             for k in xrange(len(nn_input_data)):
                 input_data[k][j] = nn_input_data[k]
-                if np.shape(input_data[k][j])[0:2] == (8, 8) and self.nn.hp['USE_CONV']:
-                    diagonals[j] = dh.get_diagonals(input_data[k][j], self.nn.size_per_tile)
 
             true_values[j] = _true_values[game_indices[board_num]]
             board_num += 1
@@ -677,8 +672,7 @@ class Teacher:
 
         for j in xrange(len(input_data)):
             _feed_dict[self.nn.input_data_placeholders[j]] = input_data[j]
-        if self.nn.hp['USE_CONV']:
-            _feed_dict[self.nn.diagonal_placeholder] = diagonals
+
         return _feed_dict, board_num
 
     def weight_update_bootstrap(self, fens, _true_values, game_indices, train_step):
@@ -692,7 +686,7 @@ class Teacher:
 
         board_num = 0
 
-        input_data, diagonals, true_values = self.get_nn_input_shapes()
+        input_data, true_values = self.get_nn_input_shapes()
 
         for i in xrange(num_batches):
             # if training time is up, save state
@@ -703,7 +697,7 @@ class Teacher:
                 return True, {'game_indices': game_indices[(i * self.hp['BATCH_SIZE']):]}
 
             _feed_dict, board_num = \
-                self.get_batch_feed_dict(input_data, diagonals, true_values,
+                self.get_batch_feed_dict(input_data, true_values,
                                          _true_values, fens, board_num,
                                          game_indices)
             # train batch
@@ -731,14 +725,14 @@ class Teacher:
 
         board_num = 0
 
-        input_data, diagonals, true_values = self.get_nn_input_shapes()
+        input_data, true_values = self.get_nn_input_shapes()
 
         # Initialize Error
         error = 0
 
         for i in xrange(num_batches):
             _feed_dict, board_num = \
-                self.get_batch_feed_dict(input_data, diagonals, true_values,
+                self.get_batch_feed_dict(input_data, true_values,
                                          _true_values, fens, board_num,
                                          range(len(fens)))
             # Get batch loss
@@ -1193,7 +1187,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='5416.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adagrad')
         # g.search.max_depth = 1
@@ -1209,7 +1203,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
+        t.run(['load_and_resume'], training_time=run_time)
         print eval_sts(g)
 
 

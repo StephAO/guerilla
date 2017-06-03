@@ -83,13 +83,7 @@ class NeuralNet:
         self.b_l1 = []
         if self.hp['USE_CONV']:
             self.W_grid = None
-            self.W_rank = None
-            self.W_file = None
-            self.W_diag = None
             self.b_grid = None
-            self.b_rank = None
-            self.b_file = None
-            self.b_diag = None
 
         # Weights for fully connected layers
         self.W_fc = [None] * self.hp['NUM_FC']
@@ -115,7 +109,7 @@ class NeuralNet:
         # tf session and variables
         self.sess = None
 
-        self.conv_layer_size = 64 + 8 + 8 + 10  # 90
+        self.conv_layer_size = 64 # 90
 
         # input placeholders
         self.true_value = tf.placeholder(tf.float32, shape=[None])
@@ -126,9 +120,6 @@ class NeuralNet:
 
             self.input_data_placeholders.append(tf.placeholder(
                 tf.float32, shape=_shape))
-            if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
-                _shape = [None, 10, 8, self.size_per_tile]
-                self.diagonal_placeholder = tf.placeholder(tf.float32, shape=_shape)
 
         # define all variables and their assignment placeholders
         self.define_tf_variables()
@@ -220,39 +211,19 @@ class NeuralNet:
             if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
                 # conv weights
                 self.W_grid = self.weight_variable([5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_rank = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_file = self.weight_variable([8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_diag = self.weight_variable([1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_l1.extend([self.W_grid, self.W_rank, self.W_file, self.W_diag])
+                self.W_l1.append(self.W_grid)
 
                 # conv biases
                 self.b_grid = self.bias_variable([self.hp['NUM_FEAT']])
-                self.b_rank = self.bias_variable([self.hp['NUM_FEAT']])
-                self.b_file = self.bias_variable([self.hp['NUM_FEAT']])
-                self.b_diag = self.bias_variable([self.hp['NUM_FEAT']])
-                self.b_l1.extend([self.b_grid, self.b_rank, self.b_file, self.b_diag])
+                self.b_l1.append(self.b_grid)
 
                 self.W_grid_placeholder = tf.placeholder(tf.float32,
                                                          shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_rank_placeholder = tf.placeholder(tf.float32,
-                                                         shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_file_placeholder = tf.placeholder(tf.float32,
-                                                         shape=[8, 1, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_diag_placeholder = tf.placeholder(tf.float32,
-                                                         shape=[1, 8, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_l1_placeholders.extend([self.W_grid_placeholder,
-                                               self.W_rank_placeholder,
-                                               self.W_file_placeholder,
-                                               self.W_diag_placeholder])
+                self.W_l1_placeholders.append(self.W_grid_placeholder)
 
                 self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-                self.b_rank_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-                self.b_file_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-                self.b_diag_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-                self.b_l1_placeholders.extend([self.b_grid_placeholder,
-                                               self.b_rank_placeholder,
-                                               self.b_file_placeholder,
-                                               self.b_diag_placeholder])
+                self.b_l1_placeholders.append(self.b_grid_placeholder)
+
                 nodes_used = self.conv_layer_size * self.hp['NUM_FEAT']
                 nodes_left -= nodes_used
                 self.weight_2nd_dim.append(nodes_used)
@@ -572,19 +543,12 @@ class NeuralNet:
             # convolve layer if you can and desired
             if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
                 o_grid = tf.nn.relu(self.conv5x5_grid(self.input_data_placeholders[i], self.W_grid) + self.b_grid)
-                o_rank = tf.nn.relu(self.conv8x1_line(self.input_data_placeholders[i], self.W_rank) + self.b_rank)
-                o_file = tf.nn.relu(self.conv8x1_line(self.input_data_placeholders[i], self.W_file) + self.b_file)
-                o_diag = tf.nn.relu(self.conv8x1_line(self.diagonal_placeholder, self.W_diag) + self.b_diag)
-                W_i += 4
-                b_i += 4
+                W_i += 1
+                b_i += 1
 
-                o_grid = tf.reshape(o_grid, [batch_size, 64 * self.hp['NUM_FEAT']])
-                o_rank = tf.reshape(o_rank, [batch_size, 8 * self.hp['NUM_FEAT']])
-                o_file = tf.reshape(o_file, [batch_size, 8 * self.hp['NUM_FEAT']])
-                o_diag = tf.reshape(o_diag, [batch_size, 10 * self.hp['NUM_FEAT']])
+                o_l1.append(tf.reshape(o_grid, [batch_size, 64 * self.hp['NUM_FEAT']]))
 
                 # output of convolutional layer
-                o_l1.append(tf.concat(values=[o_grid, o_rank, o_file, o_diag], axis=1))
             else:
                 _input_shape = [batch_size, np.prod(input_size)]
                 _input = tf.reshape(self.input_data_placeholders[i], _input_shape)
@@ -689,10 +653,6 @@ class NeuralNet:
 
         for i in xrange(len(input_data)):
             feed_dict[self.input_data_placeholders[i]] = np.array([input_data[i]])
-            if np.shape(input_data[i])[0:2] == (8, 8) and self.hp['USE_CONV']:
-                diagonal = dh.get_diagonals(input_data[i], self.size_per_tile)
-                diagonal = np.array([diagonal])
-                feed_dict[self.diagonal_placeholder] = diagonal
 
         return feed_dict
 

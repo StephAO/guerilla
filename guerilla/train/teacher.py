@@ -641,7 +641,7 @@ class Teacher:
         """ Generate shapes of nn input types """
         input_data = []
         for input_size in self.nn.input_sizes:
-            _shape = [self.hp['BATCH_SIZE']] + list(input_size)
+            _shape = [self.hp['BATCH_SIZE']] + list(input_size[0])
             input_data.append(np.zeros(_shape))
 
         true_values = np.zeros(self.hp['BATCH_SIZE'])
@@ -1203,7 +1203,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['load_and_resume'], training_time=run_time)
+        t.run(['train_bootstrap'], training_time=run_time)
         print eval_sts(g)
 
 

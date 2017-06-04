@@ -56,16 +56,18 @@ class NeuralNet:
         self.total_input_size = 0
         if self.hp['NN_INPUT_TYPE'] == 'movemap':
             self.weight_stddev = 0.01
-            self.input_sizes = [(dh.STATE_DATA_SIZE,), (dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE)]
+            self.input_sizes = [((dh.STATE_DATA_SIZE,), 0.125),
+                                ((dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.MOVEMAP_TILE_SIZE), 0.875)]
             # Used for convolution
             self.size_per_tile = dh.MOVEMAP_TILE_SIZE
         elif self.hp['NN_INPUT_TYPE'] == 'giraffe':
             self.weight_stddev = 0.001
-            self.input_sizes = [(dh.STATE_DATA_SIZE,), (dh.BOARD_DATA_SIZE,), (dh.PIECE_DATA_SIZE,)]
+            self.input_sizes = [((dh.STATE_DATA_SIZE,), 0.125),
+                                ((dh.BOARD_DATA_SIZE,), 0.5), ((dh.PIECE_DATA_SIZE,), 0.375)]
             self.hp['USE_CONV'] = False
         elif self.hp['NN_INPUT_TYPE'] == 'bitmap':
             self.weight_stddev = 0.01
-            self.input_sizes = [(dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.BITMAP_TILE_SIZE)]
+            self.input_sizes = [((dh.BOARD_LENGTH, dh.BOARD_LENGTH, dh.BITMAP_TILE_SIZE), 1.0)]
             # Used for convolution
             self.size_per_tile = dh.BITMAP_TILE_SIZE
         else:
@@ -78,29 +80,14 @@ class NeuralNet:
         # declare layer variables
         self.sess = None
 
-        # Weights for first layer
-        self.W_l1 = []
-        self.b_l1 = []
-        if self.hp['USE_CONV']:
-            self.W_grid = None
-            self.b_grid = None
-
-        # Weights for fully connected layers
-        self.W_fc = [None] * self.hp['NUM_FC']
-        self.b_fc = [None] * self.hp['NUM_FC']
-        self.W_final = None
-        self.b_final = None
-        self.all_weights = None
+        self.all_weights = []
+        self.all_biases = []
         self.all_weights_biases = []
 
-        self.W_l1_placeholders = []
-        self.b_l1_placeholders = []
-        self.W_fc_placeholders = [None] * self.hp['NUM_FC']
-        self.b_fc_placeholders = [None] * self.hp['NUM_FC']
-        self.W_final_placeholder = None
-        self.b_final_placeholder = None
         # all weights + biases
         # Currently the order is necessary for assignment operators
+        self.bias_pl = []
+        self.weight_pl = []
         self.all_placeholders = []
 
         # declare output variable
@@ -115,29 +102,33 @@ class NeuralNet:
         self.true_value = tf.placeholder(tf.float32, shape=[None])
         self.input_data_placeholders = []
         for input_size in self.input_sizes:
-            self.total_input_size += float(np.prod(input_size))
-            _shape = [None] + list(input_size)
+            self.total_input_size += float(np.prod(input_size[0]))
+            _shape = [None] + list(input_size[0])
 
             self.input_data_placeholders.append(tf.placeholder(
                 tf.float32, shape=_shape))
 
-        # define all variables and their assignment placeholders
-        self.define_tf_variables()
+        # create neural net graph
+        self.model()
+
+        # gradient op and placeholder (must be defined after self.pred_value is defined)
+        self.all_weights_biases.extend(self.all_weights)
+        self.all_weights_biases.extend(self.all_biases)
+
+        self.all_placeholders.extend(self.weight_pl)
+        self.all_placeholders.extend(self.bias_pl)
 
         # create assignment operators
-        if len(self.all_weights_biases) != len(self.all_placeholders):
-            raise ValueError("There are an unequal number of weights (%d) and"
-                             "placeholders for those weights" %
-                             len(self.all_weights_biases), len(self.all_placeholders))
         self.all_assignments = []
         for i in xrange(len(self.all_weights_biases)):
             self.all_assignments.append(self.all_weights_biases[i].assign(
                 self.all_placeholders[i]))
 
-        # create neural net graph
-        self.neural_net()
+        if len(self.all_weights_biases) != len(self.all_placeholders):
+            raise ValueError("There are an unequal number of weights (%d) and"
+                             " placeholders for those weights" %
+                             len(self.all_weights_biases), len(self.all_placeholders))
 
-        # gradient op and placeholder (must be defined after self.pred_value is defined)
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights_biases)
 
         # Blank training variables. Call 'init_training' to initialize them
@@ -184,99 +175,196 @@ class NeuralNet:
         if self.verbose:
             print "Default graph reset."
 
-    def weight_variable(self, shape):
-        initial = tf.truncated_normal(shape, stddev=self.weight_stddev, dtype=tf.float32)
-        return tf.Variable(initial)
-
-    def bias_variable(self, shape):
-        initial = tf.constant(self.weight_stddev, shape=shape, dtype=tf.float32)
-        return tf.Variable(initial)
-
-    def conv5x5_grid(self, x, w):
-        return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME')  # Pad or fit? (same is pad, fit is valid)
-
-    def conv8x1_line(self, x, w):  # includes ranks, files, and diagonals
-        return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='VALID')
-
-    def define_tf_variables(self):
+    def weight_variable(self, name, shape, use_xavier=True, wd=None):
         """
-            Initializes all weight variables to normal distribution, and all
-            bias variables to a constant. Also sets weight and bias assignment
-            placeholders.
+        Create an initialized weight Variable with weight decay.
+        Args:
+            shape[list of ints]: shape of variable
+            use_xavier[bool]: whether to use xavier initializer
+        Returns:
+            Variable Tensor
         """
-        self.weight_2nd_dim = []
-        nodes_left = self.hp['NUM_HIDDEN']
-        for input_size in self.input_sizes:
-            # Weight and bias assignment placeholders
-            if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
-                # conv weights
-                self.W_grid = self.weight_variable([5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_l1.append(self.W_grid)
+        if use_xavier:
+            initializer = tf.contrib.layers.xavier_initializer()
+        else:
+            initializer = tf.truncated_normal_initializer(stddev=self.weight_stddev)
+        weight = tf.get_variable(name, shape, initializer=initializer)
+        self.all_weights.append(weight)
+        self.weight_pl.append(tf.placeholder(tf.float32, shape=shape))
+        return weight
 
-                # conv biases
-                self.b_grid = self.bias_variable([self.hp['NUM_FEAT']])
-                self.b_l1.append(self.b_grid)
+    def bias_variable(self, name, shape):
+        """
+        Create an initialized bias variable.
+        Inputs:
+            shape [list of ints]: shape of variable
+        Returns:
+            Variable Tensor
+        """
+        initializer = tf.constant_initializer(self.weight_stddev)
+        bias = tf.get_variable(name, shape, initializer=initializer)
+        self.all_biases.append(bias)
+        self.bias_pl.append(tf.placeholder(tf.float32, shape=shape))
+        return bias
 
-                self.W_grid_placeholder = tf.placeholder(tf.float32,
-                                                         shape=[5, 5, self.size_per_tile, self.hp['NUM_FEAT']])
-                self.W_l1_placeholders.append(self.W_grid_placeholder)
+    def fc_layer(self, input_tensor, input_dim, output_dim, layer_name,
+                 activation_fn=tf.nn.relu, is_training=True, batch_norm=False,
+                 batch_norm_decay=None):
+        """
+        Reusable code for making a simple neural net layer.
+        It does a matrix multiply, bias add, and then uses relu to nonlinearize.
+        It also sets up name scoping so that the resultant graph is easy to read,
+        and adds a number of summary ops.
+        """
+        # Adding a name scope ensures logical grouping of the layers in the graph.
+        with tf.name_scope(layer_name):
+            weights = self.weight_variable(layer_name + "_weights", [input_dim, output_dim])
+            biases = self.bias_variable(layer_name + "_biases", [output_dim])
+            output = tf.matmul(input_tensor, weights) + biases
+            if batch_norm:
+                    output = self.batch_norm_fc(output, is_training=is_training,
+                                           bn_decay=batch_norm_decay,
+                                           scope=layer_name+'_batch_norm')
+            if activation_fn is not None:
+                    output = activation_fn(output, name='activation')
+            return output
 
-                self.b_grid_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_FEAT']])
-                self.b_l1_placeholders.append(self.b_grid_placeholder)
 
-                nodes_used = self.conv_layer_size * self.hp['NUM_FEAT']
-                nodes_left -= nodes_used
-                self.weight_2nd_dim.append(nodes_used)
-            else:
-                if nodes_left < self.hp['MIN_NUM_NODES']:
-                    raise ValueError("Not enough hidden nodes for the different input types")
-                ratio_of_layer = float(np.prod(input_size)) / self.total_input_size
-                num_nodes = int(max(self.hp['MIN_NUM_NODES'], ratio_of_layer * nodes_left))
-                nodes_left -= num_nodes
-                _shape = [int(np.prod(input_size)), int(num_nodes)]
-                self.W_l1.append(self.weight_variable(_shape))
-                self.W_l1_placeholders.append(tf.placeholder(
-                    tf.float32, shape=_shape))
-                self.b_l1.append(self.bias_variable([num_nodes]))
-                self.b_l1_placeholders.append(tf.placeholder(
-                    tf.float32, shape=[num_nodes]))
-                self.weight_2nd_dim.append(num_nodes)
+    def conv2d(self, input_tensor, num_in_feat_maps, num_out_feat_maps, kernel_size,
+               layer_name, stride=[1, 1], padding='SAME', use_xavier=True,
+               stddev=1e-3, activation_fn=tf.nn.relu, batch_norm=False,
+               batch_norm_decay=None, is_training=None):
+        """
+        2D convolution with non-linear operation.
+        Args:
+            input_tensor: 4-D tensor variable BxHxWxC
+            num_in_feat_maps: int
+            num_out_feat_maps: int
+            kernel_size: a list of 2 ints
+            layer_name: string used to scope variables in layer
+            stride: a list of 2 ints
+            padding: 'SAME' or 'VALID'
+            use_xavier: bool, use xavier_initializer if true
+            stddev: float, stddev for truncated_normal init
+            activation_fn: function
+            batch_norm: bool, whether to use batch norm
+            batch_norm_decay: float or float tensor variable in [0,1]
+            is_training: bool Tensor variable
+        Returns:
+            Variable tensor
+        """
+        with tf.variable_scope(layer_name) as sc:
+            kernel_h, kernel_w = kernel_size
+            kernel_shape = [kernel_h, kernel_w, num_in_feat_maps, num_out_feat_maps]
+            weights = self.weight_variable(layer_name + "_weights", shape=kernel_shape, use_xavier=use_xavier)
+            stride_h, stride_w = stride
+            output = tf.nn.conv2d(input_tensor, weights,
+                                   [1, stride_h, stride_w, 1],
+                                   padding=padding)
+            biases = self.bias_variable(layer_name + "_biases", [num_out_feat_maps])
+            output = tf.nn.bias_add(output, biases)
 
-        _shape = [np.sum(self.weight_2nd_dim), self.hp['NUM_HIDDEN']]
-        self.W_fc[0] = self.weight_variable(_shape)
-        self.W_fc_placeholders[0] = tf.placeholder(tf.float32, shape=_shape)
-        self.b_fc[0] = self.weight_variable([self.hp['NUM_HIDDEN']])
-        self.b_fc_placeholders[0] = tf.placeholder(tf.float32, shape=self.hp['NUM_HIDDEN'])
-        for i in xrange(1, self.hp['NUM_FC']):
-            # fully connected layer i, weights + biases
-            _shape = [self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN']]
-            self.W_fc[i] = self.weight_variable(_shape)
-            self.W_fc_placeholders[i] = tf.placeholder(tf.float32, shape=_shape)
-            self.b_fc[i] = self.bias_variable([self.hp['NUM_HIDDEN']])
-            self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN']])
+            if batch_norm:
+                output = self.batch_norm_conv2d(output, is_training,
+                                            bn_decay=batch_norm_decay, scope='bn')
+            if activation_fn is not None:
+                output = activation_fn(output)
 
-        # Output layer
-        self.W_final = self.weight_variable([self.hp['NUM_HIDDEN'], 1])
-        self.b_final = self.bias_variable([1])
-        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], 1])
-        self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
+            return output
 
-        # Group defined weights/biases into a set
-        self.all_weights_biases.extend(self.W_l1)
-        self.all_weights_biases.extend(self.W_fc)
-        self.all_weights_biases.append(self.W_final)
-        self.all_weights = list(self.all_weights_biases)
-        self.all_weights_biases.extend(self.b_l1)
-        self.all_weights_biases.extend(self.b_fc)
-        self.all_weights_biases.append(self.b_final)
+    def max_pool2d(self, input_tensor, kernel_size, layer_name, stride=[2, 2],
+                   padding='VALID'):
+        """
+        2D max pooling.
+        Args:
+            input_tensor: 4-D tensor BxHxWxC
+            kernel_size: a list of 2 ints
+            layer_name: string to scope variables
+            stride: a list of 2 ints
+            padding: string, either 'VALID' or 'SAME'
+        Returns:
+            Variable tensor
+        """
+        with tf.variable_scope(layer_name) as sc:
+            kernel_h, kernel_w = kernel_size
+            stride_h, stride_w = stride
+            output = tf.nn.max_pool(input_tensor,
+                                     ksize=[1, kernel_h, kernel_w, 1],
+                                     strides=[1, stride_h, stride_w, 1],
+                                     padding=padding)
+            return output
 
-        # Same order as all weights/biases
-        self.all_placeholders.extend(self.W_l1_placeholders)
-        self.all_placeholders.extend(self.W_fc_placeholders)
-        self.all_placeholders.append(self.W_final_placeholder)
-        self.all_placeholders.extend(self.b_l1_placeholders)
-        self.all_placeholders.extend(self.b_fc_placeholders)
-        self.all_placeholders.append(self.b_final_placeholder)
+
+    def batch_norm_template(self, inputs, is_training, scope, moments_dims, bn_decay):
+        """ 
+        Batch normalization on convolutional maps and beyond...
+        Ref.: http://stackoverflow.com/questions/33949786/how-could-i-use-batch-normalization-in-tensorflow
+        Args:
+            inputs:        Tensor, k-D input ... x C could be BC or BHWC or BDHWC
+            is_training:   boolean tf.Varialbe, true indicates training phase
+            scope:         string, variable scope
+            moments_dims:  a list of ints, indicating dimensions for moments calculation
+            bn_decay:      float or float tensor variable, controling moving average weight
+        Return:
+            normed:        batch-normalized maps
+        """
+
+        # TODO compare with and without batch norm
+        # TODO Will these have to be considered by TD?
+        with tf.variable_scope(scope) as sc:
+            num_channels = inputs.get_shape()[-1].value
+            beta = tf.Variable(tf.constant(0.0, shape=[num_channels]),
+                               name='beta', trainable=True)
+            gamma = tf.Variable(tf.constant(1.0, shape=[num_channels]),
+                                name='gamma', trainable=True)
+            batch_mean, batch_var = tf.nn.moments(inputs, moments_dims,
+                                                  name='moments')
+            decay = bn_decay if bn_decay is not None else 0.9
+            ema = tf.train.ExponentialMovingAverage(decay=decay)
+            # Operator that maintains moving averages of variables.
+            ema_apply_op = tf.cond(is_training,
+                                   lambda: ema.apply([batch_mean, batch_var]),
+                                   lambda: tf.no_op())
+
+            # Update moving average and return current batch's avg and var.
+            def mean_var_with_update():
+                with tf.control_dependencies([ema_apply_op]):
+                    return tf.identity(batch_mean), tf.identity(batch_var)
+
+            # ema.average returns the Variable holding the average of var.
+            mean, var = tf.cond(is_training,
+                                mean_var_with_update,
+                                lambda: (
+                                ema.average(batch_mean), ema.average(batch_var)))
+            normed = tf.nn.batch_normalization(inputs, mean, var, beta, gamma, 1e-3)
+        return normed
+
+
+    def batch_norm_fc(self, inputs, is_training, bn_decay, scope):
+        """ 
+        Batch normalization on FC data.
+        Args:
+            inputs:      Tensor, 2D BxC input
+            is_training: boolean tf.Varialbe, true indicates training phase
+            bn_decay:    float or float tensor variable, controling moving average weight
+            scope:       string, variable scope
+        Return:
+            normed:      batch-normalized maps
+        """
+        return self.batch_norm_template(inputs, is_training, scope, [0, ], bn_decay)
+
+    def batch_norm_conv2d(self, inputs, is_training, bn_decay, scope):
+        """ 
+        Batch normalization on 2D convolutional maps.
+        Args:
+            inputs:      Tensor, 4D BHWC input maps
+            is_training: boolean tf.Varialbe, true indicates training phase
+            bn_decay:    float or float tensor variable, controling moving average weight
+            scope:       string, variable scope
+        Return:
+            normed:      batch-normalized maps
+        """
+        return self.batch_norm_template(inputs, is_training, scope, [0, 1, 2], bn_decay)
 
     def _set_hyper_params_from_file(self, file):
         """
@@ -471,12 +559,8 @@ class NeuralNet:
 
         weight_values = []
 
-        weight_values.extend(values_dict['W_l1'])
-        weight_values.extend(values_dict['W_fc'])
-        weight_values.append(values_dict['W_final'])
-        weight_values.extend(values_dict['b_l1'])
-        weight_values.extend(values_dict['b_fc'])
-        weight_values.append(values_dict['b_final'])
+        weight_values.extend(values_dict['all_weights'])
+        weight_values.extend(values_dict['all_biases'])
 
         self.set_all_weights(weight_values)
 
@@ -499,35 +583,21 @@ class NeuralNet:
         """
         weight_values = dict()
 
-        # Set up dict entries for first layer
-        weight_values['W_l1'] = [None] * len(self.W_l1)
-        weight_values['b_l1'] = [None] * len(self.b_l1)
-        # Get layer 1 weight values
-        result = self.sess.run(self.W_l1 + self.b_l1)
-        # Assign layer 1 weight values
-        for i in range(len(self.W_l1)):
-            weight_values['W_l1'][i] = result[i]
-            weight_values['b_l1'][i] = result[len(self.W_l1) + i]
+        # Get all weight values
+        weight_values['weights'] = [None] * len(self.all_weights)
+        result = self.sess.run(self.all_weights)
+        for i in result:
+            weight_values['weights'][i] = result[i]
 
-        # Set up dict entries for fully-connected layers
-        weight_values['W_fc'] = [None] * len(self.W_fc)
-        weight_values['b_fc'] = [None] * len(self.b_fc)
-        # Get fully connected layer weight values
-        result = self.sess.run(self.W_fc + self.b_fc)
-        # Assign fully connected layer weight values
-        for i in range(len(self.W_fc)):
-            weight_values['W_fc'][i] = result[i]
-            weight_values['b_fc'][i] = result[len(self.W_fc) + i]
-
-        # Get final layer weight values
-        result = self.sess.run([self.W_final, self.b_final])
-        # Assign final layer weight values
-        weight_values['W_final'] = result[0]
-        weight_values['b_final'] = result[1]
+        # Get all bias values
+        weight_values['biases'] = [None] * len(self.all_biases)
+        result = self.sess.run(self.all_biases)
+        for i in result:
+            weight_values['biases'][i] = result[i]
 
         return weight_values
 
-    def neural_net(self):
+    def model(self):
         """
             Structure of neural net.
             Sets member variable 'pred_value' to the tensor representing the
@@ -535,41 +605,37 @@ class NeuralNet:
         """
         batch_size = tf.shape(self.input_data_placeholders[0])[0]
 
-        o_fc = [None] * self.hp['NUM_FC']
-        o_l1 = []
-        W_i = 0  # Weight index
-        b_i = 0  # bias index
+        mid_output = []
+        num_mid_nodes = 0
         for i, input_size in enumerate(self.input_sizes):
             # convolve layer if you can and desired
-            if input_size[0:2] == (8, 8) and self.hp['USE_CONV']:
-                o_grid = tf.nn.relu(self.conv5x5_grid(self.input_data_placeholders[i], self.W_grid) + self.b_grid)
-                W_i += 1
-                b_i += 1
+            if input_size[0][0:2] == (8, 8) and self.hp['USE_CONV']:
 
-                o_l1.append(tf.reshape(o_grid, [batch_size, 64 * self.hp['NUM_FEAT']]))
+                conv1 = self.conv2d(self.input_data_placeholders[i], self.size_per_tile, self.hp['NUM_FEAT'], [5, 5],
+                                    'conv1_' + str(i))
+
+                mid_output.append(tf.reshape(conv1, [batch_size, self.conv_layer_size * self.hp['NUM_FEAT']]))
+                num_mid_nodes += self.conv_layer_size * self.hp['NUM_FEAT']
 
                 # output of convolutional layer
             else:
-                _input_shape = [batch_size, np.prod(input_size)]
-                _input = tf.reshape(self.input_data_placeholders[i], _input_shape)
-                output = tf.nn.relu(tf.matmul(_input, self.W_l1[W_i]) + self.b_l1[b_i])
-                _shape = [batch_size, self.weight_2nd_dim[i]]
-                output = tf.reshape(output, _shape)
-                W_i += 1
-                b_i += 1
+                input_shape = [batch_size, np.prod(input_size[0])]
+                input_tensor = tf.reshape(self.input_data_placeholders[i], input_shape)
+                l1 = self.fc_layer(input_tensor, np.prod(input_size[0]), int(self.hp['NUM_HIDDEN'] * input_size[1]),
+                                   "layer1_" + str(i))
 
-                o_l1.append(output)
+                mid_output.append(tf.reshape(l1, [batch_size, int(self.hp['NUM_HIDDEN'] * input_size[1])]))
+                num_mid_nodes += self.hp['NUM_HIDDEN'] * input_size[1]
+
+
         # output of first layer
-        o_conn = tf.concat(values=o_l1, axis=1)
+        mid_output = tf.concat(values=mid_output, axis=1)
         # output of fully connected layers
-        o_fc[0] = tf.nn.relu(tf.matmul(o_conn, self.W_fc[0]) + self.b_fc[0])
-        for i in xrange(1, self.hp['NUM_FC']):
-            # output of fully connected layer n
-            # Includes dropout
-            o_fc[i] = tf.nn.dropout(tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i]), self.keep_prob)
+        fc1 = self.fc_layer(mid_output, num_mid_nodes, self.hp['NUM_HIDDEN'], "fc1")
+        fc2 = self.fc_layer(fc1, self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN'], "fc2")
 
         # final_output
-        self.pred_value = tf.matmul(o_fc[-1], self.W_final) + self.b_final
+        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'], 1, "predicted_value")
 
     def get_weights(self, weight_vars):
         """

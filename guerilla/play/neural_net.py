@@ -231,7 +231,7 @@ class NeuralNet:
 
 
     def conv2d(self, input_tensor, num_in_feat_maps, num_out_feat_maps, kernel_size,
-               layer_name, stride=[1, 1], padding='SAME', use_xavier=True,
+               layer_name, stride=[1, 1], padding='SAME', use_xavier=False,
                stddev=1e-3, activation_fn=tf.nn.relu, batch_norm=False,
                batch_norm_decay=None, is_training=None):
         """
@@ -256,7 +256,7 @@ class NeuralNet:
         with tf.variable_scope(layer_name) as sc:
             kernel_h, kernel_w = kernel_size
             kernel_shape = [kernel_h, kernel_w, num_in_feat_maps, num_out_feat_maps]
-            weights = self.weight_variable(layer_name + "_weights", shape=kernel_shape, use_xavier=use_xavier)
+            weights = self.weight_variable(layer_name + "_weights", shape=kernel_shape)
             stride_h, stride_w = stride
             output = tf.nn.conv2d(input_tensor, weights,
                                    [1, stride_h, stride_w, 1],
@@ -586,13 +586,13 @@ class NeuralNet:
         # Get all weight values
         weight_values['weights'] = [None] * len(self.all_weights)
         result = self.sess.run(self.all_weights)
-        for i in result:
+        for i in xrange(len(result)):
             weight_values['weights'][i] = result[i]
 
         # Get all bias values
         weight_values['biases'] = [None] * len(self.all_biases)
         result = self.sess.run(self.all_biases)
-        for i in result:
+        for i in xrange(len(result)):
             weight_values['biases'][i] = result[i]
 
         return weight_values
@@ -635,7 +635,7 @@ class NeuralNet:
         fc2 = self.fc_layer(fc1, self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN'], "fc2")
 
         # final_output
-        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'], 1, "predicted_value")
+        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'], 1, "predicted_value", activation_fn=None)
 
     def get_weights(self, weight_vars):
         """

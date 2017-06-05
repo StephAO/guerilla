@@ -207,6 +207,10 @@ class NeuralNet:
         self.bias_pl.append(tf.placeholder(tf.float32, shape=shape))
         return bias
 
+    ######################
+    ### NN LAYER TYPES ###
+    ###################### 
+    # (see https://github.com/okraus/DeepLoc/blob/master/nn_layers.py) on how to extend them
     def fc_layer(self, input_tensor, input_dim, output_dim, layer_name,
                  activation_fn=tf.nn.relu, is_training=True, batch_norm=False,
                  batch_norm_decay=None):
@@ -365,6 +369,8 @@ class NeuralNet:
             normed:      batch-normalized maps
         """
         return self.batch_norm_template(inputs, is_training, scope, [0, 1, 2], bn_decay)
+
+    # END OF LAYERS
 
     def _set_hyper_params_from_file(self, file):
         """
@@ -617,7 +623,6 @@ class NeuralNet:
                 mid_output.append(tf.reshape(conv1, [batch_size, self.conv_layer_size * self.hp['NUM_FEAT']]))
                 num_mid_nodes += self.conv_layer_size * self.hp['NUM_FEAT']
 
-                # output of convolutional layer
             else:
                 input_shape = [batch_size, np.prod(input_size[0])]
                 input_tensor = tf.reshape(self.input_data_placeholders[i], input_shape)

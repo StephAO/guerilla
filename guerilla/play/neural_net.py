@@ -619,9 +619,11 @@ class NeuralNet:
 
                 conv1 = self.conv2d(self.input_data_placeholders[i], self.size_per_tile, self.hp['NUM_FEAT'], [5, 5],
                                     'conv1_' + str(i))
+                conv2 = self.conv2d(conv1, self.hp['NUM_FEAT'], 2 * self.hp['NUM_FEAT'], [3, 3],
+                                    'conv2_' + str(i))
 
-                mid_output.append(tf.reshape(conv1, [batch_size, self.conv_layer_size * self.hp['NUM_FEAT']]))
-                num_mid_nodes += self.conv_layer_size * self.hp['NUM_FEAT']
+                mid_output.append(tf.reshape(conv2, [batch_size, 64 * 2 * self.hp['NUM_FEAT']]))
+                num_mid_nodes += 64 * 2 * self.hp['NUM_FEAT']
 
             else:
                 input_shape = [batch_size, np.prod(input_size[0])]

@@ -81,7 +81,7 @@ class Teacher:
 
         # Bootstrap parameters
         self.num_bootstrap = -1
-        self.conv_window_size = 2  # Number of epochs to consider when checking for convergence
+        self.conv_window_size = 4  # Number of epochs to consider when checking for convergence
         self.use_check_pre = True
 
         # TD-Leaf parameters
@@ -1236,7 +1236,7 @@ def main():
 
     with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adagrad')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
@@ -1246,11 +1246,11 @@ def main():
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 100
+        t.sts_interval = 200
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
+        t.run(['train_bootstrap'], training_time=8 * 3600)
         print eval_sts(g)
 
 

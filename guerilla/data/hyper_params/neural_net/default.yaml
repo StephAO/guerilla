@@ -2,7 +2,7 @@
 "USE_CONV" : true
 "NUM_FC" : 2
 "NUM_HIDDEN" : 1024
-"NUM_FEAT" : 32
+"NUM_FEAT" : 64
 "MIN_NUM_NODES" : 128
 
 

@@ -565,8 +565,8 @@ class NeuralNet:
 
         weight_values = []
 
-        weight_values.extend(values_dict['all_weights'])
-        weight_values.extend(values_dict['all_biases'])
+        weight_values.extend(values_dict['weights'])
+        weight_values.extend(values_dict['biases'])
 
         self.set_all_weights(weight_values)
 
@@ -621,9 +621,11 @@ class NeuralNet:
                                     'conv1_' + str(i))
                 conv2 = self.conv2d(conv1, self.hp['NUM_FEAT'], 2 * self.hp['NUM_FEAT'], [3, 3],
                                     'conv2_' + str(i))
+                conv2 = self.conv2d(conv2, 2 * self.hp['NUM_FEAT'], 4 * self.hp['NUM_FEAT'], [3, 3],
+                                    'conv3_' + str(i))
 
-                mid_output.append(tf.reshape(conv2, [batch_size, 64 * 2 * self.hp['NUM_FEAT']]))
-                num_mid_nodes += 64 * 2 * self.hp['NUM_FEAT']
+                mid_output.append(tf.reshape(conv2, [batch_size, 64 * 4 * self.hp['NUM_FEAT']]))
+                num_mid_nodes += 64 * 4 * self.hp['NUM_FEAT']
 
             else:
                 input_shape = [batch_size, np.prod(input_size[0])]
@@ -639,10 +641,10 @@ class NeuralNet:
         mid_output = tf.concat(values=mid_output, axis=1)
         # output of fully connected layers
         fc1 = self.fc_layer(mid_output, num_mid_nodes, self.hp['NUM_HIDDEN'], "fc1")
-        fc2 = self.fc_layer(fc1, self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN'], "fc2")
+        fc2 = self.fc_layer(fc1, self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN'] / 2 , "fc2")
 
         # final_output
-        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'], 1, "predicted_value", activation_fn=None)
+        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value", activation_fn=None)
 
     def get_weights(self, weight_vars):
         """

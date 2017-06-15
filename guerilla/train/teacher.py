@@ -33,6 +33,7 @@ class Teacher:
     def __init__(self, guerilla, hp_load_file=None,
                  bootstrap_training_mode='adagrad',
                  td_training_mode='gradient_descent',
+                 td_l2_reg=True,
                  seed=None,
                  test=False, verbose=True, hp=None):
         """
@@ -94,6 +95,7 @@ class Teacher:
         self.td_training_mode = td_training_mode  # Training mode to use for TD training
         self.td_w_update = None
         self.td_game_index = 0
+        self.td_l2_reg = td_l2_reg
 
         self.hp = {}
         if hp_load_file is None:
@@ -946,7 +948,7 @@ class Teacher:
             learning_rates = [self.hp['TD_LRN_RATE'] / self._sqrt_smooth(grad) for grad in self.td_grad_acc]
             weight_update = [learning_rates[i] * avg_update[i] for i in xrange(len(avg_update))]
 
-            print learning_rates[0]
+            # print learning_rates[0]
 
         elif self.td_training_mode == 'adadelta':
             # Accumulate gradient
@@ -968,6 +970,11 @@ class Teacher:
             weight_update = [self.hp['TD_LRN_RATE'] * update for update in avg_update]
         else:
             raise NotImplementedError("Unrecognized training type")
+
+        # Apply regularization if necessary
+        if self.td_l2_reg:
+            weight_update = [weight_update[i] - self.hp['TD_REG_CONST'] * w for i, w in
+                             enumerate(self.nn.get_all_weights())]
 
         self.nn.add_to_all_weights(weight_update)
 
@@ -1050,6 +1057,7 @@ class Teacher:
         step_size = 2 if full_move else 1
 
         # Iterate over boards
+        err = 0
         for t in range(num_boards):
             color = dh.strip_fen(game[t],
                                  keep_idxs=1)  # color of the board which is being updated (who's gradient is being used)
@@ -1078,11 +1086,17 @@ class Teacher:
                 # Sum
                 td_val += math.pow(self.hp['TD_DISCOUNT'], j - t) * dt
 
-            # Sum the total TD error
+            # Sum the total TD update
             if self.td_w_update is None:
                 self.td_w_update = game_info[t]['gradient'] * td_val
             else:
                 self.td_w_update += game_info[t]['gradient'] * td_val
+
+            err += td_val
+
+        if self.verbose:
+            # print error
+            print "TD Mean Error: %.5f" % (err / num_boards)
 
         self.td_game_index += 1
 
@@ -1177,7 +1191,7 @@ class Teacher:
 
             # Send game for TD-leaf training
             if self.verbose:
-                print "Training..."
+                print "Training...",
             self.td_leaf(game_fens, no_leaf=False, restrict_td=True)
 
             # Evaluate on STS if necessary
@@ -1234,24 +1248,24 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
-            Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='6311.p') as g, \
+            Stockfish(name='guppy', time_limit=1) as sf:
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta', td_l2_reg=True)
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf)
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 100
+        t.sts_interval = 200
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
-        print eval_sts(g)
+        t.run(['train_gameplay'], training_time=9 * 3600)
+        # print eval_sts(g)
 
 
 if __name__ == '__main__':

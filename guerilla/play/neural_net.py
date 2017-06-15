@@ -565,8 +565,8 @@ class NeuralNet:
 
         weight_values = []
 
-        weight_values.extend(values_dict['all_weights'])
-        weight_values.extend(values_dict['all_biases'])
+        weight_values.extend(values_dict['weights'])
+        weight_values.extend(values_dict['biases'])
 
         self.set_all_weights(weight_values)
 
@@ -591,13 +591,13 @@ class NeuralNet:
 
         # Get all weight values
         weight_values['weights'] = [None] * len(self.all_weights)
-        result = self.sess.run(self.all_weights)
+        result = self.get_weights(self.all_weights)
         for i in xrange(len(result)):
             weight_values['weights'][i] = result[i]
 
         # Get all bias values
         weight_values['biases'] = [None] * len(self.all_biases)
-        result = self.sess.run(self.all_biases)
+        result = self.get_weights(self.all_biases)
         for i in xrange(len(result)):
             weight_values['biases'][i] = result[i]
 
@@ -656,6 +656,16 @@ class NeuralNet:
         """
         return self.sess.run(weight_vars)
 
+    def get_all_weights(self):
+        """
+        Get all weights and biases.
+            Output:
+                weights [List]
+                    Weights & biases.
+        """
+
+        return self.get_weights(self.all_weights_biases)
+
     def set_all_weights(self, weight_vals):
         """
         NOTE: currently only supports updating all weights, must be in the same order.
@@ -685,7 +695,7 @@ class NeuralNet:
                     List of values with which to update weights. Must be in desired order.
         """
 
-        old_weights = self.get_weights(self.all_weights_biases)
+        old_weights = self.get_all_weights()
         new_weights = [old_weights[i] + weight_vals[i] for i in range(len(weight_vals))]
 
         self.set_all_weights(new_weights)

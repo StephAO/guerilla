@@ -1057,7 +1057,7 @@ class Teacher:
         step_size = 2 if full_move else 1
 
         # Iterate over boards
-        err = 0
+        err = []
         for t in range(num_boards):
             color = dh.strip_fen(game[t],
                                  keep_idxs=1)  # color of the board which is being updated (who's gradient is being used)
@@ -1092,11 +1092,11 @@ class Teacher:
             else:
                 self.td_w_update += game_info[t]['gradient'] * td_val
 
-            err += td_val
+            err.append(td_val)
 
         if self.verbose:
             # print error
-            print "TD Mean Error: %.5f" % (err / num_boards)
+            print "TD Error: Mean: %.5f Var: %.5f" % (np.mean(err), np.var(err))
 
         self.td_game_index += 1
 
@@ -1162,9 +1162,17 @@ class Teacher:
         if self.td_training_mode in ['adagrad', 'adadelta']:
             self.reset_accumulators()
 
+        # Fens to check variance on
+        num_var = 100
+        var_fens = random.sample(fens, num_var)
+
         for i in xrange(start_idx, self.gp_num):
             if self.verbose:
                 print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
+
+            # Check for variance on set of boards
+            if i % 50 == 0:
+                print "<Variance after %d games: %f>" % (i, self.get_variance(var_fens))
 
             # Load random fen and randomly flip board
             while True:
@@ -1229,6 +1237,14 @@ class Teacher:
         print "Intervals: " + ",".join(map(str, [(x + 1) * self.sts_interval for x in range(len(scores))]))
         print "Scores: " + ",".join(map(str, score_out))
 
+    def get_variance(self, fens):
+        """ Returns the variance of the fen evaluations. """
+
+        scores = []
+        for fen in fens:
+            scores.append(self.guerilla.get_cp_adv_white(fen))
+
+        return np.var(scores)
 
 
 def main():
@@ -1248,15 +1264,15 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='6811.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adagrad')
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf)
+        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1264,7 +1280,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=9 * 3600)
+        t.run(['train_gameplay'], training_time=7 * 3600)
         # print eval_sts(g)
 
 

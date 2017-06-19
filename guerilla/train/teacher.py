@@ -978,8 +978,7 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-
-    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False):
+    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -998,6 +997,8 @@ class Teacher:
                     If True then restrict_td must be False since with depth 0 there is no predicted move.
                 full_move [Boolean]
                     If True then trains using full moves instead of half moves. False by default.
+                num_update [Int]
+                    The maximum number of boards to update per game. By default updates on all boards.
         """
 
         num_boards = len(game)
@@ -1010,6 +1011,9 @@ class Teacher:
         if only_own_boards is None and restrict_td:
             warnings.warn(
                 "Since restrict_td=True, Guerilla will not learn from good opponent moves unless they are predicted.")
+
+        # Calculate number of boards to update
+        num_update = num_boards if num_update is None else min(num_update, num_boards)
 
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
@@ -1058,7 +1062,7 @@ class Teacher:
 
         # Iterate over boards
         err = []
-        for t in range(num_boards):
+        for t in range(num_update):
             color = dh.strip_fen(game[t],
                                  keep_idxs=1)  # color of the board which is being updated (who's gradient is being used)
             if only_own_boards is not None and only_own_boards != color:
@@ -1167,12 +1171,12 @@ class Teacher:
         var_fens = random.sample(fens, num_var)
 
         for i in xrange(start_idx, self.gp_num):
-            if self.verbose:
-                print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
-
             # Check for variance on set of boards
             if i % 50 == 0:
                 print "<Variance after %d games: %f>" % (i, self.get_variance(var_fens))
+
+            if self.verbose:
+                print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
 
             # Load random fen and randomly flip board
             while True:
@@ -1264,7 +1268,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='6811.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}, load_file='6811.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
@@ -1276,11 +1280,11 @@ def main():
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 200
+        t.sts_interval = 100
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=7 * 3600)
+        t.run(['train_gameplay'], training_time=11 * 3600)
         # print eval_sts(g)
 
 

@@ -1074,6 +1074,7 @@ class Teacher:
                 # Calculate temporal difference
                 # TODO: see if its worth memoizing this
                 dt = game_info[j + step_size]['value'] - game_info[j]['value']
+                # dt *= 1 + np.exp(-(game_info[j + step_size]['value']**2)/(2*(500**2))) # Custom loss function. Uncomment to apply.
 
                 if restrict_td:
                     for i in range(step_size):
@@ -1133,7 +1134,7 @@ class Teacher:
         if opponent:
             self.opponent = opponent
 
-    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1149,6 +1150,8 @@ class Teacher:
             allow_draw [Boolean]
                 If False then draws are not allowed in gameplay generation.
                 Has no effect if the end of the game is not reached.
+            endgame [Boolean]
+                If true then only trains on endgames.
         """
 
         # Load fens and randomly sample
@@ -1156,7 +1159,7 @@ class Teacher:
         if game_indices is None:
             game_indices = random.sample(range(len(fens)), self.gp_num)
 
-        max_len = sys.maxint if self.gp_length == -1 else self.gp_length
+        max_len = sys.maxint if (self.gp_length == -1 or endgame) else self.gp_length
 
         # Initialize STS scores if necessary
         if sts_scores is None and self.sts_on:
@@ -1166,14 +1169,19 @@ class Teacher:
         if self.td_training_mode in ['adagrad', 'adadelta']:
             self.reset_accumulators()
 
+        if self.verbose and endgame:
+            print "Training only on endgames..."
+
         # Fens to check variance on
         num_var = 100
         var_fens = random.sample(fens, num_var)
 
         for i in xrange(start_idx, self.gp_num):
             # Check for variance on set of boards
-            if i % 50 == 0:
+            if i % 25 == 0:
                 print "<Variance after %d games: %f>" % (i, self.get_variance(var_fens))
+                if i > 0:
+                    self.nn.save_weight_values(_filename='var_check_2_%d.p' % i)
 
             if self.verbose:
                 print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
@@ -1201,9 +1209,13 @@ class Teacher:
                 if allow_draw or not game.board.is_game_over() or game.board.is_checkmate():
                     break
 
+            # Only take last boards of game (endgame)
+            if endgame:
+                game_fens = game_fens[-self.gp_length:]
+
             # Send game for TD-leaf training
             if self.verbose:
-                print "Training...",
+                print "Training on %d boards..." % len(game_fens),
             self.td_leaf(game_fens, no_leaf=False, restrict_td=True)
 
             # Evaluate on STS if necessary
@@ -1284,7 +1296,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=11 * 3600)
+        t.run(['train_gameplay'], training_time=6 * 3600)
         # print eval_sts(g)
 
 

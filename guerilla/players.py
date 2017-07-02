@@ -140,7 +140,9 @@ class Human(Player):
             print e_type, value, traceback
 
     def get_move_from_gui(self, board):
-        move = self.gui.get_player_input(board, )
+        move = self.gui.get_player_input(board)
+        if move == "undo":
+            return move
         return chess.Move.from_uci(move)
 
     def get_move_from_tml(self, board):

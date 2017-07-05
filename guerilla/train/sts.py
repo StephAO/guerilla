@@ -153,7 +153,7 @@ def parse_epd(epd):
         epd [String]
             EPD describing the chess position.
     Output:
-        fen, move_scores (Tuple)
+        board, move_scores (Tuple)
             board [chess.Board]: Board as described by the EPD.
             move_scores [Dictionary]: Move score dictionary. Keys are Chess.Move objects.
     """

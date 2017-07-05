@@ -36,16 +36,22 @@ class ChessGUI:
         os.environ['SDL_VIDEO_CENTERED'] = '1' #should center pygame window on the screen
         pygame.init()
         pygame.display.init()
-        self.screen = pygame.display.set_mode((850, 600))
-        self.board_offset_x = 50
-        self.board_offset_y = 50
+        rx, ry = 1850, 1020 # RESOLUTION
+        self.screen = pygame.display.set_mode((rx, ry))
         pygame.display.set_caption('Python Chess')
 
-        self.text_box = ScrollingTextBox(self.screen, 525, 825, 50, 450)
+        self.square_size = int(ry / 10)
+
+        tbx_start = self.square_size + 9 * self.square_size
+        tbx_end = rx - self.square_size
+        tby_start = self.square_size
+        tby_end = ry - self.square_size
+
+        self.text_box = ScrollingTextBox(self.screen, tbx_start, tbx_end, tby_start, tby_end)
         self.load_images()
         # pygame.font.init() - should be already called by pygame.init()
-        self.default_font = pygame.font.Font(None, 20)
-        self.qrbk_font = pygame.font.Font(None, 30)
+        self.default_font = pygame.font.Font(None, (self.square_size)/4)
+        self.qrbk_font = pygame.font.Font(None, (self.square_size)/4)
 
         self.ranks = ['8','7','6','5','4','3','2','1']
         self.files = ['a','b','c','d','e','f','g','h']
@@ -57,10 +63,12 @@ class ChessGUI:
             Load images used to represent chess pieces.
         """
         dir_path = resource_filename('guerilla.play.gui', '.')
-        self.square_size = 50
         self.white_square = pygame.image.load(os.path.join(dir_path,"images","white_square.png")).convert()
+        self.white_square = pygame.transform.scale(self.white_square, (self.square_size,self.square_size))
         self.brown_square = pygame.image.load(os.path.join(dir_path,"images","brown_square.png")).convert()
+        self.brown_square = pygame.transform.scale(self.brown_square, (self.square_size,self.square_size))
         self.cyan_square = pygame.image.load(os.path.join(dir_path,"images","cyan_square.png")).convert()
+        self.cyan_square = pygame.transform.scale(self.cyan_square, (self.square_size,self.square_size))
 
         self.new_game_button = pygame.image.load(os.path.join(dir_path,"images","new_game_button.png")).convert()
         self.next_ = pygame.image.load(os.path.join(dir_path,"images","next.png")).convert()
@@ -116,8 +124,8 @@ class ChessGUI:
                 pixel_indices[tuple size 2]:
                     (x, y) positions of pixed in upper-left corner of tile
         """
-        screen_x = self.board_offset_x + _file*self.square_size
-        screen_y = self.board_offset_y + _rank*self.square_size
+        screen_x = self.square_size + _file*self.square_size
+        screen_y = self.square_size + _rank*self.square_size
         return (screen_x, screen_y)
 
     def get_screen_coords_from_tile(self, tile):
@@ -147,8 +155,8 @@ class ChessGUI:
                 tile[string]:
                     algebraic notation of tile (e.g. 'a3')
         """
-        _rank = (y-self.board_offset_y) / self.square_size
-        _file = (x-self.board_offset_x) / self.square_size
+        _rank = (y-self.square_size) / self.square_size
+        _file = (x-self.square_size) / self.square_size
         if _rank < 0 or _file < 0 or _rank > 7 or _file > 7:
             return None
         return self.files[_file] + self.ranks[_rank]        
@@ -295,6 +303,8 @@ class ChessGUI:
                 if e.key is K_ESCAPE:
                     fromSquareChosen = 0
                     fromTuple = []
+                if e.key == K_LEFT:
+                    return "undo"
             # On click, register tile clicked, continue
             if e.type is MOUSEBUTTONDOWN:
                 (mouseX,mouseY) = pygame.mouse.get_pos()

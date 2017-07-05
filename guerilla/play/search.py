@@ -437,7 +437,7 @@ class IterativeDeepening(Search):
                 evaluation_function[function]:
                     function used to evaluate leaf nodes
                 time_limit[float]:
-                    default time limit per move
+                    time limit per move
                 max_depth[int]:
                     If not None, limit depth to max_depth
                 h_prune[bool]:
@@ -482,7 +482,7 @@ class IterativeDeepening(Search):
         """ Always cache """
         return True
 
-    def DLS(self, node, a=1.0):
+    def DLS(self, node, a=5000):
         """
             Recursive depth limited search with alpha_beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -649,6 +649,11 @@ class IterativeDeepening(Search):
             child.expand = True
         for child in children[k:]:
             child.expand = False
+
+
+    def __str__(self):
+        return "Time Limit %f, Depth Limit %s, Prune Percentage %f" % (self.time_limit,  str(self.max_depth), self.prune_perc)
+
 
     def run(self, board, time_limit=None, clear_cache=False):
         """

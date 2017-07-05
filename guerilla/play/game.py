@@ -76,6 +76,13 @@ class Game:
             move = self.players[curr_player].get_move(self.board)
             time_taken[curr_player] += time.time() - st
 
+            # hack to go back in time
+            if move == "undo":
+                if self.board.move_stack:
+                    self.board.pop()
+                    self.board.pop()
+                continue
+
             while move not in self.board.legal_moves:
                 if self.use_gui:
                     self.gui.print_msg("Error: Move is not legal, try again")
@@ -216,7 +223,7 @@ def main():
     if choose_players == 'd':
 
         players['w'] = Human('You')
-        players['b'] = Guerilla('Harambe', search_type='minimax', load_file='default.p', search_params={'max_depth': 2})
+        players['b'] = Guerilla('Harambe', search_type='minimax', load_file='7034.p', search_params={'max_depth': 2})
 
     elif choose_players == 'c':
         for i in ['w', 'b']:

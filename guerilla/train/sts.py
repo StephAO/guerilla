@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # Containts STS Evaluation functions
 
 import time
@@ -13,7 +16,8 @@ sts_strat_files = ['activity_of_king', 'advancement_of_abc_pawns', 'advancement_
 
 sts_piece_files = ['pawn', 'bishop', 'rook', 'knight', 'queen', 'king']
 
-def eval_sts(player, mode="strategy", step_size=1):
+
+def eval_sts(player, mode="strategy", step_size=1, verbose=False, num_track=25, num_per_test=2):
     """
     Evaluates the given player using the strategic test suite. Returns a score and a maximum score.
         Inputs:
@@ -42,10 +46,15 @@ def eval_sts(player, mode="strategy", step_size=1):
         mode = [mode]
 
     # vars
-    board = chess.Board()
     scores = []
     max_scores = []
     count = 0
+
+    # Best and worst arrays
+    best = []
+    worst = []
+    num_track = 25
+    num_per_test = 2
 
     # Run tests
     if step_size > 1:
@@ -55,6 +64,9 @@ def eval_sts(player, mode="strategy", step_size=1):
         print "Running %s STS test." % test
         # load STS epds
         epds = get_epds_by_mode(test)[::step_size]
+
+        test_best = []
+        test_worst = []
 
         # Test epds
         score = 0
@@ -76,18 +88,60 @@ def eval_sts(player, mode="strategy", step_size=1):
 
             # score
             max_score += 10
+
             try:
-                score += move_scores[move]
+                new_score = move_scores[move]
             except KeyError:
-                # Score of 0
-                pass
+                new_score = 0
+
+            score += new_score
+
+            test_best.append((move, new_score, epd))
+            test_worst.append((move, new_score, epd))
+
+            test_best.sort(reverse=True, key=lambda x: x[1])
+            test_worst.sort(key=lambda x: x[1])
+
+            test_best = test_best[:num_per_test]
+            test_worst = test_worst[:num_per_test]
+
+        best += test_best
+        worst += test_worst
+
+        best.sort(reverse=True, key=lambda x: x[1])
+        worst.sort(key=lambda x: x[1])
+
+        best = best[:num_track]
+        worst = worst[:num_track]
+
         print ""
 
         # append
         scores.append(score)
         max_scores.append(max_score)
 
+    # Highest scoring epds
     print "Evaluated on %d positions" % (count)
+    if verbose:
+        print "\n\n"
+        wave = "¸,ø¤º°`°º¤ø,¸¸,ø¤º°¤ø,¸,ø¤º°`°º¤ø,¸¸,ø¤º°"
+        reverse_wave = "°º¤ø,¸¸,ø¤º°`°º¤ø,¸,ø¤°º¤ø,¸¸,ø¤º°`°º¤ø,¸"
+        print "\n%s  BEST SCORES  %s\n" % (wave, reverse_wave)
+        title = ['Move', 'Score', 'EPD']
+        print("\t\t{: <15} {: <15} {: <100}".format(*title))
+        for result in best:
+            print("\t\t{: <15} {: <15} {: <100}".format(*result))
+
+        print "\n%s  WORST SCORES %s\n" % (wave, reverse_wave)
+        print("\t\t{: <15} {: <15} {: <100}".format(*title))
+        for result in worst:
+            print("\t\t{: <15} {: <15} {: <100}".format(*result))
+
+        print "\nSCORES BY TEST SUITE\n"
+        print("\t\t{: <30} {: >30}".format(*["TEST SUITE NAME", "SCORE"]))
+        for test, score, max_score in zip(mode, scores, max_scores):
+            print("\t\t{: <30} {: >30}".format(*[test, '%d/%d' % (score, max_score)]))
+        print ''
 
     return scores, max_scores
 
@@ -180,8 +234,14 @@ def sparse_test():
         # g.search.order_function = material_balance
         # print eval_sts(g, mode=sts_piece_files)
         start = time.time()
-        print eval_sts(g, mode=sts_strat_files, step_size=25)
+        print eval_sts(g, mode=sts_strat_files, step_size=5)
         print time.time() - start
 
+
+def main():
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='6811.p') as g:
+        print eval_sts(g, mode=sts_strat_files)
+
 if __name__ == '__main__':
-    sparse_test()
+    # sparse_test()
+    main()

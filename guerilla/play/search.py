@@ -458,10 +458,15 @@ class IterativeDeepening(Search):
         self.h_prune = h_prune
         self.prune_perc = prune_perc
         self.ab_prune = ab_prune
+        self.root = None  # holds root node
         self.order_fn_fast = material_balance  # The move ordering function to use pre-Guerilla evaluation
         self.order_moves = True
         self.is_partial_search = False  # Marks if the last DFS call was a partial search
         self.use_partial_search = use_partial_search
+
+        # Propagation functions, for normal minimax use 0
+        self.up_prop_decay = 0  # decay value propagating upwards (0 for normal minimax -> pass up child value w/o decay)
+        self.down_prop_decay = 1.0  # decay value propagating downwards (1 for normal minimax -> only use child value, decay parent value entirely)
 
         # Holds the Killer Moves by depth. Each Entry is (set of moves, sorted array of (score, moves)).
         self.killer_table = [{'moves': set(), 'scores': list()}]
@@ -482,7 +487,13 @@ class IterativeDeepening(Search):
         """ Always cache """
         return True
 
-    def DLS(self, node, a=5000):
+    def _up_prop(self, child_value, curr_value):
+        return curr_value * (self.up_prop_decay) + child_value * (1 - self.up_prop_decay)
+
+    def _down_prop(self, parent_value, curr_value):
+        return curr_value * (self.down_prop_decay) + parent_value * (1 - self.down_prop_decay)
+
+    def DLS(self, node, parent=None, a=float("inf")):
         """
             Recursive depth limited search with alpha_beta pruning.
             Assumes that the layer above the leaves are trying to minimize the positive value,
@@ -490,6 +501,8 @@ class IterativeDeepening(Search):
             Inputs:
                 node [SearchNode]:
                     Node to expand
+                parent [SearchNode]
+                    Parent Node. If None, then no parent.
                 a [float]:
                     lower bound of layer above, upper bound of current layer (because of alternating signs)
             Outputs:
@@ -501,16 +514,15 @@ class IterativeDeepening(Search):
                     FEN of the board of the leaf node which yielded the highest value.
         """
         best_move = None
-        best_score = -1
+        best_score = -float("inf")
         leaf_fen = None
         board = chess.Board(node.fen)
 
         self.time_left = (time.time() - self.start_time) <= self.time_limit - self.buff_time
-
         if node.depth >= self.depth_limit or not node.expand or not self.time_left:
             if not self.time_left:
                 self.is_partial_search = True
-            return node.value, None, node.fen
+            return self._down_prop(node.value if parent is None else parent.value, node.value), None, node.fen
         else:
             # Check if a new killer table entry should be created
             if node.depth >= len(self.killer_table):
@@ -559,7 +571,7 @@ class IterativeDeepening(Search):
                     node.gen_child(move, eval_fn=self.conditional_eval)
 
                 # print move
-                score, next_move, lf = self.DLS(node.children[move], -best_score)
+                score, next_move, lf = self.DLS(node.children[move], parent=node, a=-best_score)
                 score = -score
                 # Best child is the one one which has the lowest value
                 if best_move is None or score > best_score:
@@ -571,7 +583,7 @@ class IterativeDeepening(Search):
                     self.update_killer(move, best_score, node.depth)
                     break
 
-            node.value = best_score
+            node.value = self._up_prop(child_value=best_score, curr_value=node.value)
 
         return node.value, best_move, leaf_fen
 
@@ -649,11 +661,6 @@ class IterativeDeepening(Search):
             child.expand = True
         for child in children[k:]:
             child.expand = False
-
-
-    def __str__(self):
-        return "Time Limit %f, Depth Limit %s, Prune Percentage %f" % (self.time_limit,  str(self.max_depth), self.prune_perc)
-
 
     def run(self, board, time_limit=None, clear_cache=False):
         """

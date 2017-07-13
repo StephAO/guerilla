@@ -1028,7 +1028,7 @@ class Teacher:
             if no_leaf:
                 self.guerilla.search.max_depth = 0
 
-            # Cache gets cleared when weights are updated
+            # NOTE: Cache gets cleared when weights are updated
             value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
@@ -1110,7 +1110,7 @@ class Teacher:
             self.td_update_weights()
             self.td_game_index = 0
             self.td_w_update = None
-            self.guerilla.search.clear_cache()
+            self.guerilla.search.clear_cache()  # clear cache
 
     # ---------- GAMEPLAY TRAINING METHODS
 
@@ -1215,7 +1215,7 @@ class Teacher:
 
             # Send game for TD-leaf training
             if self.verbose:
-                print "Training on %d boards..." % len(game_fens),
+                print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
             self.td_leaf(game_fens, no_leaf=False, restrict_td=True)
 
             # Evaluate on STS if necessary
@@ -1288,7 +1288,7 @@ def main():
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1296,7 +1296,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=6 * 3600)
+        t.run(['train_gameplay'], training_time=5.5 * 3600)
         # print eval_sts(g)
 
 

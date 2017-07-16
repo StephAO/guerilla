@@ -710,7 +710,7 @@ class Teacher:
                                          _true_values, fens, board_num,
                                          game_indices)
             # train batch
-            self.nn.sess.run([train_step], feed_dict=_feed_dict)
+            self.nn.sess.run([self.global_step, train_step], feed_dict=_feed_dict)
 
         return False, {}
 
@@ -978,7 +978,7 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None):
+    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None, force_divergence=False):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -1074,7 +1074,9 @@ class Teacher:
                 # Calculate temporal difference
                 # TODO: see if its worth memoizing this
                 dt = game_info[j + step_size]['value'] - game_info[j]['value']
-                # dt *= 1 + np.exp(-(game_info[j + step_size]['value']**2)/(2*(500**2))) # Custom loss function. Uncomment to apply.
+
+                if force_divergence:
+                    dt *= 1 + np.exp(-(game_info[j + step_size]['value']**2)/(2*(500**2)))
 
                 if restrict_td:
                     for i in range(step_size):

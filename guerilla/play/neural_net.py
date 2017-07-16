@@ -131,6 +131,8 @@ class NeuralNet:
 
         self.grad_all_op = tf.gradients(self.pred_value, self.all_weights_biases)
 
+        self.global_step = tf.Variable(0) # used for learning rate decay
+
         # Blank training variables. Call 'init_training' to initialize them
         self.train_optimizer = None
 
@@ -448,7 +450,7 @@ class NeuralNet:
 
         return tf.div(err, batch_size)
 
-    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, decay_rate=None):
+    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, batch_size, decay_rate=None):
         """
         Initializes the training optimizer, loss function and training step.
         Input:
@@ -472,6 +474,15 @@ class NeuralNet:
         # Regularization Term
         regularization = tf.add_n([tf.nn.l2_loss(w) for w in self.all_weights]) * reg_const
 
+        base_learning_rate = learning_rate
+        # Exponentionally decaying learning rate
+        learning_rate = tf.train.exponential_decay(learning_rate,  # Base learning rate.
+                                                   self.global_step * batch_size,  # Current index into the dataset.
+                                                   self.hp["LEARNING_RATE_DECAY_STEP"], # Decay step.
+                                                   self.hp["LEARNING_RATE_DECAY_RATE"],  # Decay rate.
+                                                   staircase=True)
+        learning_rate = tf.maximum(learning_rate, 0.01 * base_learning_rate) # clip learning rate
+
         # Set tensorflow training method for bootstrap training
         if training_mode == 'adagrad':
             self.train_optimizer = tf.train.AdagradOptimizer(learning_rate)
@@ -481,7 +492,7 @@ class NeuralNet:
             self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=decay_rate)
         elif training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-        train_step = self.train_optimizer.minimize(loss_fn + regularization)
+        train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
         self.train_saver = tf.train.Saver(
             var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 
@@ -490,7 +501,7 @@ class NeuralNet:
         if train_vars is not None:
             self.sess.run(tf.variables_initializer(train_vars.values()))
 
-        return train_step
+        return train_step, self.global_step
 
     def get_training_vars(self):
         """

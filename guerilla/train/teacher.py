@@ -106,9 +106,10 @@ class Teacher:
 
         self.loss_fn = self.nn.mae_loss(self.hp['BATCH_SIZE'])
         self.training_mode = bootstrap_training_mode
-        self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
+        self.train_step, self.global_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
                                                 reg_const=self.hp['REGULARIZATION_CONST'],
                                                 loss_fn=self.loss_fn,
+                                                batch_size=self.hp['BATCH_SIZE'],
                                                 decay_rate=self.hp['DECAY_RATE'])
 
         if self.verbose:

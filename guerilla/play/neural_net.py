@@ -71,6 +71,17 @@ class NeuralNet:
         else:
             raise NotImplementedError("Neural Net input type %s is not implemented" % (self.hp['NN_INPUT_TYPE']))
 
+        # Calculate number of classes if classifier
+        if self.hp['CLASSIFIER']:
+            cp_range = (dh.WIN_VALUE - dh.LOSE_VALUE)
+            if (cp_range) % self.hp['CLASS_SIZE'] != 0:
+                raise ValueError("Centipawn range of %d is not divisible by provided class size of %d" % (
+                cp_range, self.hp['CLASS_SIZE']))
+            self.num_class = cp_range / self.hp['CLASS_SIZE'] + 1  # the +1 is due to the 0 bin
+            self.class_bins = np.concatenate([np.arange(dh.LOSE_VALUE, 1, self.hp['CLASS_SIZE']),
+                                              np.arange(1, dh.WIN_VALUE + self.hp['CLASS_SIZE'] + 1,
+                                                        self.hp['CLASS_SIZE'])])
+
         # Dropout keep probability placeholder -> By default does not dropout when session is run
         self.kp_default = tf.constant(1.0, dtype=tf.float32)
         self.keep_prob = tf.placeholder_with_default(self.kp_default, self.kp_default.get_shape())
@@ -118,7 +129,10 @@ class NeuralNet:
         self.conv_layer_size = 64 + 8 + 8 + 10  # 90
 
         # input placeholders
-        self.true_value = tf.placeholder(tf.float32, shape=[None])
+        if self.hp['CLASSIFIER']:
+            self.true_value = tf.placeholder(tf.float32, shape=[None, None])
+        else:
+            self.true_value = tf.placeholder(tf.float32, shape=[None])
         self.input_data_placeholders = []
         for input_size in self.input_sizes:
             self.total_input_size += float(np.prod(input_size))
@@ -285,10 +299,16 @@ class NeuralNet:
             self.b_fc_placeholders[i] = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN']])
 
         # Output layer
-        self.W_final = self.weight_variable([self.hp['NUM_HIDDEN'], 1])
-        self.b_final = self.bias_variable([1])
-        self.W_final_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], 1])
-        self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
+        if self.hp['CLASSIFIER']:
+            self.W_final = self.weight_variable([self.hp['NUM_HIDDEN'], self.num_class])
+            self.b_final = self.bias_variable([self.num_class])
+            self.W_final_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], self.num_class])
+            self.b_final_placeholder = tf.placeholder(tf.float32, shape=[self.num_class])
+        else:
+            self.W_final = self.weight_variable([self.hp['NUM_HIDDEN'], 1])
+            self.b_final = self.bias_variable([1])
+            self.W_final_placeholder = tf.placeholder(tf.float32, shape=[self.hp['NUM_HIDDEN'], 1])
+            self.b_final_placeholder = tf.placeholder(tf.float32, shape=[1])
 
         # Group defined weights/biases into a set
         self.all_weights_biases.extend(self.W_l1)
@@ -351,7 +371,7 @@ class NeuralNet:
         """
         self.hp.update(hyper_parameters)
 
-    def mae_loss(self, batch_size):
+    def mae_loss(self):
         """
         Returns a MAE loss Tensor
         Input:
@@ -362,12 +382,11 @@ class NeuralNet:
                 Mean absolute error loss.
         """
 
-        err = tf.reduce_sum(tf.abs(tf.subtract(
-            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value)))
+        err = tf.abs(tf.subtract(tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value))
 
-        return tf.div(err, batch_size)
+        return tf.reduce_mean(err)
 
-    def mse_loss(self, batch_size):
+    def mse_loss(self):
         """
         Returns a MSE loss Tensor
         Input:
@@ -378,10 +397,24 @@ class NeuralNet:
                 Mean squared error loss.
         """
 
-        err = tf.reduce_sum(tf.pow(tf.subtract(
-            tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
+        err = tf.pow(tf.subtract(tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2)
 
-        return tf.div(err, batch_size)
+        return tf.reduce_mean(err)
+
+    def cross_entropy_loss(self):
+        """
+        Returns mean cross entropy loss.
+        Input:
+            batch_size [Int]
+                Batch size.
+        Output:
+            cross_entropy [Tensor]
+                Mean cross entropy loss.
+        """
+
+        err = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.true_value, logits=self.pred_value)
+
+        return tf.reduce_mean(err)
 
     def init_training(self, training_mode, learning_rate, reg_const, loss_fn, decay_rate=None):
         """
@@ -605,6 +638,8 @@ class NeuralNet:
             o_fc[i] = tf.nn.dropout(tf.nn.relu(tf.matmul(o_fc[i - 1], self.W_fc[i]) + self.b_fc[i]), self.keep_prob)
 
         # final_output
+        # CLASSIFIER NOTE: We can't apply the softmax here b/c for training we need to use
+        # softmax_cross_entropy_with_logits while for prediction we need to just use softmax (for stability)
         self.pred_value = tf.matmul(o_fc[-1], self.W_final) + self.b_final
 
     def get_weights(self, weight_vars):
@@ -703,12 +738,17 @@ class NeuralNet:
                  fen [String]:
                      FEN of chess board.
              Output:
-                 Score between 0 and 1. Represents probability of White (current player) winning.
+                 Score between -5000 and 5000. Centipawn score.
         """
         if dh.black_is_next(fen):
             raise ValueError("Invalid evaluate input, white must be next to play.")
 
-        output = self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
+        if self.hp['CLASSIFIER']:
+            # Return mean bin value
+            class_label = np.argmax(self.evaluate_distribution(fen))
+            output = (self.class_bins[class_label] + self.class_bins[class_label + 1]) / 2
+        else:
+            output = self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
 
         if np.isnan(output):
             raise RuntimeError("Neural network output NaN! Most likely due to bad training parameters.")
@@ -718,6 +758,25 @@ class NeuralNet:
 
         return output
 
+    def evaluate_distribution(self, fen):
+        if self.hp['CLASSIFIER']:
+            # Return entire distribution
+            output = tf.nn.softmax(self.pred_value)
+            return output.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0]
+        else:
+            raise ValueError("Non-Classifier NN does not have an output distribution associated with it!")
+
+    def get_accuracy_fn(self):
+        """
+        Returns the tensorflow function to evaluate the accuracy of the classified
+        :return: 
+        """
+        if self.hp['CLASSIFIER']:
+            # Return accuracy function
+            correct_prediction = tf.equal(tf.argmax(self.pred_value, 1), tf.argmax(self.true_value, 1))
+            return tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        else:
+            raise ValueError("Non-Classifier NN does not have accuracy associated with it!")
 
 if __name__ == 'main':
     pass

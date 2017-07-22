@@ -12,6 +12,7 @@ import chess.pgn
 import numpy as np
 import ruamel.yaml
 from pkg_resources import resource_filename
+from collections import namedtuple
 
 import guerilla.data_handler as dh
 from guerilla.play.game import Game
@@ -102,12 +103,27 @@ class Teacher:
         if hp is not None:
             self._set_hyper_params(hp)
 
-        self.loss_fn = self.nn.mae_loss(self.hp['BATCH_SIZE'])
+        # Setup tensorflow training
+        if self.nn.hp['CLASSIFIER']:
+            self.loss_fn = self.nn.cross_entropy_loss()
+        else:
+            self.loss_fn = self.nn.mae_loss()
+
         self.training_mode = bootstrap_training_mode
         self.train_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
                                                 reg_const=self.hp['REGULARIZATION_CONST'],
                                                 loss_fn=self.loss_fn,
                                                 decay_rate=self.hp['DECAY_RATE'])
+
+        # Setup evaluators
+        Evaluator = namedtuple('Evaluator', 'name function')
+        if self.nn.hp['CLASSIFIER']:
+            self.evaluators = [Evaluator('Loss', self.loss_fn), Evaluator('Accuracy', self.nn.get_accuracy_fn())]
+        else:
+            self.evaluators = [Evaluator('Loss', self.loss_fn)]
+
+        # Name of evaluator to use for convergence check
+        self.conv_check_name = 'Loss'
 
         if self.verbose:
             print "Bootstrap training neural net using %s." % self.training_mode
@@ -295,6 +311,15 @@ class Teacher:
             # Restore state
             if rnd_state:
                 random.setstate(old_rnd_state)
+
+        # Convert to classes
+        if self.nn.hp['CLASSIFIER']:
+            # CP to class label (-1 b/c digitize returns labels between [1, number of bins])
+            true_labels = np.digitize(true_values, self.nn.class_bins) - 1
+
+            # Convert to one hot encoding of true class labels
+            true_values = np.zeros([len(true_labels), self.nn.num_class])
+            true_values[range(len(true_labels)), true_labels] = 1
 
         return fens, true_values
 
@@ -587,13 +612,21 @@ class Teacher:
         #    return
         if self.verbose:
             print "Training data on %d positions. Will save weights to pickle" % num_boards
-            print "%16s %16s %16s " % ('Epoch', 'Validation Loss', 'Training Loss')
-        loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-        train_loss.append(self.evaluate_bootstrap(train_check_fens, train_check_values))
+            headers = ''
+            headers += "%16s " % 'EPOCH'
+            for eval in self.evaluators:
+                headers += "%16s " * 2 % ("Validation " + eval.name, "Training " + eval.name)
+            print headers
+        loss.append(self.evaluate_bootstrap(self.evaluators, valid_fens, valid_values))
+        train_loss.append(self.evaluate_bootstrap(self.evaluators, train_check_fens, train_check_values))
         if self.verbose:
-            print "%16d %16.5f %16.5f" % (start_epoch, loss[-1], train_loss[-1])
+            row = '%16d ' % (start_epoch)
+            for e in self.evaluators:
+                row += "%16.5f %16.5f " % (loss[-1][e.name], train_loss[-1][e.name])
+            print row
         for epoch in xrange(start_epoch, self.hp['NUM_EPOCHS']):
-            if self.is_converged(loss):
+            loss_arr = [x[self.conv_check_name] for x in loss]
+            if self.is_converged(loss_arr):
                 if self.verbose:
                     print "Training complete: Reached convergence threshold"
                 break
@@ -622,10 +655,13 @@ class Teacher:
                 self.save_state(state, is_checkpoint=True)
 
             # evaluate nn for convergence
-            loss.append(self.evaluate_bootstrap(valid_fens, valid_values))
-            train_loss.append(self.evaluate_bootstrap(train_check_fens, train_check_values))
+            loss.append(self.evaluate_bootstrap(self.evaluators, valid_fens, valid_values))
+            train_loss.append(self.evaluate_bootstrap(self.evaluators, train_check_fens, train_check_values))
             if self.verbose:
-                print "%16d %16.5f %16.5f" % (epoch + 1, loss[-1], train_loss[-1])
+                row = '%16d ' % (epoch + 1)
+                for e in self.evaluators:
+                    row += "%16.5f %16.5f " % (loss[-1][e.name], train_loss[-1][e.name])
+                print row
 
         else:
             if self.verbose:
@@ -654,7 +690,10 @@ class Teacher:
 
             if input_size[0:2] == (8, 8) and self.nn.hp['USE_CONV']:
                 diagonals = np.zeros((self.hp['BATCH_SIZE'], 10, 8, self.nn.size_per_tile))
-        true_values = np.zeros(self.hp['BATCH_SIZE'])
+        if self.nn.hp['CLASSIFIER']:
+            true_values = np.zeros([self.hp['BATCH_SIZE'], self.nn.num_class])
+        else:
+            true_values = np.zeros(self.hp['BATCH_SIZE'])
         return input_data, diagonals, true_values
 
     def get_batch_feed_dict(self, input_data, diagonals, true_values, _true_values, fens, board_num, game_indices):
@@ -718,15 +757,19 @@ class Teacher:
 
         return False, {}
 
-    def evaluate_bootstrap(self, fens, _true_values):
+    def evaluate_bootstrap(self, evaluators, fens, _true_values):
         """
             Evaluate neural net
 
             Inputs:
+                evaluators [list of Evaluators]
+                    Name + Tensor Operations to evaluate Guerilla with.
                 fens[list of strings]:
                     The fens representing the board states
                 true_values[ndarray]:
-                    Expected output for each chess board state (between 0 and 1)
+                    Expected output for each chess board state (between -5000 and 5000) OR (class numbers)
+            Output:
+                Dictionary of results.
         """
 
         if len(fens) % self.hp['BATCH_SIZE'] != 0:
@@ -740,8 +783,9 @@ class Teacher:
 
         input_data, diagonals, true_values = self.get_nn_input_shapes()
 
-        # Initialize Error
-        error = 0
+        # Initialize and Errors
+        error = np.zeros([len(evaluators), ])
+        eval_functions = [e.function for e in evaluators]
 
         for i in xrange(num_batches):
             _feed_dict, board_num = \
@@ -749,10 +793,11 @@ class Teacher:
                                          _true_values, fens, board_num,
                                          range(len(fens)))
             # Get batch loss
-            error += self.nn.sess.run(self.loss_fn, feed_dict=_feed_dict) / num_batches
+            error += np.array(self.nn.sess.run(eval_functions, feed_dict=_feed_dict)) / num_batches
 
+        result = {e.name: error[i] for i, e in enumerate(self.evaluators)}
 
-        return error
+        return result
 
     def is_converged(self, loss):
         """
@@ -1240,15 +1285,13 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='5240.p') as g, \
-            Stockfish('test', time_limit=1) as sf_player:
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=1500, max_length=12, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1256,7 +1299,8 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['load_and_resume'], training_time=2 * 3600)
+        t.run(['train_bootstrap'], training_time=2 * 3600)
+        print t.nn.evaluate(chess.Board().fen())
         # print eval_sts(g)
 
 

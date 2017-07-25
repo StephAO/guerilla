@@ -155,13 +155,9 @@ class Teacher:
         self.sts_depth = self.guerilla.search.max_depth  # Depth used for STS evaluation (can override default)
 
         # Build unique file modifier which demarks final output files from this session
-        self.file_modifier = "_%s_%s%s_%sFC.p" % (time.strftime("%m%d-%H%M"),
-                                                  self.nn.hp['NN_INPUT_TYPE'],
-                                                  '_conv' if \
-                                                      (self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' \
-                                                       and self.guerilla.nn.hp['USE_CONV'])
-                                                  else '',
-                                                  str(self.nn.hp['NUM_FC']))
+        conv = self.nn.hp['NN_INPUT_TYPE'] == 'bitmap' and self.guerilla.nn.hp['USE_CONV']
+        self.file_modifier = "_%s_%s%s_%sFC.p" % (time.strftime("%m%d-%H%M"), self.nn.hp['NN_INPUT_TYPE'],
+                                                  '_conv' if conv else '', str(self.nn.hp['NUM_FC']))
 
     # ---------- RUNNING AND RESUMING METHODS
 
@@ -1334,9 +1330,8 @@ def main():
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
+        t.set_bootstrap_params(num_bootstrap=10000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True

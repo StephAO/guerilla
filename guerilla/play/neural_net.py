@@ -685,7 +685,13 @@ class NeuralNet:
         # final_output
         # CLASSIFIER NOTE: We can't apply the softmax here b/c for training we need to use
         # softmax_cross_entropy_with_logits while for prediction we need to just use softmax (for stability)
-        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value", activation_fn=None)
+        if self.hp['CLASSIFIER']:
+            output_size = self.num_class
+        else:
+            output_size = 1
+
+        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, output_size, "predicted_value",
+                                        activation_fn=None)
 
     def get_weights(self, weight_vars):
         """

@@ -111,7 +111,7 @@ class UCI:
             if modifiers[0] == 'movetime':
                 self.guerilla.search.max_depth = None
                 self.guerilla.search.time_limit = float(modifiers[1]) / 1000  # since in milliseconds
-            elif modifiers[1] == 'depth':
+            elif modifiers[0] == 'depth':
                 self.guerilla.search.max_depth = int(modifiers[1])
                 self.guerilla.search.time_limit = float("inf")
 
@@ -141,7 +141,7 @@ class UCI:
 
 
 def main():
-    with Guerilla('Harambe', load_file='5240.p', search_type='iterativedeepening',
+    with Guerilla('Harambe', load_file='7034.p', search_type='iterativedeepening',
                   search_params={'time_limit': 1}) as g:
         uci = UCI(g)
         # Get commands

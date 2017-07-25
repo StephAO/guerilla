@@ -39,6 +39,7 @@ def save_load_weights_test(verbose=False):
 
     # Close session
     test_nn.close_session()
+    test_nn.reset_graph()
 
     # Load neural net weights from file
     test_nn = nn.NeuralNet(load_file=test_file, verbose=verbose)
@@ -46,6 +47,8 @@ def save_load_weights_test(verbose=False):
     test_nn.init_graph()
     new_weights = test_nn.get_weight_values()
     test_nn.close_session()
+    test_nn.reset_graph()
+
 
     # Remove test file
     os.remove(resource_filename('guerilla', 'data/weights/' + test_file))

@@ -19,7 +19,9 @@ Packages and programs required for things to work.
     - If this does not work check the 2nd answer here: https://askubuntu.com/questions/312767/installing-pygame-with-pip
   - `sudo apt-get install python-pygame`
 - ruamel.yaml:
-  - `pip install ruamel.yaml`
+  - `sudo pip install ruamel.yaml`
+- futures:
+  - `sudo pip install futures`
 
 ### Required Packages to Train
 - stockfish:
@@ -29,7 +31,7 @@ Packages and programs required for things to work.
 
 ### Required Packages for Testing
 - guppy:
-  - `pip install guppy`
+  - `sudo pip install guppy`
 
 ### Optional other chess engines
 - stockfish:

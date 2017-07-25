@@ -339,10 +339,10 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
     hp['BATCH_SIZE'] = 10
     hp['VALIDATION_SIZE'] = 30
     hp['TRAIN_CHECK_SIZE'] = 10
-    hp['LEARNING_RATE'] = 1e-4 if nn_input_type == 'giraffe' else 0.1
+    hp['LEARNING_RATE'] = 1e-7 if nn_input_type == 'giraffe' else 0.1
     hp['LOSS_THRESHOLD'] = float("-inf")  # so that convergence threshold is never met
-    hp['REGULARIZATION_CONST'] = 0.001 if nn_input_type == 'giraffe' else 0.0001
-    hp['TD_LRN_RATE'] = 0.001
+    hp['REGULARIZATION_CONST'] = 0.01 if nn_input_type == 'giraffe' else 0.0001
+    hp['TD_LRN_RATE'] = 1e-7 if nn_input_type == 'giraffe' else 0.001
 
     # Probability value Constants (0 <= x <= 1)
     high_value = 0.9
@@ -421,7 +421,7 @@ def learn_moves_test(nn_input_type, num_test=3, num_attempt=3, verbose=False):
                         'FAILURE: Learn Move Mismatch: Expected %s got %s \n Neural Net Scores: %s - > %f, %s -> %f\n' %
                         (goal_move, result_move, goal_move, goal_score, result_move, result_score))
 
-        if score == num_test:
+        if np.allclose(score, num_test):
             return True
 
         err_msg += "Failed attempt #%s...\n" % i
@@ -462,9 +462,9 @@ def load_and_resume_test(nn_input_type, verbose=False):
     hp['TRAIN_CHECK_SIZE'] = 5
     hp['LOSS_THRESHOLD'] = float("-inf")  # So it never converges
     hp['TD_BATCH_SIZE'] = 1
-    hp['TD_LRN_RATE'] = 0.00001  # Learning rate
+    hp['TD_LRN_RATE'] = 0.000001  # Learning rate
     hp['TD_DISCOUNT'] = 0.7  # Discount rate
-    hp['LEARNING_RATE'] = 0.001
+    hp['LEARNING_RATE'] = 0.00001
 
     # Pickle path
     loss_path = resource_filename('guerilla', 'data/loss/')
@@ -636,7 +636,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
 
             # Due to differences in initialization distribution
             if td_training_mode == 'gradient_descent':
-                td_lrn_rate = 1e-4 if nn_input_type == 'giraffe' else 1e-1
+                td_lrn_rate = 1e-4 if nn_input_type == 'giraffe' else 1e-3
             else:
                 td_lrn_rate = 1e-5
 
@@ -645,7 +645,7 @@ def td_conv_test(nn_input_type, num_iter=25, dec_thresh=0.20, verbose=False):
             if td_training_mode == 'gradient_descent':
                 t.td_batch_size = 1
             elif td_training_mode == 'adagrad':
-                t.reset_adagrad()
+                t.reset_accumulators()
                 t.td_batch_size = 5
             else:
                 raise NotImplementedError("TD Convergence Test for this training mode has not yet been implemented!")
@@ -707,11 +707,11 @@ def td_checkmate_test(max_iter=100, verbose=False):
     if verbose:
         print "All scores are P(Guerilla wins)."
 
-    with Guerilla('Kong', load_file='5240.p', verbose=verbose,
+    with Guerilla('Kong', load_file='7034.p', verbose=verbose,
                   nn_params={'NN_INPUT_TYPE': 'movemap'},
                   search_params={'max_depth': 1}) as g:
 
-        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 1e-7, 'TD_DISCOUNT': 0.7})
+        t = Teacher(g, td_training_mode='gradient_descent', hp={'TD_LRN_RATE': 1e-8, 'TD_DISCOUNT': 0.7})
         t.td_batch_size = 1
 
         for move_test in data:
@@ -777,17 +777,17 @@ def run_train_tests():
 
     all_tests["Training Tests"] = {
         'Training': training_test,
-        'Load and Resume': load_and_resume_test,
+        # 'Load and Resume': load_and_resume_test,
         'Learn Moves': learn_moves_test
     }
 
     all_tests["Temporal Difference Tests"] = {
         'td_conv_test': td_conv_test,
-        'td_checkmate_test': td_checkmate_test
+        # 'td_checkmate_test': td_checkmate_test
     }
 
     success = True
-    input_types = ['movemap', 'bitmap', 'giraffe']
+    input_types = ['movemap', 'bitmap'] #, 'giraffe']
     print "\nRunning Train Tests...\n"
 
     print "--- Stockfish tests ---"
@@ -809,12 +809,12 @@ def run_train_tests():
 
     print "--- Temporal Difference Tests --"
     print "Testing using input type MOVEMAP"
-    name = 'td_checkmate_test'
-    test = all_tests['Temporal Difference Tests'][name]
-    print "Testing " + name + "..."
-    if not test():
-        print "%s test failed" % name.capitalize()
-        success = False
+    # name = 'td_checkmate_test'
+    # test = all_tests['Temporal Difference Tests'][name]
+    # print "Testing " + name + "..."
+    # if not test():
+    #     print "%s test failed" % name.capitalize()
+    #     success = False
 
     for it in input_types:
         print "\nTesting using input type %s \n" % it.upper()

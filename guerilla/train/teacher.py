@@ -1325,12 +1325,12 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g:
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='w_train_bootstrap_0802-0009_movemap_2FC.p') as g:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=10000, use_check_pre=True)
+        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
 
         # Gameplay STS aparams
@@ -1339,9 +1339,9 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=2 * 3600)
-        print t.nn.evaluate(chess.Board().fen())
-        # print eval_sts(g)
+        # t.run(['train_bootstrap'], training_time=8 * 3600)
+        # print t.nn.evaluate(chess.Board().fen())
+        print eval_sts(g)
 
 
 if __name__ == '__main__':

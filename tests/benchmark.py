@@ -34,7 +34,7 @@ def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
 
     for i in range(1, max_depth + 1):
         # Create Guerilla with Random weights:
-        with Guerilla('curious_george', verbose=False, seed=rnd_seed, search_params={'max_depth': i}) as g:
+        with Guerilla('curious_george', verbose=False, seed=rnd_seed, search_params={'max_depth': i},load_file='w_train_bootstrap_0802-0009_movemap_2FC.p') as g:
 
             # Time multiple repetitions
             avg_time = 0.0

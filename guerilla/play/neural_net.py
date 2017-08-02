@@ -474,7 +474,7 @@ class NeuralNet:
                 Mean cross entropy loss.
         """
 
-        err = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.true_value, logits=self.pred_value)
+        err = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.true_value, logits=self.logits)
 
         return tf.reduce_mean(err)
 
@@ -686,12 +686,14 @@ class NeuralNet:
         # CLASSIFIER NOTE: We can't apply the softmax here b/c for training we need to use
         # softmax_cross_entropy_with_logits while for prediction we need to just use softmax (for stability)
         if self.hp['CLASSIFIER']:
-            output_size = self.num_class
-        else:
-            output_size = 1
-
-        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, output_size, "predicted_value",
+            self.logits = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, self.num_class, "predicted_value",
                                         activation_fn=None)
+            self.pred_value = tf.nn.softmax(self.logits)
+        else:
+            self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value",
+                                        activation_fn=None)
+
+        
 
     def get_weights(self, weight_vars):
         """
@@ -802,7 +804,7 @@ class NeuralNet:
 
         if self.hp['CLASSIFIER']:
             # Return mean bin value
-            class_label = np.argmax(self.evaluate_distribution(fen))
+            class_label = np.argmax(self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0])
             output = (self.class_bins[class_label] + self.class_bins[class_label + 1]) / 2
         else:
             output = self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
@@ -815,14 +817,6 @@ class NeuralNet:
 
         return output
 
-    def evaluate_distribution(self, fen):
-        if self.hp['CLASSIFIER']:
-            # Return entire distribution
-            output = tf.nn.softmax(self.pred_value)
-            return output.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0]
-        else:
-            raise ValueError("Non-Classifier NN does not have an output distribution associated with it!")
-
     def get_accuracy_fn(self):
         """
         Returns the tensorflow function to evaluate the accuracy of the classified
@@ -830,7 +824,7 @@ class NeuralNet:
         """
         if self.hp['CLASSIFIER']:
             # Return accuracy function
-            correct_prediction = tf.equal(tf.argmax(self.pred_value, 1), tf.argmax(self.true_value, 1))
+            correct_prediction = tf.equal(tf.argmax(self.pred_value, axis=1), tf.argmax(self.true_value, axis=1))
             return tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         else:
             raise ValueError("Non-Classifier NN does not have accuracy associated with it!")

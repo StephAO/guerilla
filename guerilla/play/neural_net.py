@@ -79,7 +79,7 @@ class NeuralNet:
             if (cp_range) % self.hp['CLASS_SIZE'] != 0:
                 raise ValueError("Centipawn range of %d is not divisible by provided class size of %d" % (
                 cp_range, self.hp['CLASS_SIZE']))
-            self.num_class = cp_range / self.hp['CLASS_SIZE'] + 1  # the +1 is due to the 0 bin
+            self.num_class = self.hp['NUM_BINS'] # cp_range / self.hp['CLASS_SIZE'] + 1  # the +1 is due to the 0 bin
             self.class_bins = np.concatenate([np.arange(dh.LOSE_VALUE, 1, self.hp['CLASS_SIZE']),
                                               np.arange(1, dh.WIN_VALUE + self.hp['CLASS_SIZE'] + 1,
                                                         self.hp['CLASS_SIZE'])])

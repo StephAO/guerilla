@@ -2,6 +2,7 @@
 "USE_CONV" : false
 "CLASSIFIER": true
 "CLASS_SIZE": 10 # Centipawn per class
+"NUM_BINS" : 1001
 "NUM_FC" : 2
 "NUM_HIDDEN" : 1024
 "NUM_FEAT" : 64

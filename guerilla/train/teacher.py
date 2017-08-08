@@ -313,7 +313,37 @@ class Teacher:
 
         # Convert to classes
         if self.nn.hp['CLASSIFIER']:
+            # TODO: Should be made a function (maybe an nn member function)
             # CP to class label (-1 b/c digitize returns labels between [1, number of bins])
+            # cp_range = (dh.WIN_VALUE - dh.LOSE_VALUE) + 1
+            # cp_count = [0] * cp_range
+            # for tv in true_values:
+            #     cp_count[int(tv - dh.LOSE_VALUE)] += 1
+
+            # class_bins = [dh.LOSE_VALUE]
+            # num_bins_rem = self.nn.hp['NUM_BINS']
+            # curr_bin_count = 0
+            # tot_bin_count = 0
+            # bin_bound = None
+            # for i in xrange(cp_range):
+            #     tot_bin_count += cp_count[i]
+            #     num_elements_per_bin = float(len(true_values) - tot_bin_count) / float(num_bins_rem)
+            #     if cp_count[i] == 0:
+            #         continue
+            #     elif bin_bound is not None:
+            #         class_bins.append(float(bin_bound + i + dh.LOSE_VALUE) / 2.)
+            #         num_bins_rem -= 1
+            #         bin_bound = None
+            #     curr_bin_count += cp_count[i]
+            #     if curr_bin_count > num_elements_per_bin:
+            #         bin_bound = i + dh.LOSE_VALUE
+            #         curr_bin_count = 0
+            # class_bins.append(float(dh.WIN_VALUE + 1))
+            # self.nn.class_bins = class_bins
+            # print "---", len(self.nn.class_bins)
+            # print len(true_values)
+            # print self.nn.hp['NUM_BINS']
+
             true_labels = np.digitize(true_values, self.nn.class_bins) - 1
 
             # Convert to one hot encoding of true class labels
@@ -1325,7 +1355,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='w_train_bootstrap_0802-0009_movemap_2FC.p') as g:
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
@@ -1339,7 +1369,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        # t.run(['train_bootstrap'], training_time=8 * 3600)
+        t.run(['train_bootstrap'], training_time=5.5 * 3600)
         # print t.nn.evaluate(chess.Board().fen())
         print eval_sts(g)
 

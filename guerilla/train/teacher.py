@@ -314,41 +314,43 @@ class Teacher:
         # Convert to classes
         if self.nn.hp['CLASSIFIER']:
             # TODO: Should be made a function (maybe an nn member function)
-            # CP to class label (-1 b/c digitize returns labels between [1, number of bins])
-            # cp_range = (dh.WIN_VALUE - dh.LOSE_VALUE) + 1
-            # cp_count = [0] * cp_range
-            # for tv in true_values:
-            #     cp_count[int(tv - dh.LOSE_VALUE)] += 1
+            cp_range = (dh.WIN_VALUE - dh.LOSE_VALUE) + 1
+            cp_count = [0] * cp_range
+            for tv in true_values:
+                cp_count[int(tv - dh.LOSE_VALUE)] += 1
 
-            # class_bins = [dh.LOSE_VALUE]
-            # num_bins_rem = self.nn.hp['NUM_BINS']
-            # curr_bin_count = 0
-            # tot_bin_count = 0
-            # bin_bound = None
-            # for i in xrange(cp_range):
-            #     tot_bin_count += cp_count[i]
-            #     num_elements_per_bin = float(len(true_values) - tot_bin_count) / float(num_bins_rem)
-            #     if cp_count[i] == 0:
-            #         continue
-            #     elif bin_bound is not None:
-            #         class_bins.append(float(bin_bound + i + dh.LOSE_VALUE) / 2.)
-            #         num_bins_rem -= 1
-            #         bin_bound = None
-            #     curr_bin_count += cp_count[i]
-            #     if curr_bin_count > num_elements_per_bin:
-            #         bin_bound = i + dh.LOSE_VALUE
-            #         curr_bin_count = 0
-            # class_bins.append(float(dh.WIN_VALUE + 1))
-            # self.nn.class_bins = class_bins
-            # print "---", len(self.nn.class_bins)
+            class_bins = [dh.LOSE_VALUE]
+            num_bins_rem = self.nn.hp['NUM_BINS']
+            curr_bin_count = 0
+            tot_bin_count = 0
+            bin_bound = None
+            for i in xrange(cp_range):
+                tot_bin_count += cp_count[i]
+                num_elements_per_bin = float(len(true_values) - tot_bin_count) / float(num_bins_rem)
+                if cp_count[i] == 0:
+                    continue
+                elif bin_bound is not None:
+                    class_bins.append(float(bin_bound + i + dh.LOSE_VALUE) / 2.)
+                    num_bins_rem -= 1
+                    bin_bound = None
+                curr_bin_count += cp_count[i]
+                if curr_bin_count > num_elements_per_bin:
+                    bin_bound = i + dh.LOSE_VALUE
+                    curr_bin_count = 0
+            class_bins.append(float(dh.WIN_VALUE + 1))
+            highest_bin_value = dh.WIN_VALUE + 1
+            while len(class_bins) < self.nn.hp['NUM_BINS']:
+                class_bins.append(highest_bin_value + 1)
+                highest_bin_value += 1
+            self.nn.class_bins = class_bins
+            print "---", len(self.nn.class_bins)
             # print len(true_values)
             # print self.nn.hp['NUM_BINS']
 
-            true_labels = np.digitize(true_values, self.nn.class_bins) - 1
+            # CP to class label (-1 b/c digitize returns labels between [1, number of bins])
+            true_values = np.digitize(true_values, self.nn.class_bins) - 1
 
-            # Convert to one hot encoding of true class labels
-            true_values = np.zeros([len(true_labels), self.nn.num_class])
-            true_values[range(len(true_labels)), true_labels] = 1
+            # Convert to one hot encoding of true class label
 
         return fens, true_values
 
@@ -717,7 +719,7 @@ class Teacher:
             input_data.append(np.zeros(_shape))
 
         if self.nn.hp['CLASSIFIER']:
-            true_values = np.zeros([self.hp['BATCH_SIZE'], self.nn.num_class])
+            true_values = np.zeros([self.hp['BATCH_SIZE'], self.nn.num_class], dtype=np.int32)
         else:
             true_values = np.zeros(self.hp['BATCH_SIZE'])
 
@@ -736,7 +738,10 @@ class Teacher:
             for k in xrange(len(nn_input_data)):
                 input_data[k][j] = nn_input_data[k]
 
-            true_values[j] = _true_values[game_indices[board_num]]
+            if self.nn.hp['CLASSIFIER']:
+                true_values[j][_true_values[game_indices[board_num]]] = 1
+            else:
+                true_values[j] = _true_values[game_indices[board_num]]
             board_num += 1
 
         _feed_dict = {self.nn.true_value: true_values,
@@ -1369,7 +1374,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=5.5 * 3600)
+        t.run(['train_bootstrap'], training_time=8 * 3600)
         # print t.nn.evaluate(chess.Board().fen())
         print eval_sts(g)
 

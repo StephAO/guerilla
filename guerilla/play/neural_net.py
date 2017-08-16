@@ -691,10 +691,8 @@ class NeuralNet:
             self.pred_value = tf.nn.softmax(self.logits)
         else:
             self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value",
-                                        activation_fn=None)
-
+                                            activation_fn=None)
         
-
     def get_weights(self, weight_vars):
         """
         Get the weight values of the input.

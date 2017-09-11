@@ -1,6 +1,8 @@
 # Tensorflow tensor storage files
 *.vars
 *.vars.meta
+*.vars.*
+*.vars.meta.*
 checkpoint
 
 # Text files

@@ -214,6 +214,10 @@ class Teacher:
                 if self.verbose:
                     print "Performing gameplay training!"
                 self.train_gameplay()
+            elif action == 'train_everymove':
+                if self.verbose:
+                    print "Performing everymove training!"
+                self.train_everymove()
             elif action == 'load_and_resume':
                 raise ValueError("Error: Resuming must be the first action in an action set.")
             else:
@@ -979,7 +983,7 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None, force_divergence=False):
+    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None, force_divergence=False, no_update=False):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -998,6 +1002,10 @@ class Teacher:
                     If True then restrict_td must be False since with depth 0 there is no predicted move.
                 full_move [Boolean]
                     If True then trains using full moves instead of half moves. False by default.
+                force_divergence [Boolean]:
+                    If true, pushes scores away from 0 -> probably doesn't work
+                no_update [Boolean]:
+                    If true, forces no updates to weights
                 num_update [Int]
                     The maximum number of boards to update per game. By default updates on all boards.
         """
@@ -1102,14 +1110,14 @@ class Teacher:
 
             err.append(td_val)
 
-        if self.verbose:
+        # if self.verbose:
             # print error
-            print "TD Error: Mean: %.5f Var: %.5f" % (np.mean(err), np.var(err))
+            # print "TD Error: Mean: %.5f Var: %.5f" % (np.mean(err), np.var(err))
 
         self.td_game_index += 1
 
         # Only update at the end of a game
-        if self.td_game_index >= self.hp['TD_BATCH_SIZE']:
+        if not no_update and self.td_game_index >= self.hp['TD_BATCH_SIZE']:
             self.td_update_weights()
             self.td_game_index = 0
             self.td_w_update = None
@@ -1245,6 +1253,112 @@ class Teacher:
 
         return
 
+    def train_everymove(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False):
+        """
+        Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
+        Gameplay is performed from a random board position. The random board position is found by loading from the fens
+        file and then randomly flipping the board.
+
+        Inputs:
+            game_indices [List of Ints]
+                List of indices denoting which FENs to process and in what order. Used when loading and resuming.
+            start_idx [Int]
+                Marks which game index to start training from. Used when loading and resuming.
+            sts_scores [List]
+                List of previously of previously calculated STS scores. Used when loading and resuming.
+            allow_draw [Boolean]
+                If False then draws are not allowed in gameplay generation.
+                Has no effect if the end of the game is not reached.
+            endgame [Boolean]
+                If true then only trains on endgames.
+        """
+
+        # Load fens and randomly sample
+        fens = cgp.load_fens()
+        if game_indices is None:
+            game_indices = random.sample(range(len(fens)), self.gp_num)
+
+        max_len = sys.maxint if (self.gp_length == -1 or endgame) else self.gp_length
+
+        # Initialize STS scores if necessary
+        if sts_scores is None and self.sts_on:
+            sts_scores = []
+
+        self.td_game_index = 0
+        if self.td_training_mode in ['adagrad', 'adadelta']:
+            self.reset_accumulators()
+
+        if self.verbose and endgame:
+            print "Training only on endgames..."
+
+        # Fens to check variance on
+        num_var = 100
+        var_fens = random.sample(fens, num_var)
+
+        for i in xrange(start_idx, self.gp_num):
+            # Check for variance on set of boards
+            # if i % 25 == 0:
+            #     print "<Variance after %d games: %f>" % (i, self.get_variance(var_fens))
+            #     if i > 0:
+            #         self.nn.save_weight_values(_filename='var_check_2_%d.p' % i)
+
+            if self.verbose:
+                print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
+
+            # Load random fen and randomly flip board
+            fen = fens[game_indices[i]]
+            if random.random() < 0.5:
+                fen = dh.flip_board(fen)
+
+            # Play a game against opponent
+            players = {'w': None, 'b': None}
+            guerilla_player = fen.split()[1]
+            players[guerilla_player] = self.guerilla
+            opponent_player = 'w' if guerilla_player == 'b' else 'b'
+            players[opponent_player] = self.opponent
+            game = Game(players, use_gui=False)
+
+            board = chess.Board(fen)
+            for move in board.legal_moves:
+                board.push(move)
+                game.set_board(fen)
+                game_fens, _ = game.play(dh.strip_fen(board.fen(), keep_idxs=1), moves_left=max_len, verbose=False)
+                board.pop()
+
+                # Send game for TD-leaf training
+                # if self.verbose:
+                #     print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
+                self.td_leaf([fen] + game_fens, num_update=1, no_leaf=True, restrict_td=False, no_update=True)
+
+            self.td_update_weights()
+            self.td_game_index = 0
+            self.td_w_update = None
+            self.guerilla.search.clear_cache()
+
+            # Evaluate on STS if necessary
+            if self.sts_on and ((i + 1) % self.sts_interval == 0):
+                original_depth = self.guerilla.search.max_depth
+                self.guerilla.search.max_depth = self.sts_depth
+                sts_scores.append(eval_sts(self.guerilla, mode=self.sts_mode, step_size=10)[0])
+                self.guerilla.search.max_depth = original_depth
+                print "[Games Played: %d] STS Result: %s" % (i + 1, str(sts_scores[-1]))
+
+            # Check if out of time
+            if self.out_of_time() and i != (self.gp_num - 1):
+                if self.verbose:
+                    print "TD-Leaf self-play Timeout: Saving state and quitting."
+                save = {'game_indices': game_indices,
+                        'start_idx': i + 1,
+                        'sts_scores': sts_scores,
+                        'mid_action': True}
+                self.save_state(save)
+                return
+
+        if self.sts_on:
+            self.print_sts(sts_scores)
+
+        return
+
     def print_sts(self, scores):
         """ Prints the STS scores and corresponding intervals. """
 
@@ -1283,7 +1397,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}, load_file='6811.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='6811.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
@@ -1291,15 +1405,16 @@ def main():
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=10, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 100
+        t.sts_interval = 10
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=5.5 * 3600)
+        print eval_sts(g, step_size=10)
+        t.run(['train_everymove'], training_time=5.5 * 3600)
         # print eval_sts(g)
 
 

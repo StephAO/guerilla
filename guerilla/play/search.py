@@ -264,6 +264,129 @@ class Minimax(Search):
         return best_score, best_move, best_leaf
 
 
+class Learn(Search):
+    """
+        Uses a recursive function to perform a simple minimax with
+        alpha-beta pruning.
+    """
+    def __init__(self, leaf_eval, max_depth=2, ab_prune=True):
+        """
+            Constructor
+            Inputs:
+                leaf_eval[function]:
+                    function used to evaluate leaf nodes
+                max_depth[int]:
+                    depth to go to
+                ab_prune[bool]:
+                    Alpha-beta pruning. Same results on or off, only set to off for td training
+        """
+        super(Learn, self).__init__(leaf_eval)
+
+        self.evaluation_function = leaf_eval
+        self.order_function = material_balance
+        self.order_moves = True
+        self.max_depth = max_depth
+        self.ab_prune = ab_prune
+        self.depth_reached = max_depth  # By definition
+
+    def __str__(Learn):
+        return "Minimax"
+
+    def _evaluation_condition(self, **kwargs):
+        """ Condition on which to evaluate """
+        return kwargs['depth'] == self.max_depth
+
+    def _set_evaluation_function(self, **kwargs):
+        """ Evaluation function is always leaf_eval set in __init__"""
+        return
+
+    def _cache_condition(self, **kwargs):
+        """Always use cache."""
+        return True
+
+    def run(self, board, forced_move_idx=None, time_limit=None, clear_cache=False):
+        """ Reset some variables, call recursive function """
+        if clear_cache:
+            self.clear_cache()
+        self.num_evals = 0
+        self.num_visits = []
+        return self.minimax(board, forced_move_idx=forced_move_idx)
+
+    def minimax(self, board, depth=0, forced_move_idx=None, a=float("inf")):
+        """
+            Recursive function to search for best move using minimax with alpha-beta pruning.
+            Assumes that the layer above the leaves are trying to minimize the positive value,
+            which is the same as maximizing the negative value.
+            Inputs:
+                board [chess.Board]:
+                    current state of board
+                depth [int]:
+                    current depth, used for terminating condition
+                a [float]:
+                    lower bound of layer above, upper bound of current layer (because of alternating signs)
+            Outputs:
+                best_score [float]:
+                    Score achieved by best move. Centipawn advantage of next player to play.
+                best_move [chess.Move]:
+                    Best move to play
+                best_leaf [String]
+                    FEN of the board of the leaf node which yielded the highest value.
+        """
+        best_score = float("-inf")
+        best_move = None
+        best_leaf = None
+
+        end = self.conditional_eval(board, depth=depth)
+        if end is not None:
+            return end
+        elif forced_move_idx is not None and depth == 0:
+            moves = list(board.legal_moves)
+            board.push(moves[forced_move_idx])
+            score, next_move, leaf_board = self.minimax(board, depth + 1, -best_score)
+            # Take reciprocal of score since alternating levels
+            score = -score
+            board.pop()
+            best_score = score
+            best_move = moves[forced_move_idx]
+            best_leaf = leaf_board
+        else:
+            moves = list(board.legal_moves)
+
+            if self.order_moves:
+                # Get scores
+                move_scores = []
+                for move in moves:
+                    board.push(move)
+                    move_scores.append((move, self.order_function(board.fen())))
+                    board.pop()
+
+                # Order in ascending order (want to check boards which are BAD for opponent first)
+                move_scores.sort(key=lambda x: x[1])
+
+                moves = [x[0] for x in move_scores]
+
+            for i, move in enumerate(moves):
+                # recursive call
+                board.push(move)
+                score, next_move, leaf_board = self.minimax(board, depth + 1, -best_score)
+                # Take reciprocal of score since alternating levels
+                score = -score
+                board.pop()
+                if score > best_score:
+                    best_score = score
+                    best_move = move
+                    best_leaf = leaf_board
+
+                # best_score is my current lower bound
+                # a is the upper bound of what's useful to search
+                # if my lower bound breaks the boundaries of what's worth to search
+                # stop searching here
+                if self.ab_prune and best_score >= a:
+                    break
+
+        return best_score, best_move, best_leaf
+
+
 class RankPrune(Search):
     def __init__(self, leaf_eval, prune_perc=0.75, internal_eval=None,
                  time_limit=10, buff_time=0.1, max_depth=None, verbose=True):

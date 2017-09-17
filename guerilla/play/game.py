@@ -223,7 +223,7 @@ def main():
     if choose_players == 'd':
 
         players['w'] = Human('You')
-        players['b'] = Guerilla('Harambe', search_type='minimax', load_file='7034.p', search_params={'max_depth': 2})
+        players['b'] = Guerilla('Harambe', search_type='minimax', load_file='w_train_gameplay_0915-1819_movemap_2FC.p', search_params={'max_depth': 2})
 
     elif choose_players == 'c':
         for i in ['w', 'b']:
@@ -239,9 +239,17 @@ def main():
                 players[i] = Game.player_types[player_type](player_name)
             else:
                 raise NotImplementedError("Player type selected is not supported. See README.md for player types")
-
+    
+    start_fen = raw_input("Input start fen (or hit enter for starting position): ")
     game = Game(players)
-    game.start()
+    if start_fen != '':
+        print start_fen
+        game.set_board(start_fen)
+        print "Board set"
+        with players['w'], players['b']:
+            game.play(start_fen.split()[1])
+    else:
+        game.start()
 
 
 if __name__ == '__main__':

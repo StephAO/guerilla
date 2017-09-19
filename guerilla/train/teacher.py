@@ -18,7 +18,7 @@ from guerilla.play.game import Game
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
 from guerilla.players import *
-from guerilla.train.sts import eval_sts, sts_strat_files, get_epds_by_mode
+from guerilla.train.sts import eval_sts, sts_strat_files, get_epds_by_mode, parse_epd
 
 
 class Teacher:
@@ -1277,7 +1277,7 @@ class Teacher:
         fens = []
         for epd in epds:
             fens.append(str(' '.join(epd.split()[:4])) + ' 0 0')
-        random.shuffle(fens)
+        # random.shuffle(fens)
 
         # fens = cgp.load_fens() # ['8/8/7k/6pp/5p2/5K1P/4QPP1/3q4 b - - 1 1'] * 100 #
         if game_indices is None:
@@ -1311,9 +1311,10 @@ class Teacher:
                 print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
 
             # Load random fen and randomly flip board
-            fen = fens[game_indices[i]]
-            if random.random() < 0.5:
-                fen = dh.flip_board(fen)
+            # fen = fens[game_indices[i]]
+            # if random.random() < 0.5:
+            #     fen = dh.flip_board(fen)
+            fen = fens[i]
 
             # Play a game against opponent
             players = {'w': None, 'b': None}
@@ -1325,8 +1326,9 @@ class Teacher:
 
             board = chess.Board(fen)
             for j, move in enumerate(board.legal_moves):
-                if np.random.random() < 0.75:
-                    continue
+                print "{}...".format(j),
+                # if np.random.random() < 0.75:
+                #     continue
                 board.push(move)
                 game.set_board(board.fen())
                 game_fens, _ = game.play(dh.strip_fen(board.fen(), keep_idxs=1), moves_left=max_len, verbose=False)
@@ -1336,7 +1338,7 @@ class Teacher:
                 # if self.verbose:
                 #     print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
                 self.td_leaf([fen] + game_fens, first_move=j, no_leaf=False, restrict_td=False, no_update=True)
-
+            print ""
             self.td_update_weights()
             self.td_game_index = 0
             self.td_w_update = None
@@ -1346,9 +1348,31 @@ class Teacher:
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
                 original_depth = self.guerilla.search.max_depth
                 self.guerilla.search.max_depth = self.sts_depth
-                sts_scores.append(eval_sts(self.guerilla, mode=self.sts_mode)[0])
+                # sts_scores.append(eval_sts(self.guerilla, mode=self.sts_mode)[0])
+
+                scores = []
+                for epd in epds:
+                    board, move_scores = parse_epd(epd)
+
+                    # Get move
+                    move = self.guerilla.get_move(board)
+
+                    try:
+                        new_score = move_scores[move]
+                    except KeyError:
+                        new_score = 0
+
+                    scores.append(new_score)
+
                 self.guerilla.search.max_depth = original_depth
-                print "[Games Played: %d] STS Result: %s" % (i + 1, str(sts_scores[-1]))
+                print "Scores for EPDs 0 to {}: {}".format(i, scores[:i + 1])
+                print "Scores for EPDs {} to {}: {}".format(i, len(scores), scores[i + 1:])
+                print "Avg score on last {} EPDs: {}".format(self.sts_interval,
+                                                             np.mean(scores[i + 1 - self.sts_interval:i + 1]))
+                print "Avg score on next {} EPDs: {}".format(self.sts_interval,
+                                                             np.mean(scores[i + 1:i + 1 + self.sts_interval]))
+                print "STS Score: {}".format(sum(scores))
+                # print "[Games Played: %d] STS Result: %s" % (i + 1, str(sts_scores[-1]))
 
             # Check if out of time
             if self.out_of_time() and i != (self.gp_num - 1):
@@ -1411,7 +1435,7 @@ def main():
         # g.search.max_depth = 2
         t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True, num_epochs=1)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=5, max_length=6, opponent=sf_player)
+        t.set_gp_params(num_gameplay=300, max_length=6, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1420,7 +1444,7 @@ def main():
 
         # t.checkpoint_interval = None
         # t.run(['train_gameplay'], training_time=6 * 3600)
-        t.run(['train_everymove', 'train_bootstrap', 'train_everymove', 'train_bootstrap', 'train_everymove', 'train_bootstrap', 'train_everymove', 'train_bootstrap'], training_time=12 * 3600)
+        t.run(['train_everymove'], training_time=6.5 * 3600)
         print eval_sts(g)
 
 

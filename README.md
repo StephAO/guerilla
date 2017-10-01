@@ -43,6 +43,8 @@ Packages and programs required for things to work.
 
 ## Usage
 ### How to Play
+To get the current best version, please contact [us](#authors). We will provide you with the latest pickle file of the weights for neural net. Replace the default.p in /path/to/guerilla/guerilla/data/weights/ with the new file.
+
 1. Go to guerilla directory (outer guerilla directory)
   - `cd /path/to/guerilla`
 2. Run game by running:

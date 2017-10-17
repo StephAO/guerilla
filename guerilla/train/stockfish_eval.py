@@ -13,11 +13,9 @@ from pkg_resources import resource_filename
 
 # Modification from notbanker's stockfish.py https://gist.github.com/notbanker/3af51fd2d11ddcad7f16
 
-def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_scores=False, num_attempt = 3):
+def stockfish_scores(generate_time, seconds=1.0, threads=None, memory=None, num_score=None, num_attempt=3):
     """ 
         Uses stockfishes engine to evaluate a score for each board.
-        Then uses a sigmoid to map the scores to a winning probability between 
-        0 and 1 (see sigmoid_array for how the sigmoid was chosen).
 
             Inputs:
                 boards[list of strings]:
@@ -30,11 +28,15 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
                     a list of values for each board ranging between 0 and 1
     """
 
+    print "Evaluating fens for {} seconds, spending {} second(s) on each".format(generate_time, seconds)
+
     sf_num = 0
     if os.path.isfile(resource_filename('guerilla', 'data/extracted_data/sf_num.txt')):
         with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'r') as f:
             l = f.readline()
             sf_num = int(l)
+
+    print "Starting from FEN #{}...".format(sf_num)
 
     batch_size = 5
 
@@ -47,7 +49,7 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
             # Shell out to Stockfish
             scores = []
             start_time = time.time()
-            while (time.time() - start_time) < generate_time:
+            while (time.time() - start_time) < generate_time and (num_score is None or sf_num < num_score):
                 fen = fen_file.readline().strip()
                 print fen
 
@@ -78,13 +80,15 @@ def stockfish_scores(generate_time, seconds=1, threads=None, memory=None, all_sc
     with open(resource_filename('guerilla', 'data/extracted_data/sf_num.txt'), 'w') as num_file:
         num_file.write(str(sf_num))
 
-def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, max_depth=None):
+
+def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, max_depth=None,
+                        sleep_length=1, attempt_step=5, attempt_step_inc=0.5):
     """
     Input:
         fen [String]
             Chess board to evaluate.
         seconds [Int]
-            Number of seconds to evaluate the board.
+            Initial number of seconds to evaluate the board.
         threads [Int]
             Number of threads to use for stockfish.
         memory [Int]
@@ -93,6 +97,12 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
             Number of attempts which should be made to get a stockfish score for the given fen.
         max_depth [Int]
             Max depth to search to.
+        sleep_length [Int]
+            Amount of time to sleep between attempts.
+        attempt_step [Int]
+            Number of attempts to make before increasing command time.
+        attempt_step_inc [Float]
+            Amount of time to increase command time by at each attempt_step.
     Output:
         score [Float]
             Stockfish score. Returns None if no score found.
@@ -102,16 +112,17 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
     MATE_BASE = dh.WIN_VALUE  # 50 pawn advantage (>5 queens)
 
     memory = memory or psutil.virtual_memory().available / (2 * 1024 * 1024)
-    threads = threads or psutil.cpu_count() - 2
+    threads = threads or psutil.cpu_count()
     binary = 'linux'
-
-    cmd = ' '.join([(resource_filename('guerilla.train', '/stockfish_eval.sh')), fen, str(seconds), binary,
-                    str(threads), str(memory), str(max_depth) if max_depth else ''])
 
     attempt = 0
     output = None
+    cmd = None
     while attempt < num_attempt:
         try:
+            cmd = ' '.join([(resource_filename('guerilla.train', '/stockfish_eval.sh')), fen, str(seconds), binary,
+                            str(threads), str(memory), str(max_depth) if max_depth else ''])
+
             output = subprocess.check_output(cmd, shell=True).strip().split('\n')
             if output is not None:
                 break
@@ -119,15 +130,19 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
             print e
 
         attempt += 1
+        time.sleep(sleep_length)
+        if attempt % attempt_step == 0:
+            seconds += attempt_step_inc
+            print "Increased command time to {} seconds...".format(seconds)
 
     if output is None:
         return output
     elif output[0] == '':
-        print "Warning: stockfish returned nothing. Command was:\n%s" % cmd
+        print "Warning: stockfish returned nothing. Command was:\n{}".format(cmd)
         return None
 
     if len(output) == 2:
-        print "ERROR: Too long (len > 1) stockfish output. Command was:\n%s" % cmd
+        print "ERROR: Too long (len > 1) stockfish output. Command was:\n{}".format(cmd)
         return None
 
     output = output[0].split(' ')
@@ -225,14 +240,10 @@ def stockfish_eval_fn(fen, seconds=0.3, max_depth=1, num_attempt=3):
     return raw_value
 
 def main():
+    generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
+    seconds = 0.5
 
-    # generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
-
-    # print "Evaluating fens for %d seconds, spending 1 second on each" % (generate_time)
-
-    # stockfish_scores(generate_time)
-
-    reverse_true_values_to_cp()
+    stockfish_scores(generate_time=generate_time, seconds=seconds, num_attempt=10)
 
 if __name__ == "__main__":
 

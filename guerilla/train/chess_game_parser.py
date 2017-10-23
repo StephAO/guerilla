@@ -6,6 +6,7 @@ import os
 import time
 from os.path import isfile, join
 import random as rnd
+import numpy as np
 
 import chess.pgn
 from pkg_resources import resource_filename
@@ -41,7 +42,7 @@ def read_pgn(filename, max_skip=80):
     return fens[skip_start:]
 
 
-def get_fens(generate_time, num_random=2, store_prob=0.0):
+def get_fens(generate_time, num_random=0, store_prob=0.0):
     """
     Extracts fens from games and saves them.
     Will read from all games in folder /pgn_files/single_game_pgns.
@@ -65,10 +66,17 @@ def get_fens(generate_time, num_random=2, store_prob=0.0):
     files = [f for f in os.listdir(games_path) if isfile(join(games_path, f))]
 
     start_time = time.clock()
-    with open(resource_filename('guerilla', 'data/extracted_data/fens.csv'), 'a') as fen_file:
+    fen_count = 0
+    fname = 'fens_sampled'
+    print "starting at game num: {}".format(game_num)
+    with open(resource_filename('guerilla', 'data/extracted_data/{}.csv'.format(fname)), 'w') as fen_file:
         print "Opened fens output file..."
-        while (time.clock() - start_time) < generate_time:
-            fens = read_pgn(games_path + '/' + files[game_num])
+        while (time.clock() - start_time) < generate_time and game_num < len(files):
+            fens = read_pgn(games_path + '/' + files[game_num], max_skip=0)
+
+            # Randomly choose 3
+            fens = np.random.choice(fens, 3, replace=False)
+
             for fen in fens:
 
                 board = chess.Board(fen)
@@ -93,8 +101,9 @@ def get_fens(generate_time, num_random=2, store_prob=0.0):
                     out_fen = dh.flip_to_white(out_fen)
 
                     fen_file.write(out_fen + '\n')
-
-            print "Processed game %d..." % game_num
+                    fen_count += 1
+            if game_num % 100 == 0:
+                print "Processed game %d [%d] fens..." % (game_num, fen_count)
             game_num += 1
 
     # Write out next game to be processed
@@ -173,7 +182,7 @@ def load_fens(filename='fens.csv', num_values=None):
 def main():
     generate_time = raw_input("How many seconds do you want to generate fens for?: ")
 
-    get_fens(int(generate_time))
+    get_fens(int(generate_time), num_random=4)
 
 
 if __name__ == "__main__":

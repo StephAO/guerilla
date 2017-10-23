@@ -56,7 +56,8 @@ def stockfish_scores(generate_time, seconds=1.0, threads=None, memory=None, num_
                 if fen == "":
                     break
 
-                score = get_stockfish_score(fen, seconds = seconds, threads = threads, memory = memory, num_attempt=num_attempt)
+                score = get_stockfish_score(fen, seconds=seconds, threads=threads, memory=memory,
+                                            num_attempt=num_attempt)
 
                 if score is None:
                     print "Failed to score fen '%s' after %d attempts. Exiting." % (fen, num_attempt)
@@ -124,7 +125,7 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
                             str(threads), str(memory), str(max_depth) if max_depth else ''])
 
             output = subprocess.check_output(cmd, shell=True).strip().split('\n')
-            if output is not None:
+            if output is not None and output[0] != '':
                 break
         except subprocess.CalledProcessError as e:
             print e
@@ -138,7 +139,7 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
     if output is None:
         return output
     elif output[0] == '':
-        print "Warning: stockfish returned nothing. Command was:\n{}".format(cmd)
+        print "Warning: stockfish returned nothing ({}). Command was:\n{}".format(output, cmd)
         return None
 
     if len(output) == 2:
@@ -159,6 +160,7 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
         score = float(output[1])
 
     return score
+
 
 def sigmoid_array(values):
     """ NOTE: Not in use since switched to linear output.
@@ -239,12 +241,13 @@ def stockfish_eval_fn(fen, seconds=0.3, max_depth=1, num_attempt=3):
 
     return raw_value
 
+
 def main():
     generate_time = int(raw_input("How many seconds do you want to generate stockfish values for?: "))
     seconds = 0.5
 
     stockfish_scores(generate_time=generate_time, seconds=seconds, num_attempt=10)
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     main()

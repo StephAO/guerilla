@@ -1,8 +1,8 @@
 import numpy as np
 
 # WIN/LOSE/DRAW CONSTANTS
-WIN_VALUE = 5000
-LOSE_VALUE = -5000
+WIN_VALUE = 20000
+LOSE_VALUE = -20000
 DRAW_VALUE = 0
 
 # Data handler constants + Variables

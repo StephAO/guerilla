@@ -52,6 +52,7 @@ def stockfish_scores(generate_time, seconds=1.0, threads=None, memory=None, num_
             while (time.time() - start_time) < generate_time and (num_score is None or sf_num < num_score):
                 fen = fen_file.readline().strip()
                 print fen
+                assert (dh.white_is_next(fen))
 
                 if fen == "":
                     break
@@ -109,9 +110,6 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
             Stockfish score. Returns None if no score found.
     """
 
-    # Base for mate scoring
-    MATE_BASE = dh.WIN_VALUE  # 50 pawn advantage (>5 queens)
-
     memory = memory or psutil.virtual_memory().available / (2 * 1024 * 1024)
     threads = threads or psutil.cpu_count()
     binary = 'linux'
@@ -150,9 +148,11 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
     if output[0] == 'mate':
         mate_in = int(output[1])
         if mate_in == 0:
-            # avoids division by zero
-            mate_in = 1e-9
-        score = MATE_BASE * (1 + 1.0 / abs(mate_in))
+            # MEANS WHITE LOST (i.e. white's turn, but white is checkmated)
+            mate_in = -1
+
+        # Checkmate in 'mate_in' moves
+        score = dh.WIN_VALUE - (abs(mate_in) - 1) * 500
         if mate_in < 0:
             # White will LOSE in mate_in turns, therefore make the score negative
             score *= -1

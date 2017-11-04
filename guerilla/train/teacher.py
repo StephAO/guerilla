@@ -96,6 +96,7 @@ class Teacher:
         self.td_w_update = None
         self.td_game_index = 0
         self.td_l2_reg = td_l2_reg
+        self.target_learn_rate = 1e-3
 
         self.hp = {}
         if hp_load_file is None:
@@ -124,7 +125,8 @@ class Teacher:
                 self.weight_shapes.append(weight.get_shape().as_list())
 
         if self.td_training_mode == 'adadelta' and self.hp['TD_LRN_RATE'] != 1.0:
-            warnings.warn("Training mode is adadelta and initial learning rate is %d != 1.0" % self.hp['TD_LRN_RATE'])
+            warnings.warn(
+                "TD Training mode is adadelta and initial learning rate is %f != 1.0" % self.hp['TD_LRN_RATE'])
 
 
         # Self-play parameters
@@ -979,7 +981,8 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None, force_divergence=False):
+    def td_leaf(self, game, restrict_td=False, only_own_boards=None, no_leaf=True, full_move=False, num_update=None,
+                force_divergence=False):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -1108,16 +1111,16 @@ class Teacher:
 
         self.td_game_index += 1
 
-        # Only update at the end of a game
-        if self.td_game_index >= self.hp['TD_BATCH_SIZE']:
-            self.td_update_weights()
-            self.td_game_index = 0
-            self.td_w_update = None
-            self.guerilla.search.clear_cache()  # clear cache
+        # # Only update at the end of a game
+        # if self.td_game_index >= self.hp['TD_BATCH_SIZE']:
+        #     self.td_update_weights()
+        #     self.td_game_index = 0
+        #     self.td_w_update = None
+        #     self.guerilla.search.clear_cache()  # clear cache
 
     # ---------- GAMEPLAY TRAINING METHODS
 
-    def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None):
+    def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None, target_learn_rate=None):
         """
         Set the parameteres for self-play.
             Inputs:
@@ -1129,6 +1132,7 @@ class Teacher:
                     The opponent to play when generating the gameplay for training. By default the opponent is the
                     version of Guerilla currently being trained (self.guerilla).
         """
+        # TODO: Document
 
         if num_gameplay:
             self.gp_num = num_gameplay
@@ -1136,8 +1140,11 @@ class Teacher:
             self.gp_length = max_length
         if opponent:
             self.opponent = opponent
+        if target_learn_rate:
+            self.target_learn_rate = target_learn_rate
 
-    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False,
+                       use_target=True):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1155,6 +1162,9 @@ class Teacher:
                 Has no effect if the end of the game is not reached.
             endgame [Boolean]
                 If true then only trains on endgames.
+            use_target [Boolean]
+                Whether or not to use a target network. The target network will slowly track the gameplay network, and 
+                will be used to score the boards. See p.4 of https://arxiv.org/pdf/1509.02971.pdf.
         """
 
         # Load fens and randomly sample
@@ -1175,17 +1185,19 @@ class Teacher:
         if self.verbose and endgame:
             print "Training only on endgames..."
 
+        # Target network
+        target_weights = None
+        gameplay_weights = None
+        if use_target:
+            print "Using target network!"
+            target_weights = self.nn.get_all_weights()
+
         # Fens to check variance on
         num_var = 100
         var_fens = random.sample(fens, num_var)
 
         for i in xrange(start_idx, self.gp_num):
             # Check for variance on set of boards
-            if i % 25 == 0:
-                print "<Variance after %d games: %f>" % (i, self.get_variance(var_fens))
-                if i > 0:
-                    self.nn.save_weight_values(_filename='var_check_2_%d.p' % i)
-
             if self.verbose:
                 print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
 
@@ -1216,10 +1228,34 @@ class Teacher:
             if endgame:
                 game_fens = game_fens[-self.gp_length:]
 
+            # set weights to target network
+            if use_target:
+                gameplay_weights = self.nn.get_all_weights()
+                self.nn.set_all_weights(target_weights)
+
+                # clear cache
+                self.guerilla.search.clear_cache()
+
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, no_leaf=False, restrict_td=True)
+            self.td_leaf(game_fens, no_leaf=True, restrict_td=False)
+
+            # set weights to value network
+            if use_target:
+                # Return gameplay_weights
+                self.nn.set_all_weights(gameplay_weights)
+
+                # Update weights
+                self.td_update_weights()
+                self.td_game_index = 0
+                self.td_w_update = None
+                self.guerilla.search.clear_cache()  # clear cache
+
+                # Update target_weights
+                new_weights = self.nn.get_all_weights()
+                target_weights = [target_weights[w] * (1 - self.target_learn_rate)
+                                  + new_weights[w] * (self.target_learn_rate) for w in range(len(target_weights))]
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1289,9 +1325,9 @@ def main():
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
+        t.set_bootstrap_params(num_bootstrap=1e6, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1299,8 +1335,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=5.5 * 3600)
-        # print eval_sts(g)
+        t.run(['train_gameplay'], training_time=7 * 3600)
 
 
 if __name__ == '__main__':

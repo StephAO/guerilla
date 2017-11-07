@@ -982,7 +982,7 @@ class Teacher:
         self.nn.add_to_all_weights(weight_update)
 
     def td_leaf(self, game, restrict_td=False, only_own_boards=None, no_leaf=True, full_move=False, num_update=None,
-                force_divergence=False):
+                force_divergence=False, target_weights=None):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -1003,6 +1003,9 @@ class Teacher:
                     If True then trains using full moves instead of half moves. False by default.
                 num_update [Int]
                     The maximum number of boards to update per game. By default updates on all boards.
+                target_weights [Array]
+                    Target weights. If none then no target network is used for scoring. If provided then these weights 
+                    are used for scoring.
         """
 
         num_boards = len(game)
@@ -1022,9 +1025,20 @@ class Teacher:
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
 
+        # set weights to target network
+        gameplay_weights = None
+        if target_weights is not None:
+            print "Applied target network for values..."
+            gameplay_weights = self.nn.get_all_weights()
+            self.nn.set_all_weights(target_weights)
+
+            # clear cache
+            self.guerilla.search.clear_cache()
+
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
+        leaf_boards = []
         for i, root_board in enumerate(game):
 
             # turn off leaf evaluation if necessary
@@ -1033,6 +1047,7 @@ class Teacher:
                 self.guerilla.search.max_depth = 0
 
             # NOTE: Cache gets cleared when weights are updated
+            # TODO: properly handle move in 'restrict_td' when target network is being used
             value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
@@ -1046,6 +1061,18 @@ class Teacher:
             else:
                 game_info[i]['value'] = -value
 
+            # append leaf board to list
+            leaf_boards.append(leaf_board)
+
+        # Switch back to gameplay network to calculate gradient
+        if target_weights is not None:
+            print "Applying gameplay weights for gradients..."
+            self.nn.set_all_weights(gameplay_weights)
+
+            # clear cache
+            self.guerilla.search.clear_cache()
+
+        for i, leaf_board in enumerate(leaf_boards):
             # Get gradient of prediction on leaf board
             if dh.white_is_next(leaf_board):
                 game_info[i]['gradient'] = np.array(self.nn.get_all_weights_gradient(leaf_board))
@@ -1112,11 +1139,11 @@ class Teacher:
         self.td_game_index += 1
 
         # # Only update at the end of a game
-        # if self.td_game_index >= self.hp['TD_BATCH_SIZE']:
-        #     self.td_update_weights()
-        #     self.td_game_index = 0
-        #     self.td_w_update = None
-        #     self.guerilla.search.clear_cache()  # clear cache
+        if self.td_game_index >= self.hp['TD_BATCH_SIZE']:
+            self.td_update_weights()
+            self.td_game_index = 0
+            self.td_w_update = None
+            self.guerilla.search.clear_cache()  # clear cache
 
     # ---------- GAMEPLAY TRAINING METHODS
 
@@ -1187,14 +1214,9 @@ class Teacher:
 
         # Target network
         target_weights = None
-        gameplay_weights = None
         if use_target:
             print "Using target network!"
             target_weights = self.nn.get_all_weights()
-
-        # Fens to check variance on
-        num_var = 100
-        var_fens = random.sample(fens, num_var)
 
         for i in xrange(start_idx, self.gp_num):
             # Check for variance on set of boards
@@ -1228,30 +1250,13 @@ class Teacher:
             if endgame:
                 game_fens = game_fens[-self.gp_length:]
 
-            # set weights to target network
-            if use_target:
-                gameplay_weights = self.nn.get_all_weights()
-                self.nn.set_all_weights(target_weights)
-
-                # clear cache
-                self.guerilla.search.clear_cache()
-
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, no_leaf=True, restrict_td=False)
+            self.td_leaf(game_fens, no_leaf=True, restrict_td=False, target_weights=target_weights)
 
             # set weights to value network
             if use_target:
-                # Return gameplay_weights
-                self.nn.set_all_weights(gameplay_weights)
-
-                # Update weights
-                self.td_update_weights()
-                self.td_game_index = 0
-                self.td_w_update = None
-                self.guerilla.search.clear_cache()  # clear cache
-
                 # Update target_weights
                 new_weights = self.nn.get_all_weights()
                 target_weights = [target_weights[w] * (1 - self.target_learn_rate)
@@ -1320,7 +1325,7 @@ def main():
         run_time = None
 
     with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}, load_file='6811.p') as g, \
-            Stockfish('test', time_limit=1) as sf_player:
+            Stockfish('test', time_limit=0.5) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
@@ -1331,7 +1336,7 @@ def main():
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 100
+        t.sts_interval = 50
         t.sts_depth = 2
 
         # t.checkpoint_interval = None

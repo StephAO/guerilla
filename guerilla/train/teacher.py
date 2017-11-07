@@ -981,7 +981,7 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-    def td_leaf(self, game, restrict_td=False, only_own_boards=None, no_leaf=True, full_move=False, num_update=None,
+    def td_leaf(self, game, restrict_td=False, only_own_boards=None, leaf=False, full_move=False, num_update=None,
                 force_divergence=False, target_weights=None):
         """
         Trains neural net using TD-Leaf algorithm.
@@ -996,9 +996,9 @@ class Teacher:
                 only_boards[char]:
                     'w' or 'b' or None. If 'w' or 'b', only update (use gradients of) positions
                     where the next move is white or black respectively. If None, update on all boards
-                no_leaf [Boolean]
-                    If True then uses standard TD instead of TD-Leaf. False by default.
-                    If True then restrict_td must be False since with depth 0 there is no predicted move.
+                leaf [Boolean]
+                    If False then uses standard TD instead of TD-Leaf. False by default.
+                    If False then restrict_td must be False since with depth 0 there is no predicted move.
                 full_move [Boolean]
                     If True then trains using full moves instead of half moves. False by default.
                 num_update [Int]
@@ -1012,7 +1012,7 @@ class Teacher:
         game_info = [{'value': 0, 'gradient': 0, 'move': None, 'leaf_board': None}
                      for _ in range(num_boards)]
 
-        if no_leaf and restrict_td:
+        if not leaf and restrict_td:
             raise ValueError("Invalid td_leaf input combination! If no_leaf is True then restrict_td must be False.")
 
         if only_own_boards is None and restrict_td:
@@ -1043,7 +1043,7 @@ class Teacher:
 
             # turn off leaf evaluation if necessary
             original_depth = self.guerilla.search.max_depth
-            if no_leaf:
+            if not leaf:
                 self.guerilla.search.max_depth = 0
 
             # NOTE: Cache gets cleared when weights are updated
@@ -1052,7 +1052,7 @@ class Teacher:
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
 
-            if no_leaf:
+            if not leaf:
                 self.guerilla.search.max_depth = original_depth
 
             # Modify value so that it represents cp advantage of white
@@ -1253,7 +1253,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, no_leaf=True, restrict_td=False, target_weights=target_weights)
+            self.td_leaf(game_fens, leaf=False, restrict_td=False, target_weights=target_weights)
 
             # set weights to value network
             if use_target:
@@ -1340,7 +1340,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=7 * 3600)
+        t.run(['train_gameplay'], training_time=7.5 * 3600)
 
 
 if __name__ == '__main__':

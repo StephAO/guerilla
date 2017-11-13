@@ -1336,11 +1336,11 @@ def main():
 
         # Gameplay STS aparams
         t.sts_on = True
-        t.sts_interval = 50
+        t.sts_interval = 100
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=7.5 * 3600)
+        t.run(['train_gameplay'], training_time=8 * 3600)
 
 
 if __name__ == '__main__':

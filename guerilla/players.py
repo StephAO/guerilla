@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 
 import guerilla.data_handler as dh
 from guerilla.play.neural_net import NeuralNet
-from guerilla.play.search import Minimax, RankPrune, IterativeDeepening
+from guerilla.play.search import Minimax, IterativeDeepening
 
 class Player:
     __metaclass__ = ABCMeta
@@ -63,7 +63,6 @@ class Player:
 class Guerilla(Player):
     search_types = {
         "minimax": Minimax,
-        "rankprune": RankPrune,
         "iterativedeepening": IterativeDeepening
     }
 

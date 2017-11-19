@@ -503,6 +503,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
             # Save Weights
             weights = g.nn.get_weight_values()
+            target_weights = {'all_weights': t.target_weights}
 
             # Save graph training variables
             train_vars = g.nn.sess.run(g.nn.get_training_vars())
@@ -531,6 +532,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
 
             # Get new weights
             new_weights = g.nn.get_weight_values()
+            new_target_weights = {'all_weights': t.target_weights}
 
             # Save new training variables
             new_train_vars = g.nn.sess.run(g.nn.get_training_vars())
@@ -563,6 +565,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
         DictComp = namedtuple('DictComp', 'description dicts error_msg')
         comparisons = [
             DictComp('Compare load/resume weight values', [weights, new_weights], "Weight did not match.\n"),
+            DictComp('Compare load/resume target weight values', [target_weights, new_target_weights],
+                     "Target Weight did not match.\n"),
             DictComp('Compare final weight values', [final_w_lr, final_w],
                      "Load and resume did not yield the same weights as normal training.\n"),
             DictComp('Compare load/resume training variables', [train_vars, new_train_vars],
@@ -787,7 +791,7 @@ def run_train_tests():
     }
 
     success = True
-    input_types = ['movemap', 'bitmap'] #, 'giraffe']
+    input_types = ['movemap']  # , bitmap'] #, 'giraffe']
     print "\nRunning Train Tests...\n"
 
     print "--- Stockfish tests ---"

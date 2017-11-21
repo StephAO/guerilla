@@ -66,10 +66,8 @@ class UCI:
 
         cmd = commands[0]
         modifiers = commands[1:]
-
         if cmd == 'uci':
             output = 'id name %s\nid author %s\n' % (NAME, AUTHOR)
-
             if OPTIONS:
                 for option in OPTIONS:
                     output += option + '\n'
@@ -146,7 +144,8 @@ def main():
         uci = UCI(g)
         # Get commands
         while True:
-            quit = uci.process_command(g, raw_input().split(' '))
+            line = sys.stdin.readline().strip().split(' ')
+            quit = uci.process_command(g, line)
             if quit:
                 break
 

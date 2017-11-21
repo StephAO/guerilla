@@ -98,6 +98,9 @@ class NeuralNet:
 
         self.conv_layer_size = 64 # 90
 
+        # Training place holder
+        self.is_training = tf.placeholder(tf.bool)
+
         # input placeholders
         self.true_value = tf.placeholder(tf.float32, shape=[None])
         self.input_data_placeholders = []
@@ -214,7 +217,7 @@ class NeuralNet:
     ###################### 
     # (see https://github.com/okraus/DeepLoc/blob/master/nn_layers.py) on how to extend them
     def fc_layer(self, input_tensor, input_dim, output_dim, layer_name,
-                 activation_fn=tf.nn.relu, is_training=True, batch_norm=False,
+                 activation_fn=tf.nn.relu, batch_norm=False,
                  batch_norm_decay=None):
         """
         Reusable code for making a simple neural net layer.
@@ -228,8 +231,7 @@ class NeuralNet:
             biases = self.bias_variable(layer_name + "_biases", [output_dim])
             output = tf.matmul(input_tensor, weights) + biases
             if batch_norm:
-                    output = self.batch_norm_fc(output, is_training=is_training,
-                                           bn_decay=batch_norm_decay,
+                    output = self.batch_norm_fc(output, bn_decay=batch_norm_decay,
                                            scope=layer_name+'_batch_norm')
             if activation_fn is not None:
                     output = activation_fn(output, name='activation')
@@ -239,7 +241,7 @@ class NeuralNet:
     def conv2d(self, input_tensor, num_in_feat_maps, num_out_feat_maps, kernel_size,
                layer_name, stride=[1, 1], padding='SAME', use_xavier=False,
                stddev=1e-3, activation_fn=tf.nn.relu, batch_norm=False,
-               batch_norm_decay=None, is_training=None):
+               batch_norm_decay=None):
         """
         2D convolution with non-linear operation.
         Args:
@@ -255,7 +257,6 @@ class NeuralNet:
             activation_fn: function
             batch_norm: bool, whether to use batch norm
             batch_norm_decay: float or float tensor variable in [0,1]
-            is_training: bool Tensor variable
         Returns:
             Variable tensor
         """
@@ -271,8 +272,7 @@ class NeuralNet:
             output = tf.nn.bias_add(output, biases)
 
             if batch_norm:
-                output = self.batch_norm_conv2d(output, is_training,
-                                            bn_decay=batch_norm_decay, scope='bn')
+                output = self.batch_norm_conv2d(output, bn_decay=batch_norm_decay, scope='bn')
             if activation_fn is not None:
                 output = activation_fn(output)
 
@@ -301,13 +301,12 @@ class NeuralNet:
             return output
 
 
-    def batch_norm_template(self, inputs, is_training, scope, moments_dims, bn_decay):
+    def batch_norm_template(self, inputs, scope, moments_dims, bn_decay):
         """ 
         Batch normalization on convolutional maps and beyond...
         Ref.: http://stackoverflow.com/questions/33949786/how-could-i-use-batch-normalization-in-tensorflow
         Args:
             inputs:        Tensor, k-D input ... x C could be BC or BHWC or BDHWC
-            is_training:   boolean tf.Varialbe, true indicates training phase
             scope:         string, variable scope
             moments_dims:  a list of ints, indicating dimensions for moments calculation
             bn_decay:      float or float tensor variable, controling moving average weight
@@ -328,7 +327,7 @@ class NeuralNet:
             decay = bn_decay if bn_decay is not None else 0.9
             ema = tf.train.ExponentialMovingAverage(decay=decay)
             # Operator that maintains moving averages of variables.
-            ema_apply_op = tf.cond(is_training,
+            ema_apply_op = tf.cond(self.is_training,
                                    lambda: ema.apply([batch_mean, batch_var]),
                                    lambda: tf.no_op())
 
@@ -338,7 +337,7 @@ class NeuralNet:
                     return tf.identity(batch_mean), tf.identity(batch_var)
 
             # ema.average returns the Variable holding the average of var.
-            mean, var = tf.cond(is_training,
+            mean, var = tf.cond(self.is_training,
                                 mean_var_with_update,
                                 lambda: (
                                 ema.average(batch_mean), ema.average(batch_var)))
@@ -346,31 +345,29 @@ class NeuralNet:
         return normed
 
 
-    def batch_norm_fc(self, inputs, is_training, bn_decay, scope):
+    def batch_norm_fc(self, inputs, bn_decay, scope):
         """ 
         Batch normalization on FC data.
         Args:
             inputs:      Tensor, 2D BxC input
-            is_training: boolean tf.Varialbe, true indicates training phase
             bn_decay:    float or float tensor variable, controling moving average weight
             scope:       string, variable scope
         Return:
             normed:      batch-normalized maps
         """
-        return self.batch_norm_template(inputs, is_training, scope, [0, ], bn_decay)
+        return self.batch_norm_template(inputs, scope, [0, ], bn_decay)
 
-    def batch_norm_conv2d(self, inputs, is_training, bn_decay, scope):
+    def batch_norm_conv2d(self, inputs, bn_decay, scope):
         """ 
         Batch normalization on 2D convolutional maps.
         Args:
             inputs:      Tensor, 4D BHWC input maps
-            is_training: boolean tf.Varialbe, true indicates training phase
             bn_decay:    float or float tensor variable, controling moving average weight
             scope:       string, variable scope
         Return:
             normed:      batch-normalized maps
         """
-        return self.batch_norm_template(inputs, is_training, scope, [0, 1, 2], bn_decay)
+        return self.batch_norm_template(inputs, scope, [0, 1, 2], bn_decay)
 
     # END OF LAYERS
 
@@ -730,7 +727,7 @@ class NeuralNet:
         # calculate gradient
         return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen))
 
-    def board_to_feed(self, fen):
+    def board_to_feed(self, fen, is_training=False):
         """
         Converts the FEN of a SINGLE board to the required feed input for the neural net.
             Input:
@@ -749,6 +746,8 @@ class NeuralNet:
 
         for i in xrange(len(input_data)):
             feed_dict[self.input_data_placeholders[i]] = np.array([input_data[i]])
+
+        feed_dict[self.is_training] = is_training
 
         return feed_dict
 

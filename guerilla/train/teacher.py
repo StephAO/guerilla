@@ -710,6 +710,8 @@ class Teacher:
                 self.get_batch_feed_dict(input_data, true_values,
                                          _true_values, fens, board_num,
                                          game_indices)
+
+            _feed_dict[self.nn.is_training] = True
             # train batch
             self.nn.sess.run([self.global_step, train_step], feed_dict=_feed_dict)
 
@@ -745,6 +747,7 @@ class Teacher:
                 self.get_batch_feed_dict(input_data, true_values,
                                          _true_values, fens, board_num,
                                          range(len(fens)))
+            _feed_dict[self.nn.is_training] = False
             # Get batch loss
             error += self.nn.sess.run(self.loss_fn, feed_dict=_feed_dict) / num_batches
 
@@ -1283,13 +1286,13 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}, load_file='6811.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='6811.p') as g, \
             Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta', seed=123456)
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
+        t.set_bootstrap_params(num_bootstrap=10000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
         t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
 
@@ -1299,8 +1302,8 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=5.5 * 3600)
-        # print eval_sts(g)
+        t.run(['train_bootstrap'], training_time=5.5 * 3600)
+        print eval_sts(g)
 
 
 if __name__ == '__main__':

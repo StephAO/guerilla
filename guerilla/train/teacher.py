@@ -1236,8 +1236,11 @@ class Teacher:
 
         # Target network
         if self.use_target:
-            print "Using Target Network! Storing weights..."
-            self.target_weights = self.nn.get_all_weights()
+            if self.target_weights:
+                print "Target weights already set! Using those..."
+            else:
+                print "Using Target Network! Storing weights..."
+                self.target_weights = self.nn.get_all_weights()
 
         for i in xrange(start_idx, self.gp_num):
             # Check for variance on set of boards

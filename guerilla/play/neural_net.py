@@ -73,10 +73,6 @@ class NeuralNet:
         else:
             raise NotImplementedError("Neural Net input type %s is not implemented" % (self.hp['NN_INPUT_TYPE']))
 
-        # Dropout keep probability placeholder -> By default does not dropout when session is run
-        self.kp_default = tf.constant(1.0, dtype=tf.float32)
-        self.keep_prob = tf.placeholder_with_default(self.kp_default, self.kp_default.get_shape())
-
         # declare layer variables
         self.sess = None
 
@@ -89,6 +85,9 @@ class NeuralNet:
         self.bias_pl = []
         self.weight_pl = []
         self.all_placeholders = []
+
+        # Exponential moving averages for batch norm
+        self.emas = {}
 
         # declare output variable
         self.pred_value = None
@@ -138,6 +137,9 @@ class NeuralNet:
 
         # Blank training variables. Call 'init_training' to initialize them
         self.train_optimizer = None
+
+        # Exponential Moving Average (ema) saver
+        self.ema_saver = tf.train.Saver(var_list=self.emas)
 
     def init_graph(self):
         """
@@ -198,7 +200,7 @@ class NeuralNet:
         self.weight_pl.append(tf.placeholder(tf.float32, shape=shape))
         return weight
 
-    def bias_variable(self, name, shape):
+    def bias_variable(self, name, shape, value=None):
         """
         Create an initialized bias variable.
         Inputs:
@@ -206,7 +208,7 @@ class NeuralNet:
         Returns:
             Variable Tensor
         """
-        initializer = tf.constant_initializer(self.weight_stddev)
+        initializer = tf.constant_initializer(value or self.weight_stddev)
         bias = tf.get_variable(name, shape, initializer=initializer)
         self.all_biases.append(bias)
         self.bias_pl.append(tf.placeholder(tf.float32, shape=shape))
@@ -217,7 +219,7 @@ class NeuralNet:
     ###################### 
     # (see https://github.com/okraus/DeepLoc/blob/master/nn_layers.py) on how to extend them
     def fc_layer(self, input_tensor, input_dim, output_dim, layer_name,
-                 activation_fn=tf.nn.relu, batch_norm=False,
+                 activation_fn=tf.nn.relu, batch_norm=True, dropout=False,
                  batch_norm_decay=None):
         """
         Reusable code for making a simple neural net layer.
@@ -226,21 +228,23 @@ class NeuralNet:
         and adds a number of summary ops.
         """
         # Adding a name scope ensures logical grouping of the layers in the graph.
-        with tf.name_scope(layer_name):
-            weights = self.weight_variable(layer_name + "_weights", [input_dim, output_dim])
-            biases = self.bias_variable(layer_name + "_biases", [output_dim])
+        with tf.variable_scope(layer_name):
+            weights = self.weight_variable("weights", [input_dim, output_dim])
+            biases = self.bias_variable("biases", [output_dim])
             output = tf.matmul(input_tensor, weights) + biases
-            if batch_norm:
-                    output = self.batch_norm_fc(output, bn_decay=batch_norm_decay,
-                                           scope=layer_name+'_batch_norm')
             if activation_fn is not None:
-                    output = activation_fn(output, name='activation')
-            return output
+                output = activation_fn(output, name='activation')
+            if batch_norm:
+                # output = tf.contrib.layers.batch_norm(output, is_training=self.is_training, scale=True, decay=0.9)
+                output = self.batch_norm_fc(output, bn_decay=batch_norm_decay, scope='batch_norm')
+            if dropout:
+                output = tf.layers.dropout(output, rate=(1 - self.hp['KEEP_PROB']), training=self.is_training)
+        return output
 
 
     def conv2d(self, input_tensor, num_in_feat_maps, num_out_feat_maps, kernel_size,
                layer_name, stride=[1, 1], padding='SAME', use_xavier=False,
-               stddev=1e-3, activation_fn=tf.nn.relu, batch_norm=False,
+               stddev=1e-3, activation_fn=tf.nn.relu, batch_norm=True, dropout=False,
                batch_norm_decay=None):
         """
         2D convolution with non-linear operation.
@@ -263,20 +267,23 @@ class NeuralNet:
         with tf.variable_scope(layer_name) as sc:
             kernel_h, kernel_w = kernel_size
             kernel_shape = [kernel_h, kernel_w, num_in_feat_maps, num_out_feat_maps]
-            weights = self.weight_variable(layer_name + "_weights", shape=kernel_shape)
+            weights = self.weight_variable("weights", shape=kernel_shape)
             stride_h, stride_w = stride
             output = tf.nn.conv2d(input_tensor, weights,
                                    [1, stride_h, stride_w, 1],
                                    padding=padding)
-            biases = self.bias_variable(layer_name + "_biases", [num_out_feat_maps])
+            biases = self.bias_variable("biases", [num_out_feat_maps])
             output = tf.nn.bias_add(output, biases)
 
-            if batch_norm:
-                output = self.batch_norm_conv2d(output, bn_decay=batch_norm_decay, scope='bn')
             if activation_fn is not None:
                 output = activation_fn(output)
+            if batch_norm:
+                # output = tf.contrib.layers.batch_norm(output, scale=True, is_training=self.is_training, decay=0.9)
+                output = self.batch_norm_conv2d(output, bn_decay=batch_norm_decay, scope='batch_norm')
+            if dropout:
+                output = tf.layers.dropout(output, rate=(1 - self.hp['KEEP_PROB']), training=self.is_training)
 
-            return output
+        return output
 
     def max_pool2d(self, input_tensor, kernel_size, layer_name, stride=[2, 2],
                    padding='VALID'):
@@ -298,7 +305,7 @@ class NeuralNet:
                                      ksize=[1, kernel_h, kernel_w, 1],
                                      strides=[1, stride_h, stride_w, 1],
                                      padding=padding)
-            return output
+        return output
 
 
     def batch_norm_template(self, inputs, scope, moments_dims, bn_decay):
@@ -318,17 +325,15 @@ class NeuralNet:
         # TODO Will these have to be considered by TD?
         with tf.variable_scope(scope) as sc:
             num_channels = inputs.get_shape()[-1].value
-            beta = tf.Variable(tf.constant(0.0, shape=[num_channels]),
-                               name='beta', trainable=True)
-            gamma = tf.Variable(tf.constant(1.0, shape=[num_channels]),
-                                name='gamma', trainable=True)
+            beta = self.bias_variable(name='beta', shape=[num_channels], value=0.0)
+            gamma = self.bias_variable(name='gamma', shape=[num_channels], value=1.0)
             batch_mean, batch_var = tf.nn.moments(inputs, moments_dims,
                                                   name='moments')
             decay = bn_decay if bn_decay is not None else 0.9
             ema = tf.train.ExponentialMovingAverage(decay=decay)
             # Operator that maintains moving averages of variables.
             ema_apply_op = tf.cond(self.is_training,
-                                   lambda: ema.apply([batch_mean, batch_var]),
+                                   lambda: ema.apply(var_list=[batch_mean, batch_var]),
                                    lambda: tf.no_op())
 
             # Update moving average and return current batch's avg and var.
@@ -336,12 +341,22 @@ class NeuralNet:
                 with tf.control_dependencies([ema_apply_op]):
                     return tf.identity(batch_mean), tf.identity(batch_var)
 
+            def mean_var_without_update():
+                ema_mean = ema.average(batch_mean)
+                ema_var = ema.average(batch_var)
+                self.emas[ema.average_name(batch_mean)] = ema_mean
+                self.emas[ema.average_name(batch_var)] = ema_var
+                # print self.sess.run([ema_mean, ema_var])
+                return (ema_mean, ema_var)
+
             # ema.average returns the Variable holding the average of var.
             mean, var = tf.cond(self.is_training,
                                 mean_var_with_update,
-                                lambda: (
-                                ema.average(batch_mean), ema.average(batch_var)))
-            normed = tf.nn.batch_normalization(inputs, mean, var, beta, gamma, 1e-3)
+                                mean_var_without_update)
+            normed = tf.nn.batch_normalization(inputs, mean, var, beta, gamma, 1e-9)
+
+            print ema
+
         return normed
 
 
@@ -489,7 +504,12 @@ class NeuralNet:
             self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=decay_rate)
         elif training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+
+        # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        # with tf.control_dependencies(update_ops):
+            # Ensures that we execute the update_ops before performing the train_step
         train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
+
         self.train_saver = tf.train.Saver(
             var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 
@@ -497,6 +517,10 @@ class NeuralNet:
         train_vars = self.get_training_vars()
         if train_vars is not None:
             self.sess.run(tf.variables_initializer(train_vars.values()))
+
+        # initialize emas variables if necessary
+        # if self.emas:
+        #     self.sess.run(tf.variables_initializer(self.emas))
 
         return train_step, self.global_step
 
@@ -558,6 +582,37 @@ class NeuralNet:
         if self.verbose:
             print "Loaded training vars from %s " % filename
 
+    def save_ema_vars(self, path):
+        """
+        Saves the training variables associated with the current training mode to a file in path.
+        Returns the file name.
+        Input:
+            path [String]:
+                Path specifying where the variables should be saved.
+        Ouput:
+            filename [String]:
+                Filename specifying where the training variables were saved.
+        """
+        for name, ema in self.emas.iteritems():
+            print self.sess.run(ema)
+        filename = self.ema_saver.save(self.sess, path)
+        if self.verbose:
+            print "Saved ema vars to %s" % filename
+        return filename
+
+    def load_ema_vars(self, filename):
+        """
+        Loads the training variable associated with the current training mode.
+        Input:
+            filename [String]:
+                Filename where training variables are stored.
+        """
+        self.ema_saver.restore(self.sess, filename)
+        for name, ema in self.emas.iteritems():
+            print self.sess.run(ema)
+        if self.verbose:
+            print "Loaded ema vars from %s " % filename
+
     def load_weight_values(self, _filename='weight_values.p'):
         """
             Sets all variables to values loaded from a file
@@ -565,7 +620,6 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to load weight values from
         """
-
         pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
         if self.verbose:
             print "Loading weights values from %s" % pickle_path
@@ -578,6 +632,9 @@ class NeuralNet:
 
         self.set_all_weights(weight_values)
 
+        ema_var_path = resource_filename('guerilla', 'data/emas/' + _filename)
+        self.load_ema_vars(ema_var_path)
+
     def save_weight_values(self, _filename='weight_values.p'):
         """
             Saves all variable values a pickle file
@@ -585,11 +642,13 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to save weight values to
         """
-
         pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
         pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
         if self.verbose:
             print "Weights saved to %s" % _filename
+
+        ema_var_path = resource_filename('guerilla', 'data/emas/' + _filename)
+        self.save_ema_vars(ema_var_path)
 
     def get_weight_values(self):
         """
@@ -627,7 +686,7 @@ class NeuralNet:
 
                 conv1 = self.conv2d(self.input_data_placeholders[i], self.size_per_tile, self.hp['NUM_FEAT'], [5, 5],
                                     'conv1_' + str(i))
-                conv2 = self.conv2d(conv1, self.hp['NUM_FEAT'], 2 * self.hp['NUM_FEAT'], [3, 3],
+                conv2 = self.conv2d(conv1, self.hp['NUM_FEAT'], 2 * self.hp['NUM_FEAT'], [4, 4],
                                     'conv2_' + str(i))
                 conv2 = self.conv2d(conv2, 2 * self.hp['NUM_FEAT'], 4 * self.hp['NUM_FEAT'], [3, 3],
                                     'conv3_' + str(i))
@@ -652,7 +711,7 @@ class NeuralNet:
         fc2 = self.fc_layer(fc1, self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN'] / 2 , "fc2")
 
         # final_output
-        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value", activation_fn=None)
+        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value", activation_fn=None, batch_norm=False)
 
     def get_weights(self, weight_vars):
         """
@@ -725,7 +784,7 @@ class NeuralNet:
             raise ValueError("Invalid gradient input, white must be next to play.")
 
         # calculate gradient
-        return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen))
+        return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen, is_training=True))
 
     def board_to_feed(self, fen, is_training=False):
         """

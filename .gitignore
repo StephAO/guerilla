@@ -2,6 +2,9 @@
 *.vars
 *.vars.meta
 checkpoint
+guerilla/data/loss/*
+guerilla/data/weights/*
+guerilla/data/train_checkpoint/*
 
 # Text files
 *.txt

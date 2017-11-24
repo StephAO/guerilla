@@ -137,9 +137,7 @@ class NeuralNet:
 
         # Blank training variables. Call 'init_training' to initialize them
         self.train_optimizer = None
-
-        # Exponential Moving Average (ema) saver
-        self.ema_saver = tf.train.Saver(var_list=self.emas)
+        self.saver = None
 
     def init_graph(self):
         """
@@ -151,8 +149,6 @@ class NeuralNet:
         # initialize or load variables
         if self.load_file:
             self.load_weight_values(self.load_file)
-            # Initialize un-initialized variables (non-weight variables)
-            self.sess.run(tf.variables_initializer(set(tf.global_variables()) - set(self.all_weights_biases)))
         else:
             if self.verbose:
                 print "Initializing variables from a normal distribution."
@@ -235,8 +231,8 @@ class NeuralNet:
             if activation_fn is not None:
                 output = activation_fn(output, name='activation')
             if batch_norm:
-                # output = tf.contrib.layers.batch_norm(output, is_training=self.is_training, scale=True, decay=0.9)
-                output = self.batch_norm_fc(output, bn_decay=batch_norm_decay, scope='batch_norm')
+                output = tf.contrib.layers.batch_norm(output, is_training=self.is_training, scale=True, decay=0.9)
+                # output = self.batch_norm_fc(output, bn_decay=batch_norm_decay, scope='batch_norm')
             if dropout:
                 output = tf.layers.dropout(output, rate=(1 - self.hp['KEEP_PROB']), training=self.is_training)
         return output
@@ -278,8 +274,8 @@ class NeuralNet:
             if activation_fn is not None:
                 output = activation_fn(output)
             if batch_norm:
-                # output = tf.contrib.layers.batch_norm(output, scale=True, is_training=self.is_training, decay=0.9)
-                output = self.batch_norm_conv2d(output, bn_decay=batch_norm_decay, scope='batch_norm')
+                output = tf.contrib.layers.batch_norm(output, scale=True, is_training=self.is_training, decay=0.9)
+                # output = self.batch_norm_conv2d(output, bn_decay=batch_norm_decay, scope='batch_norm')
             if dropout:
                 output = tf.layers.dropout(output, rate=(1 - self.hp['KEEP_PROB']), training=self.is_training)
 
@@ -308,6 +304,7 @@ class NeuralNet:
         return output
 
 
+    # TODO not currently used -> delete if never used
     def batch_norm_template(self, inputs, scope, moments_dims, bn_decay):
         """ 
         Batch normalization on convolutional maps and beyond...
@@ -331,6 +328,7 @@ class NeuralNet:
                                                   name='moments')
             decay = bn_decay if bn_decay is not None else 0.9
             ema = tf.train.ExponentialMovingAverage(decay=decay)
+
             # Operator that maintains moving averages of variables.
             ema_apply_op = tf.cond(self.is_training,
                                    lambda: ema.apply(var_list=[batch_mean, batch_var]),
@@ -341,21 +339,14 @@ class NeuralNet:
                 with tf.control_dependencies([ema_apply_op]):
                     return tf.identity(batch_mean), tf.identity(batch_var)
 
-            def mean_var_without_update():
-                ema_mean = ema.average(batch_mean)
-                ema_var = ema.average(batch_var)
-                self.emas[ema.average_name(batch_mean)] = ema_mean
-                self.emas[ema.average_name(batch_var)] = ema_var
-                # print self.sess.run([ema_mean, ema_var])
-                return (ema_mean, ema_var)
+            def mean_var_without_update(): 
+                return (ema.average(batch_mean), ema.average(batch_var))
 
             # ema.average returns the Variable holding the average of var.
             mean, var = tf.cond(self.is_training,
                                 mean_var_with_update,
                                 mean_var_without_update)
             normed = tf.nn.batch_normalization(inputs, mean, var, beta, gamma, 1e-9)
-
-            print ema
 
         return normed
 
@@ -505,10 +496,10 @@ class NeuralNet:
         elif training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
 
-        # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        # with tf.control_dependencies(update_ops):
-            # Ensures that we execute the update_ops before performing the train_step
-        train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+        #     Ensures that we execute the update_ops before performing the train_step
+            train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
 
         self.train_saver = tf.train.Saver(
             var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
@@ -582,37 +573,7 @@ class NeuralNet:
         if self.verbose:
             print "Loaded training vars from %s " % filename
 
-    def save_ema_vars(self, path):
-        """
-        Saves the training variables associated with the current training mode to a file in path.
-        Returns the file name.
-        Input:
-            path [String]:
-                Path specifying where the variables should be saved.
-        Ouput:
-            filename [String]:
-                Filename specifying where the training variables were saved.
-        """
-        for name, ema in self.emas.iteritems():
-            print self.sess.run(ema)
-        filename = self.ema_saver.save(self.sess, path)
-        if self.verbose:
-            print "Saved ema vars to %s" % filename
-        return filename
-
-    def load_ema_vars(self, filename):
-        """
-        Loads the training variable associated with the current training mode.
-        Input:
-            filename [String]:
-                Filename where training variables are stored.
-        """
-        self.ema_saver.restore(self.sess, filename)
-        for name, ema in self.emas.iteritems():
-            print self.sess.run(ema)
-        if self.verbose:
-            print "Loaded ema vars from %s " % filename
-
+    # TODO clean up commented code
     def load_weight_values(self, _filename='weight_values.p'):
         """
             Sets all variables to values loaded from a file
@@ -620,21 +581,29 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to load weight values from
         """
-        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
-        if self.verbose:
-            print "Loading weights values from %s" % pickle_path
-        values_dict = pickle.load(open(pickle_path, 'rb'))
+        # pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
+        # if self.verbose:
+        #     print "Loading weights values from %s" % pickle_path
+        # values_dict = pickle.load(open(pickle_path, 'rb'))
 
-        weight_values = []
+        # weight_values = []
 
-        weight_values.extend(values_dict['weights'])
-        weight_values.extend(values_dict['biases'])
+        # weight_values.extend(values_dict['weights'])
+        # weight_values.extend(values_dict['biases'])
 
-        self.set_all_weights(weight_values)
+        # self.set_all_weights(weight_values)
 
-        ema_var_path = resource_filename('guerilla', 'data/emas/' + _filename)
-        self.load_ema_vars(ema_var_path)
+        # ema_var_path = resource_filename('guerilla', 'data/emas/' + _filename)
+        # self.load_ema_vars(ema_var_path)
 
+        if self.saver is None:
+            self.saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+        # print most_recent_ckpt
+        load_path = resource_filename('guerilla', 'data/weights/' + _filename)
+        self.saver.restore(self.sess, load_path)
+        print "Model restored from file: %s" % load_path
+
+    # TODO clean up commented code
     def save_weight_values(self, _filename='weight_values.p'):
         """
             Saves all variable values a pickle file
@@ -642,13 +611,19 @@ class NeuralNet:
                 filename[String]:
                     Name of the file to save weight values to
         """
-        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
-        pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
-        if self.verbose:
-            print "Weights saved to %s" % _filename
+        if self.saver is None:
+            self.saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+        save_path = resource_filename('guerilla', 'data/weights/' + _filename)
+        save_path = self.saver.save(self.sess, save_path, global_step=self.global_step)
+        print "Model saved to file: %s" % save_path
 
-        ema_var_path = resource_filename('guerilla', 'data/emas/' + _filename)
-        self.save_ema_vars(ema_var_path)
+        # pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
+        # pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
+        # if self.verbose:
+        #     print "Weights saved to %s" % _filename
+
+        # ema_var_path = resource_filename('guerilla', 'data/emas/' + _filename)
+        # self.save_ema_vars(ema_var_path)
 
     def get_weight_values(self):
         """
@@ -784,7 +759,7 @@ class NeuralNet:
             raise ValueError("Invalid gradient input, white must be next to play.")
 
         # calculate gradient
-        return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen, is_training=True))
+        return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen))
 
     def board_to_feed(self, fen, is_training=False):
         """

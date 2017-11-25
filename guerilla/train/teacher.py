@@ -97,7 +97,7 @@ class Teacher:
         self.td_game_index = 0
         self.td_l2_reg = td_l2_reg
         # EMA updates for td
-        self.mean_var_fens = []
+        # self.mean_var_fens = []
 
         self.hp = {}
         if hp_load_file is None:
@@ -225,7 +225,7 @@ class Teacher:
                 # If not timed out
                 self.curr_action_idx += 1
 
-    def load_data(self, shuffle=True, rnd_state=None, load_checkmate=True, load_premate=True, mate_perc=0.5):
+    def load_data(self, shuffle=True, rnd_state=None, load_checkmate=True, load_premate=True, mate_perc=0.4):
         """
         Loads FENs and corresponding Stockfish values. Optional shuffle.
 
@@ -1041,11 +1041,11 @@ class Teacher:
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
 
-            self.mean_var_fens.append(leaf_board)
-            if len(self.mean_var_fens) > 100:
-                # TODO Make hyper param
-                self.evaluate_bootstrap(self.mean_var_fens[:100], [0]*100, update_emas=True)
-                self.mean_var_fens = self.mean_var_fens[100:]
+            # self.mean_var_fens.append(leaf_board)
+            # if len(self.mean_var_fens) > 100:
+            #     # TODO Make hyper param
+            #     self.evaluate_bootstrap(self.mean_var_fens[:100], [0]*100, update_emas=True)
+            #     self.mean_var_fens = self.mean_var_fens[100:]
 
             if no_leaf:
                 self.guerilla.search.max_depth = original_depth
@@ -1296,13 +1296,13 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}, load_file='w_train_bootstrap_1124-1307_movemap_2FC-2700') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
-        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta', seed=123456)
+        t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta') #, seed=123456)
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=10000, use_check_pre=True)
+        t.set_bootstrap_params(num_bootstrap=4400000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
         t.set_gp_params(num_gameplay=200, max_length=5, opponent=sf_player)
 
@@ -1311,23 +1311,11 @@ def main():
         t.sts_interval = 20
         t.sts_depth = 1
 
-        # g.search.max_depth = 1
-        # print eval_sts(g)
-        g.search.max_depth = 3
-
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=1 * 3600)
-        g.search.max_depth = 1
+        # t.run(['train_bootstrap'], training_time=1 * 3600)
+        t.run(['train_bootstrap'], training_time=6 * 3600)
+        g.search.max_depth = 2
         print eval_sts(g)
-        g.search.max_depth = 3
-        t.run(['train_gameplay'], training_time=1 * 3600)
-        # g.search.max_depth = 2
-        # print eval_sts(g)
-        # g.search.max_depth = 3
-        # t.run(['train_gameplay'], training_time=4 * 3600)
-        # g.search.max_depth = 2
-        # print eval_sts(g)
-        # t.nn.get_training_vars()
 
 
 if __name__ == '__main__':

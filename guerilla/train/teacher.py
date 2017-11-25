@@ -96,7 +96,8 @@ class Teacher:
         self.td_w_update = None
         self.td_game_index = 0
         self.td_l2_reg = td_l2_reg
-        # EMA updates for td
+        self.target_learn_rate = 1e-3	
+	# EMA updates for td
         # self.mean_var_fens = []
 
         self.hp = {}
@@ -126,7 +127,8 @@ class Teacher:
                 self.weight_shapes.append(weight.get_shape().as_list())
 
         if self.td_training_mode == 'adadelta' and self.hp['TD_LRN_RATE'] != 1.0:
-            warnings.warn("Training mode is adadelta and initial learning rate is %d != 1.0" % self.hp['TD_LRN_RATE'])
+            warnings.warn(
+                "TD Training mode is adadelta and initial learning rate is %f != 1.0" % self.hp['TD_LRN_RATE'])
 
 
         # Self-play parameters
@@ -471,8 +473,6 @@ class Teacher:
         # Load training variables
         if 'train_var_file' in state:
             self.nn.load_training_vars(state['train_var_file'])
-
-        self.nn.get_training_vars()
 
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
@@ -986,7 +986,8 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-    def td_leaf(self, game, restrict_td=True, only_own_boards=None, no_leaf=False, full_move=False, num_update=None, force_divergence=False):
+    def td_leaf(self, game, restrict_td=False, only_own_boards=None, leaf=False, full_move=False, num_update=None,
+                force_divergence=False, target_weights=None):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -1000,20 +1001,23 @@ class Teacher:
                 only_boards[char]:
                     'w' or 'b' or None. If 'w' or 'b', only update (use gradients of) positions
                     where the next move is white or black respectively. If None, update on all boards
-                no_leaf [Boolean]
-                    If True then uses standard TD instead of TD-Leaf. False by default.
-                    If True then restrict_td must be False since with depth 0 there is no predicted move.
+                leaf [Boolean]
+                    If False then uses standard TD instead of TD-Leaf. False by default.
+                    If False then restrict_td must be False since with depth 0 there is no predicted move.
                 full_move [Boolean]
                     If True then trains using full moves instead of half moves. False by default.
                 num_update [Int]
                     The maximum number of boards to update per game. By default updates on all boards.
+                target_weights [Array]
+                    Target weights. If none then no target network is used for scoring. If provided then these weights 
+                    are used for scoring.
         """
 
         num_boards = len(game)
         game_info = [{'value': 0, 'gradient': 0, 'move': None, 'leaf_board': None}
                      for _ in range(num_boards)]
 
-        if no_leaf and restrict_td:
+        if not leaf and restrict_td:
             raise ValueError("Invalid td_leaf input combination! If no_leaf is True then restrict_td must be False.")
 
         if only_own_boards is None and restrict_td:
@@ -1026,17 +1030,29 @@ class Teacher:
         # turn pruning for search off
         # self.guerilla.search.ab_prune = False
 
+        # set weights to target network
+        gameplay_weights = None
+        if target_weights is not None:
+            print "Applied target network for values..."
+            gameplay_weights = self.nn.get_all_weights()
+            self.nn.set_all_weights(target_weights)
+
+            # clear cache
+            self.guerilla.search.clear_cache()
+
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
         # print "Calculating TD-Leaf values for move ",
+        leaf_boards = []
         for i, root_board in enumerate(game):
 
             # turn off leaf evaluation if necessary
             original_depth = self.guerilla.search.max_depth
-            if no_leaf:
+            if not leaf:
                 self.guerilla.search.max_depth = 0
 
             # NOTE: Cache gets cleared when weights are updated
+            # TODO: properly handle move in 'restrict_td' when target network is being used
             value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
@@ -1047,7 +1063,7 @@ class Teacher:
             #     self.evaluate_bootstrap(self.mean_var_fens[:100], [0]*100, update_emas=True)
             #     self.mean_var_fens = self.mean_var_fens[100:]
 
-            if no_leaf:
+            if not leaf:
                 self.guerilla.search.max_depth = original_depth
 
             # Modify value so that it represents cp advantage of white
@@ -1056,6 +1072,18 @@ class Teacher:
             else:
                 game_info[i]['value'] = -value
 
+            # append leaf board to list
+            leaf_boards.append(leaf_board)
+
+        # Switch back to gameplay network to calculate gradient
+        if target_weights is not None:
+            print "Applying gameplay weights for gradients..."
+            self.nn.set_all_weights(gameplay_weights)
+
+            # clear cache
+            self.guerilla.search.clear_cache()
+
+        for i, leaf_board in enumerate(leaf_boards):
             # Get gradient of prediction on leaf board
             if dh.white_is_next(leaf_board):
                 game_info[i]['gradient'] = np.array(self.nn.get_all_weights_gradient(leaf_board))
@@ -1130,7 +1158,7 @@ class Teacher:
 
     # ---------- GAMEPLAY TRAINING METHODS
 
-    def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None):
+    def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None, target_learn_rate=None):
         """
         Set the parameteres for self-play.
             Inputs:
@@ -1142,6 +1170,7 @@ class Teacher:
                     The opponent to play when generating the gameplay for training. By default the opponent is the
                     version of Guerilla currently being trained (self.guerilla).
         """
+        # TODO: Document
 
         if num_gameplay:
             self.gp_num = num_gameplay
@@ -1149,8 +1178,11 @@ class Teacher:
             self.gp_length = max_length
         if opponent:
             self.opponent = opponent
+        if target_learn_rate:
+            self.target_learn_rate = target_learn_rate
 
-    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False,
+                       use_target=True):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1168,6 +1200,9 @@ class Teacher:
                 Has no effect if the end of the game is not reached.
             endgame [Boolean]
                 If true then only trains on endgames.
+            use_target [Boolean]
+                Whether or not to use a target network. The target network will slowly track the gameplay network, and 
+                will be used to score the boards. See p.4 of https://arxiv.org/pdf/1509.02971.pdf.
         """
 
         # Load fens and randomly sample
@@ -1188,17 +1223,14 @@ class Teacher:
         if self.verbose and endgame:
             print "Training only on endgames..."
 
-        # Fens to check variance on
-        num_var = 100
-        var_fens = random.sample(fens, num_var)
+        # Target network
+        target_weights = None
+        if use_target:
+            print "Using target network!"
+            target_weights = self.nn.get_all_weights()
 
         for i in xrange(start_idx, self.gp_num):
             # Check for variance on set of boards
-            if i % 25 == 0:
-                print "<Variance after %d games: %f>" % (i, self.get_variance(var_fens))
-                if i > 0:
-                    self.nn.save_weight_values(_filename='var_check_2_%d.p' % i)
-
             if self.verbose:
                 print "[%d/%d] Generating gameplay..." % (i + 1, self.gp_num),
 
@@ -1232,7 +1264,14 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, no_leaf=False, restrict_td=True)
+            self.td_leaf(game_fens, leaf=False, restrict_td=False, target_weights=target_weights)
+
+            # set weights to value network
+            if use_target:
+                # Update target_weights
+                new_weights = self.nn.get_all_weights()
+                target_weights = [target_weights[w] * (1 - self.target_learn_rate)
+                                  + new_weights[w] * (self.target_learn_rate) for w in range(len(target_weights))]
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):

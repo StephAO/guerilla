@@ -96,7 +96,12 @@ class Teacher:
         self.td_w_update = None
         self.td_game_index = 0
         self.td_l2_reg = td_l2_reg
-        self.target_learn_rate = 1e-3	
+        # Whether or not to use a target network in TD. The target network will slowly track the gameplay network, and
+        #   will be used to score the boards. See p.4 of https://arxiv.org/pdf/1509.02971.pdf.
+        self.use_target = True
+        self.target_weights = None
+        self.target_learn_rate = 1e-4
+	
 	# EMA updates for td
         # self.mean_var_fens = []
 
@@ -409,6 +414,10 @@ class Teacher:
             state['training']['grad_acc'] = self.td_grad_acc
             state['training']['param_acc'] = self.td_param_acc
 
+        # If using target network, save weights
+        if self.use_target:
+            state['target_weights'] = self.target_weights
+
         # Save STS evaluation parameters
         state['sts_on'] = self.sts_on
         state['sts_interval'] = self.sts_interval
@@ -473,6 +482,14 @@ class Teacher:
         # Load training variables
         if 'train_var_file' in state:
             self.nn.load_training_vars(state['train_var_file'])
+
+        # Load target weigths
+        if self.use_target:
+            if 'target_weights' in state:
+                self.target_weights = state['target_weights']
+            else:
+                raise ValueError("State trying to be loaded does not contain target weight value, "
+                                 "but self.use_target is True.")
 
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
@@ -856,6 +873,11 @@ class Teacher:
         if sts_scores is None and self.sts_on:
             sts_scores = []
 
+        # Target network
+        if self.use_target:
+            print "Using Target Network! Storing weights..."
+            self.target_weights = self.nn.get_all_weights()
+
         self.td_game_index = 0
         if self.td_training_mode in ['adagrad', 'adadelta']:
             self.reset_accumulators()
@@ -987,7 +1009,7 @@ class Teacher:
         self.nn.add_to_all_weights(weight_update)
 
     def td_leaf(self, game, restrict_td=False, only_own_boards=None, leaf=False, full_move=False, num_update=None,
-                force_divergence=False, target_weights=None):
+                force_divergence=False):
         """
         Trains neural net using TD-Leaf algorithm.
             Inputs:
@@ -1008,9 +1030,6 @@ class Teacher:
                     If True then trains using full moves instead of half moves. False by default.
                 num_update [Int]
                     The maximum number of boards to update per game. By default updates on all boards.
-                target_weights [Array]
-                    Target weights. If none then no target network is used for scoring. If provided then these weights 
-                    are used for scoring.
         """
 
         num_boards = len(game)
@@ -1032,10 +1051,10 @@ class Teacher:
 
         # set weights to target network
         gameplay_weights = None
-        if target_weights is not None:
-            print "Applied target network for values..."
+        if self.use_target:
+            print "Applying target weights for evaluation..."
             gameplay_weights = self.nn.get_all_weights()
-            self.nn.set_all_weights(target_weights)
+            self.nn.set_all_weights(self.target_weights)
 
             # clear cache
             self.guerilla.search.clear_cache()
@@ -1076,7 +1095,7 @@ class Teacher:
             leaf_boards.append(leaf_board)
 
         # Switch back to gameplay network to calculate gradient
-        if target_weights is not None:
+        if self.use_target:
             print "Applying gameplay weights for gradients..."
             self.nn.set_all_weights(gameplay_weights)
 
@@ -1156,6 +1175,14 @@ class Teacher:
             self.td_w_update = None
             self.guerilla.search.clear_cache()  # clear cache
 
+            # set weights to value network
+            if self.use_target:
+                # Update target_weights
+                new_weights = self.nn.get_all_weights()
+                self.target_weights = [self.target_weights[w] * (1 - self.target_learn_rate)
+                                       + new_weights[w] * (self.target_learn_rate) for w in
+                                       range(len(self.target_weights))]
+
     # ---------- GAMEPLAY TRAINING METHODS
 
     def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None, target_learn_rate=None):
@@ -1181,8 +1208,7 @@ class Teacher:
         if target_learn_rate:
             self.target_learn_rate = target_learn_rate
 
-    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False,
-                       use_target=True):
+    def train_gameplay(self, game_indices=None, start_idx=0, sts_scores=None, allow_draw=True, endgame=False):
         """
         Trains neural net using TD-Leaf algorithm based on partial games which the neural net plays against an opponent..
         Gameplay is performed from a random board position. The random board position is found by loading from the fens
@@ -1200,9 +1226,6 @@ class Teacher:
                 Has no effect if the end of the game is not reached.
             endgame [Boolean]
                 If true then only trains on endgames.
-            use_target [Boolean]
-                Whether or not to use a target network. The target network will slowly track the gameplay network, and 
-                will be used to score the boards. See p.4 of https://arxiv.org/pdf/1509.02971.pdf.
         """
 
         # Load fens and randomly sample
@@ -1224,10 +1247,12 @@ class Teacher:
             print "Training only on endgames..."
 
         # Target network
-        target_weights = None
-        if use_target:
-            print "Using target network!"
-            target_weights = self.nn.get_all_weights()
+        if self.use_target:
+            if self.target_weights:
+                print "Target weights already set! Using those..."
+            else:
+                print "Using Target Network! Storing weights..."
+                self.target_weights = self.nn.get_all_weights()
 
         for i in xrange(start_idx, self.gp_num):
             # Check for variance on set of boards
@@ -1264,14 +1289,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, leaf=False, restrict_td=False, target_weights=target_weights)
-
-            # set weights to value network
-            if use_target:
-                # Update target_weights
-                new_weights = self.nn.get_all_weights()
-                target_weights = [target_weights[w] * (1 - self.target_learn_rate)
-                                  + new_weights[w] * (self.target_learn_rate) for w in range(len(target_weights))]
+            self.td_leaf(game_fens, leaf=False, restrict_td=False)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):

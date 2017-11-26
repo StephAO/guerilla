@@ -244,3 +244,17 @@ class Stockfish(Player):
         self.engine.ucinewgame()
 
     pass
+
+
+def main():
+    # test
+    with Guerilla('Harambe', search_type='iterativedeepening', search_params={'time_limit': 5},
+                  load_file='6811.p') as g:
+        board = chess.Board()
+        print g.get_move(board)
+        print "HIT: {} MISS: {} DEPTH REACHED: {}".format(g.search.tt.cache_hit, g.search.tt.cache_miss,
+                                                          g.search.depth_reached)
+
+
+if __name__ == '__main__':
+    main()

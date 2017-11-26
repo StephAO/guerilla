@@ -3,9 +3,100 @@ import chess
 import math
 import time
 import numpy as np
+from collections import namedtuple
 
 from search_helpers import quickselect, material_balance
 import guerilla.data_handler as dh
+
+# TODO: Deal with node_type
+# Note:
+#   Moves are stored as UCI strings
+#   Leaf FEN is stripped
+Transposition = namedtuple("Transposition", "best_move score leaf_fen node_type")
+
+PV_NODE = 0
+CUT_NODE = 1
+ALL_NODE = 2
+
+
+class TranspositionTable:
+    def __init__(self, exact_depth=True):
+        self.table = {}  # Main transposition table {FEN: Transposition Entry}
+        self.exact_depth = exact_depth  # If we require an exact depth match
+
+        # TODO
+        self.cache_hits = 0
+        self.cache_miss = 0
+
+    def fetch(self, fen, requested_depth):
+        # Returns {Best Move, Score, Type, Depth}
+
+        # Check for entry in table
+        white_fen = dh.flip_to_white(fen)
+        # print "Fetching ORIGINAL {} WHITE {}".format(fen, white_fen)
+        entry = self._get_entry(white_fen)
+        if not entry or entry.deepest < requested_depth:
+            self.cache_miss += 1
+            return
+
+        # If not using exact depth, then get deepest depth
+        if not self.exact_depth:
+            requested_depth = entry.deepest
+
+        # Fetch depth result from table
+        if requested_depth in entry.score_dict:
+            self.cache_hits += 1
+            transpo = entry.score_dict[requested_depth]
+
+            # If black is next then flip move AND leaf fen
+            if dh.black_is_next(fen):
+                transpo = self._flip_transposition(transpo)
+
+            return transpo
+        else:
+            self.cache_miss += 1
+
+    def update(self, fen, search_depth, best_move, score, leaf_fen, node_type):
+
+        # Flip to white
+        transpo = Transposition(best_move, score, leaf_fen, node_type)
+
+        # Flip transposition if necessary
+        if dh.black_is_next(fen):
+            transpo = self._flip_transposition(transpo)
+
+        entry = self._get_entry(dh.flip_to_white(fen), create=True)
+        entry.add_depth(search_depth, transpo)
+
+    def exists(self, fen):
+        assert (dh.white_is_next(fen))
+        return dh.strip_fen(fen) in self.table
+
+    def _get_entry(self, fen, create=False):
+        assert (dh.white_is_next(fen))
+        key = dh.strip_fen(fen)
+        if key not in self.table and create:
+            self.table[key] = TranpositionEntry()
+        return self.table.get(key)
+
+    def _flip_transposition(self, entry):
+        best_move = dh.flip_move(entry.best_move) if entry.best_move is not None else entry.best_move
+        leaf_fen = dh.flip_board(entry.leaf_fen)
+        return Transposition(best_move, entry.score, leaf_fen, entry.node_type)
+
+
+class TranpositionEntry:
+    def __init__(self):
+        self.score_dict = {}  # {Depth: {Best Move (UCI), Score, Leaf FEN, Node Type,}}
+        self.deepest = None
+
+    def add_depth(self, depth, transposition):
+        # Update Score dict and deepest
+        if depth in self.score_dict:
+            raise ValueError("Should never try to update an existing depth!")
+        self.score_dict[depth] = transposition
+
+        self.deepest = max(depth, self.deepest)
 
 class Search:
     __metaclass__ = ABCMeta
@@ -24,11 +115,32 @@ class Search:
         self.num_evals = 0
         self.num_visits = []  # Index: depth, Value: Number of vists at that depth
         self.depth_reached = 0
-        self.cache_hits = 0
-        self.cache_miss = 0
-        # cache: Key is FEN of board (where white plays next), Value is Score
-        self.cache = {}
-        self.eval_time = 0  # Time spent evaluating boards
+        # Transposition table
+        self.tt = TranspositionTable(exact_depth=True)  # TODO: We can change this
+
+    def evaluate(self, fen, depth):
+        # Depth is used to update information
+
+        # Track some info
+        try:
+            self.num_visits[depth] += 1
+        except IndexError:
+            self.num_visits.append(1)
+
+        # check if new depth reached
+        if depth > self.depth_reached:
+            self.depth_reached = depth
+
+        self.num_evals += 1
+
+        # Evaluate
+        board = chess.Board(fen)
+        if board.is_checkmate():
+            return self.lose_value
+        elif board.can_claim_draw() or board.is_stalemate():
+            return self.draw_value
+        else:
+            return self.evaluation_function(dh.flip_to_white(fen))
 
     @abstractmethod
     def __str__(self):
@@ -51,64 +163,12 @@ class Search:
         """
         raise NotImplementedError("You should never see this")
 
-    # TODO: This should be part of transposition table
-    def conditional_eval(self, board, depth, **kwargs):
-        """ 
-        Check current state of board, and decided whether or not to evaluate
-        the given board.
-        Inputs:
-            board[chess.Board]:
-                current board
-            depth[int]:
-                current depth
-            kwargs[dict]:
-                necessary data for evaluation condition and selection
-        Outputs:
-            score [float]:
-                Score achieved by the board. P(win of next player to play)
-            best_move [chess.Move]:
-                Best move to play
-            best_leaf [String]
-                FEN of the board of the leaf node which yielded the highest value.
-        """
-        try:
-            self.num_visits[depth] += 1
-        except IndexError:
-            self.num_visits.append(1)
-
-        # check if new depth reached
-        if depth > self.depth_reached:
-            self.depth_reached = depth
-
-        # add for inputs
-        kwargs['depth'] = depth
-
-        fen = unflipped_fen = board.fen()
-        fen = dh.flip_to_white(fen)
-        # Check if draw
-        if board.is_checkmate():
-            return self.lose_value, None, unflipped_fen
-        elif board.can_claim_draw() or board.is_stalemate():
-            return self.draw_value, None, unflipped_fen
-        else:
-            # Check for self.cache hit
-            # Use cache
-            key = dh.strip_fen(fen)
-            self.num_evals += 1
-            if key not in self.cache:
-                self.cache_miss += 1
-                start = time.time()
-                self.cache[key] = self.evaluation_function(fen)
-                self.eval_time += time.time() - start
-            else:
-                self.cache_hits += 1
-            score = self.cache[key]
-
-            return score, None, unflipped_fen
 
     def clear_cache(self):
-        # Clears the cache
-        self.cache = {}
+        # Clears the transposition table
+        self.tt.table.clear()
+        self.tt.cache_hits = self.tt.cache_miss = 0
+        # TODO
 
 
 class IterativeDeepening(Search):
@@ -143,21 +203,16 @@ class IterativeDeepening(Search):
 
         self.time_limit = time_limit
         self.buff_time = time_limit * 0.02
-        self.depth_limit = 1
+        self.depth_limit = 1  # Depth limit for DFS
         self.max_depth = max_depth
+        self.order_moves = True  # Whether moves should be ordered
         self.h_prune = h_prune
         self.prune_perc = prune_perc
         self.ab_prune = ab_prune
         self.root = None  # holds root node
-        self.order_fn_fast = material_balance  # The move ordering function to use pre-Guerilla evaluation
-        self.order_moves = True
+        self.order_fn_fast = material_balance  # The move ordering function to use pre-Guerilla evaluation # TODO: Replace w/ lower depth scores
         self.is_partial_search = False  # Marks if the last DFS call was a partial search
         self.use_partial_search = use_partial_search
-
-        # Propagation functions, for normal minimax use 0
-        self.use_prop = True
-        self.up_prop_decay = 0  # decay value propagating upwards (0 for normal minimax -> pass up child value w/o decay)
-        self.down_prop_decay = 1.0  # decay value propagating downwards (1 for normal minimax -> only use child value, decay parent value entirely)
 
         # Holds the Killer Moves by depth. Each Entry is (set of moves, sorted array of (score, moves)).
         self.killer_table = [{'moves': set(), 'scores': list()}]
@@ -165,16 +220,6 @@ class IterativeDeepening(Search):
 
     def __str__(self):
         return "IterativeDeepening"
-
-    def _up_prop(self, child_value, curr_value):
-        if self.use_prop:
-            return curr_value * (self.up_prop_decay) + child_value * (1 - self.up_prop_decay)
-        return child_value
-
-    def _down_prop(self, parent_value, curr_value):
-        if self.use_prop:
-            return curr_value * (self.down_prop_decay) + parent_value * (1 - self.down_prop_decay)
-        return curr_value
 
     def DLS(self, node, parent=None, a=float("inf")):
         """
@@ -198,68 +243,76 @@ class IterativeDeepening(Search):
         """
         best_move = None
         best_score = -float("inf")
-        leaf_fen = None
-        board = chess.Board(node.fen)
+        leaf_fen = node.fen
+        node_type = PV_NODE
+
+        result = self.tt.fetch(node.fen, requested_depth=self.depth_limit - node.depth)
+        if result and result.node_type == PV_NODE:
+            # print "FOUND TRANSPOSITION! {}".format(node.fen)
+            # TODO: For now ignore if not type == PV
+            return result.score, result.best_move, result.leaf_fen
+
+        # Create child nodes if not already done
+        # TODO: This is here b/c of checkmates, maybe can avoid generating children and move back into else
+        if not node.children:
+            node.gen_children()
 
         self.time_left = (time.time() - self.start_time) <= self.time_limit - self.buff_time
-        if node.depth >= self.depth_limit or not node.expand or not self.time_left:
+        # Evaluate IF: depth limit reached, pruned, no time left OR no children
+        if node.depth >= self.depth_limit or not node.expand or not self.time_left or not node.children:
             if not self.time_left:
                 self.is_partial_search = True
-            return self._down_prop(node.value if parent is None else parent.value, node.value), None, node.fen
+            # Evaluate node
+            node.value = self.evaluate(node.fen, node.depth)
         else:
             # Check if a new killer table entry should be created
             if node.depth >= len(self.killer_table):
                 self.killer_table.append({'moves': set(), 'scores': list()})
 
-            moves = list(board.legal_moves)
+            killers = []  # Children that are "killer" moves
+            value_order = []  # Children w/ values
+            fast_order = []  # Children w/o values
+
+            # Accessing of children is done this way so that order is consistent
+            move_order = node.child_moves
             if self.order_moves:
-                killers = []
-                fast_order = []
-                node_order = []
-                for move in moves:
-
+                for move in move_order:
+                    child = node.children[move]
                     # Child has not previously been evaluated, use fast scoring & ordering
-
-                    # TODO: Transposition has an effect here
-
-                    if move not in node.children:
+                    if child.value:
                         # Get scores
-                        board.push(move)
-                        value = self.order_fn_fast(board.fen())
-                        fast = True
-                        board.pop()
+                        value = self.order_fn_fast(child.fen)
                     else:
                         # Child has previously been evaluated, use node evaluation for ordering
-                        value = node.children[move].value
-                        fast = False
+                        #   (This is possible because its iterative deepening)
+                        value = child.value
 
                     # Check which ordering it should go into
-                    move_inf = (move, value, fast)
+                    move_inf = (move, value)
                     if self.is_killer(move, node.depth):
                         killers.append(move_inf)
-                    elif move not in node.children:
-                        fast_order.append(move_inf)
+                    elif child.value:
+                        value_order.append(move_inf)
                     else:
-                        node_order.append(move_inf)
+                        fast_order.append(move_inf)
 
                 # Order in ascending order (want to check boards which are BAD for opponent first)
                 killers.sort(key=lambda x: x[1])
-                node_order.sort(key=lambda x: x[1])
+                value_order.sort(key=lambda x: x[1])
                 fast_order.sort(key=lambda x: x[1])
 
-                # Favor killer moves the most
-                # Always favor node ordering, mark whether node needs to be evaluated
-                moves = [(x[0], x[2]) for x in killers + node_order + fast_order]
+                # Favor killer moves the most, then nodes with value, then others
+                move_order = [x[0] for x in killers + value_order + fast_order]
 
-            for move, new_move in moves:
-                # Generate child if necessary
-                if new_move:
-                    node.gen_child(move, eval_fn=self.conditional_eval)
+            for move in move_order:
+                # Do DLS on children
+                # print "[{}] {}".format(node.depth, move)
+                score, _, lf = self.DLS(node.children[move], parent=node, a=-best_score)
 
-                # print move
-                # TODO: [TT] DLS should not becalled if already in transposition table -> Maybe replace DLS call w/ wrapper that handles Transposition
-                score, next_move, lf = self.DLS(node.children[move], parent=node, a=-best_score)
+
+
                 score = -score
+                # print "[{}] PARENT {} MOVE {} SCORE {}".format(node.depth, node.fen, move, score)
                 # Best child is the one one which has the lowest value
                 if best_move is None or score > best_score:
                     best_score = score
@@ -267,10 +320,17 @@ class IterativeDeepening(Search):
                     leaf_fen = lf
 
                 if self.ab_prune and best_score >= a:
+                    # print "PRUNED @ {} AFTER CHECKING {}".format(node.fen, move)
                     self.update_killer(move, best_score, node.depth)
+                    # TODO: HANDLE MOVE TYPE
+                    node.type = CUT_NODE
                     break
 
-            node.value = self._up_prop(child_value=best_score, curr_value=node.value)
+            node.value = best_score
+
+        # Update transposition table
+        # print "ADDING {}".format(node)
+        self.tt.update(node.fen, self.depth_limit - node.depth, best_move, node.value, leaf_fen, node_type)
 
         return node.value, best_move, leaf_fen
 
@@ -312,10 +372,10 @@ class IterativeDeepening(Search):
         Adds killer move to the table.
         """
         # Update moves
-        self.killer_table[depth]['moves'].add(str(killer_move))
+        self.killer_table[depth]['moves'].add(killer_move)
 
         # Update scores
-        self.killer_table[depth]['scores'].append((score, str(killer_move)))
+        self.killer_table[depth]['scores'].append((score, killer_move))
         self.killer_table[depth]['scores'].sort(key=lambda x: x[0])  # Sorting each time is OK since length is small.
 
     def is_killer(self, move, depth):
@@ -328,7 +388,7 @@ class IterativeDeepening(Search):
             output [Boolean]
                 True if it is a kill move, False if not.
         """
-        return str(move) in self.killer_table[depth]['moves']
+        return move in self.killer_table[depth]['moves']
 
     def prune(self, node):
         """
@@ -385,9 +445,7 @@ class IterativeDeepening(Search):
         self.start_time = time.time()
         self.time_left = True
 
-        score, _, fen = self.conditional_eval(board, depth=0)
-
-        self.root = SearchNode(fen, 0, score)  # Note: store unflipped fen
+        self.root = SearchNode(board.fen(), 0, self.evaluate(board.fen(), 0))
 
         self.depth_limit = 1
         score = best_move = leaf_board = None
@@ -410,7 +468,7 @@ class IterativeDeepening(Search):
 
 
 class SearchNode:
-    def __init__(self, fen, depth):
+    def __init__(self, fen, depth, value=None):
         """
         Generic node used for searching in 'rank_prune'.
         Input:
@@ -418,45 +476,35 @@ class SearchNode:
                 FEN of the board.
             depth [Int]
                 Depth at which the node occurs.
-            value [Float]
-                Value of the node, i.e. P(current player wins).
+            value [Float] (Optional)
+                Value of the node.
         Non-Input Class Attributes
             children [Dict of SearchNode's]
                 Children of the current SearchNode, key is Move which yields that SearchNode.
         """
         self.fen = fen
         self.depth = depth
-        self.value = None  # TODO: Value comes from transposition table
+        self.value = value
         self.children = {}
+        self.child_moves = []
         self.expand = True
 
-    def add_child(self, move, child):
+    def _add_child(self, move, child):
         assert (isinstance(child, SearchNode))
 
-        self.children[move] = child
+        # Convert move to uci
+        uci_move = move.uci()
 
-    def gen_child(self, move, eval_fn):
-        """
-        Generates a child for the search node based on the input move.
-        Generation involves adding and evaluating the child.
-        Throws an error if move is not legal or if input move has already been used for child generation.
-        Input:
-            move [chess.Move]
-                Move used for child generation. Must be a legal move which has not already been generated.
-            eval_fn [Function]
-                Function used to evaluate the child.
-        """
-        # TODO: Populate with transposition table results
+        self.children[uci_move] = child
+        self.child_moves.append(uci_move)
+
+    def gen_children(self):
+        # Create children
         board = chess.Board(self.fen)
-        if not board.is_legal(move):
-            raise ValueError("Invalid move for child generation! %s is not a legal move from %s.", str(move), self.fen)
-        if move in self.children:
-            raise ValueError("Invalid move for child generation! Child Node %s already exists", str(move))
-        board.push(move)
-        score, _, fen = eval_fn(board, depth=self.depth + 1)
-        self.add_child(move, SearchNode(fen, self.depth + 1, score))
-        board.pop()
-
+        for move in board.legal_moves:
+            board.push(move)
+            self._add_child(move, SearchNode(board.fen(), self.depth + 1))
+            board.pop()
 
     def get_child_nodes(self):
         """
@@ -465,7 +513,7 @@ class SearchNode:
         return self.children.values()
 
     def __str__(self):
-        return "Node{%s, %d, %f, %d children}" % (self.fen, self.depth, self.value, len(self.children))
+        return "Node[{}, {}, {}, {} children]".format(self.fen, self.depth, self.value, len(self.children))
 
 
 class Minimax(IterativeDeepening):
@@ -488,6 +536,9 @@ class Minimax(IterativeDeepening):
         super(Minimax, self).__init__(leaf_eval, time_limit=np.inf, max_depth=max_depth,
                                       prune_perc=0.0, ab_prune=ab_prune, use_partial_search=False)
 
+        # Set depth limit to max depth
+        self.depth_limit = max_depth
+
         # Turn off propagation
         self.use_prop = False
 
@@ -508,5 +559,5 @@ class Minimax(IterativeDeepening):
 
         # Run to depth limit
         self.start_time = 0
-        self.root = SearchNode(board.fen(), 0, None)  # Note: store unflipped fe
+        self.root = SearchNode(board.fen(), 0)  # Note: store unflipped fen
         return self.DLS(self.root)

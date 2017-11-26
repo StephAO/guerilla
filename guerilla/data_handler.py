@@ -159,6 +159,18 @@ def flip_board(fen):
     return ' '.join((new_board_fen, turn, new_castling, new_en_passant, half_clock, full_clock))
 
 
+# TODO: Documentation
+def flip_move(move):
+    """
+    Flips the input UCI move.
+    :return: 
+    """
+
+    def flip_num(n):
+        return str(9 - int(n))
+
+    return move[0] + flip_num(move[1]) + move[2] + flip_num(move[3])
+
 def fen_to_nn_input(fen, nn_type):
     """
         Return neural net input types base on hyper parameters
@@ -776,7 +788,6 @@ def flip_to_white(fen):
     if black_is_next(fen):
         return flip_board(fen)
     return fen
-
 
 def diff_dict_helper(list_of_dicts):
     """

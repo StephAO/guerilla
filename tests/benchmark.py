@@ -76,7 +76,7 @@ def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
 
     # Create Guerilla with Random weights:
 
-    for st in ['iterativedeepening', 'minimax', 'rankprune']:
+    for st in ['iterativedeepening', 'minimax']:
         sp = {'max_depth': max_depth} if st == 'minimax' else {'time_limit': time_limit}
         num_visits = None
         time_taken = num_evals = cache_hits = depth_reached = 0
@@ -93,7 +93,7 @@ def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
                 else:
                     num_visits = [num_visits[i] + g.search.num_visits[i] for i in range(len(g.search.num_visits))]
                 num_evals += g.search.num_evals
-                cache_hits += g.search.cache_hits
+                cache_hits += g.search.tt.cache_hits
                 depth_reached += g.search.depth_reached
 
         print "Search type: %s, Average of %d repetition(s).\nTime Taken: %f\nNumber nodes visited by depth: %s \n" \
@@ -129,8 +129,8 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        'Complimentmax Search': complimentmax_search_bench,
-        # 'Search Types': search_types_bench,
+        # 'Complimentmax Search': complimentmax_search_bench,
+        'Search Types': search_types_bench,
         # 'Data Processing': data_processing_bench,
         # 'Evaluation': nn_evaluation_bench
     }

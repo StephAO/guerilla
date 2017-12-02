@@ -110,7 +110,7 @@ def error_by_depth(weight_file, min_depth=1, max_depth=3, num_values=1000):
         for depth in range(min_depth, max_depth + 1):
             # Set depth
             g.search.max_depth = depth
-            g.search.clear_cache()
+            g.search.reset()
 
             predicted = get_predictions(g, fens, mode='search', verbose=True)  # Get predictions
 

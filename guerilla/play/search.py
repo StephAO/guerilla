@@ -8,6 +8,7 @@ from collections import namedtuple
 from search_helpers import quickselect, material_balance
 import guerilla.data_handler as dh
 
+# TODO: Documentation
 # TODO: Deal with node_type
 # Note:
 #   Moves are stored as UCI strings
@@ -84,6 +85,10 @@ class TranspositionTable:
         leaf_fen = dh.flip_board(entry.leaf_fen)
         return Transposition(best_move, entry.score, leaf_fen, entry.node_type)
 
+    def clear(self):
+        # Clears the transposition table
+        self.table.clear()
+        self.cache_hits = self.cache_miss = 0
 
 class TranpositionEntry:
     def __init__(self):
@@ -118,18 +123,8 @@ class Search:
         # Transposition table
         self.tt = TranspositionTable(exact_depth=True)  # TODO: We can change this
 
-    def evaluate(self, fen, depth):
+    def evaluate(self, fen):
         # Depth is used to update information
-
-        # Track some info
-        try:
-            self.num_visits[depth] += 1
-        except IndexError:
-            self.num_visits.append(1)
-
-        # check if new depth reached
-        if depth > self.depth_reached:
-            self.depth_reached = depth
 
         self.num_evals += 1
 
@@ -163,12 +158,14 @@ class Search:
         """
         raise NotImplementedError("You should never see this")
 
-
-    def clear_cache(self):
+    def reset(self):
         # Clears the transposition table
-        self.tt.table.clear()
-        self.tt.cache_hits = self.tt.cache_miss = 0
-        # TODO
+        self.tt.clear()
+
+        # Reset some logging variables
+        self.num_evals = 0
+        self.num_visits = []
+        self.depth_reached = 0
 
 
 class IterativeDeepening(Search):
@@ -221,6 +218,9 @@ class IterativeDeepening(Search):
     def __str__(self):
         return "IterativeDeepening"
 
+    def _uci_to_move(self, uci):
+        return chess.Move.from_uci(uci) if uci is not None else uci
+
     def DLS(self, node, parent=None, a=float("inf")):
         """
             Recursive depth limited search with alpha_beta pruning.
@@ -246,16 +246,25 @@ class IterativeDeepening(Search):
         leaf_fen = node.fen
         node_type = PV_NODE
 
+        # Create child nodes if not already done
+        if not node.children:
+            node.gen_children()
+
+            # We've never seen this node before -> Track some info
+            try:
+                self.num_visits[node.depth] += 1
+            except IndexError:
+                self.num_visits.append(1)
+
+            # check if new depth reached
+            if node.depth > self.depth_reached:
+                self.depth_reached = node.depth
+
         result = self.tt.fetch(node.fen, requested_depth=self.depth_limit - node.depth)
         if result and result.node_type == PV_NODE:
             # print "FOUND TRANSPOSITION! {}".format(node.fen)
             # TODO: For now ignore if not type == PV
-            return result.score, result.best_move, result.leaf_fen
-
-        # Create child nodes if not already done
-        # TODO: This is here b/c of checkmates, maybe can avoid generating children and move back into else
-        if not node.children:
-            node.gen_children()
+            return result.score, self._uci_to_move(result.best_move), result.leaf_fen
 
         self.time_left = (time.time() - self.start_time) <= self.time_limit - self.buff_time
         # Evaluate IF: depth limit reached, pruned, no time left OR no children
@@ -263,7 +272,7 @@ class IterativeDeepening(Search):
             if not self.time_left:
                 self.is_partial_search = True
             # Evaluate node
-            node.value = self.evaluate(node.fen, node.depth)
+            node.value = self.evaluate(node.fen)
         else:
             # Check if a new killer table entry should be created
             if node.depth >= len(self.killer_table):
@@ -332,7 +341,7 @@ class IterativeDeepening(Search):
         # print "ADDING {}".format(node)
         self.tt.update(node.fen, self.depth_limit - node.depth, best_move, node.value, leaf_fen, node_type)
 
-        return node.value, best_move, leaf_fen
+        return node.value, self._uci_to_move(best_move), leaf_fen
 
     def update_killer(self, killer_move, score, depth):
         """
@@ -409,7 +418,7 @@ class IterativeDeepening(Search):
         for child in children[k:]:
             child.expand = False
 
-    def run(self, board, time_limit=None, clear_cache=False):
+    def run(self, board, time_limit=None, reset=False):
         """
             For the duration of the time limit and depth limit:
                 1. Depth Limited Search
@@ -420,8 +429,8 @@ class IterativeDeepening(Search):
                     Chess board to search the best move for
                 time_limit[float]:
                     time limit for search. If None, defaults to time_limit set in init
-                clear_cache[bool]:
-                    clear evaluation cache. Needed for trainings
+                reset [bool]:
+                    Resets the search instance. Used for training.
             Outputs:
                 best_score [float]:
                     Score achieved by best move
@@ -433,8 +442,8 @@ class IterativeDeepening(Search):
         if time_limit is None:
             time_limit = self.time_limit
 
-        if clear_cache:
-            self.clear_cache()
+        if reset:
+            self.reset()
         self.num_evals = 0
         self.eval_time = 0
         self.num_visits = []
@@ -445,7 +454,7 @@ class IterativeDeepening(Search):
         self.start_time = time.time()
         self.time_left = True
 
-        self.root = SearchNode(board.fen(), 0, self.evaluate(board.fen(), 0))
+        self.root = SearchNode(board.fen(), 0)
 
         self.depth_limit = 1
         score = best_move = leaf_board = None
@@ -548,10 +557,10 @@ class Minimax(IterativeDeepening):
     def __str__(self):
         return "Minimax"
 
-    def run(self, board, time_limit=None, clear_cache=False):
+    def run(self, board, time_limit=None, reset=False):
         """ Reset some variables, call recursive function """
-        if clear_cache:
-            self.clear_cache()
+        if reset:
+            self.reset()
         self.num_evals = 0
         self.eval_time = 0
         self.num_visits = []

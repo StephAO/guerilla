@@ -6,7 +6,7 @@ import guerilla.data_handler as dh
 from guerilla.players import Guerilla
 
 
-def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
+def minimax_search_bench(max_depth=3, num_rep=3, verbose=True):
     """
     Times how long searches of different depths takes.
     Input:
@@ -52,7 +52,7 @@ def complimentmax_search_bench(max_depth=3, num_rep=3, verbose=True):
     return output
 
 
-def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
+def search_types_bench(max_depth=3, time_limit=100, num_rep=1, verbose=True):
     """
     Times how long searches of different depths takes.
     Input:
@@ -77,7 +77,7 @@ def search_types_bench(max_depth=3, time_limit=50, num_rep=1, verbose=True):
     # Create Guerilla with Random weights:
 
     for st in ['iterativedeepening', 'minimax']:
-        sp = {'max_depth': max_depth} if st == 'minimax' else {'time_limit': time_limit}
+        sp = {'max_depth': max_depth} if st == 'minimax' else {'max_depth': max_depth, 'time_limit': time_limit}
         num_visits = None
         time_taken = num_evals = cache_hits = depth_reached = 0
         for _ in range(num_rep):
@@ -129,7 +129,7 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        # 'Complimentmax Search': complimentmax_search_bench,
+        # 'Complimentmax Search': minimax_search_bench,
         'Search Types': search_types_bench,
         # 'Data Processing': data_processing_bench,
         # 'Evaluation': nn_evaluation_bench

@@ -6,7 +6,7 @@ import guerilla.data_handler as dh
 from guerilla.players import Guerilla
 
 
-def minimax_search_bench(max_depth=3, num_rep=3, verbose=True):
+def minimax_search_bench(max_depth=3, num_rep=1, verbose=True):
     """
     Times how long searches of different depths takes.
     Input:
@@ -33,8 +33,9 @@ def minimax_search_bench(max_depth=3, num_rep=3, verbose=True):
         print "Each timing is the average of %d runs" % num_rep
 
     for i in range(1, max_depth + 1):
-        # Create Guerilla with Random weights:
-        with Guerilla('curious_george', verbose=False, seed=rnd_seed, search_params={'max_depth': i}) as g:
+        # Create Guerilla with good weights
+        with Guerilla('curious_george', verbose=False, seed=rnd_seed, load_file='6811.p',
+                      search_params={'max_depth': i}) as g:
 
             # Time multiple repetitions
             avg_time = 0.0
@@ -76,12 +77,13 @@ def search_types_bench(max_depth=3, time_limit=100, num_rep=1, verbose=True):
 
     # Create Guerilla with Random weights:
 
-    for st in ['iterativedeepening', 'minimax']:
+    for st in ['minimax', 'iterativedeepening']:
         sp = {'max_depth': max_depth} if st == 'minimax' else {'max_depth': max_depth, 'time_limit': time_limit}
         num_visits = None
         time_taken = num_evals = cache_hits = depth_reached = 0
         for _ in range(num_rep):
-            with Guerilla('curious_george', search_type=st, seed=rnd_seed, verbose=False, search_params=sp) as g:
+            with Guerilla('curious_george', search_type=st, seed=rnd_seed, verbose=False, search_params=sp,
+                          load_file='6811.p') as g:
                 # Time multiple repetitions
                 start_time = time.time()
                 g.get_move(board)
@@ -129,7 +131,7 @@ def nn_evaluation_bench():
 
 def run_benchmark_tests():
     benchmarks = {
-        # 'Complimentmax Search': minimax_search_bench,
+        # 'Minimax Search': minimax_search_bench,
         'Search Types': search_types_bench,
         # 'Data Processing': data_processing_bench,
         # 'Evaluation': nn_evaluation_bench

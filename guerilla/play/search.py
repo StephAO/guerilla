@@ -24,9 +24,12 @@ class TranspositionTable:
         self.table = {}  # Main transposition table {FEN: Transposition Entry}
         self.exact_depth = exact_depth  # If we require an exact depth match
 
-        # TODO
         self.cache_hits = 0
         self.cache_miss = 0
+        self.num_transpositions = 0
+
+    def __str__(self):
+        return "[TT] {} entries | {} transpositions".format(len(self.table), self.num_transpositions)
 
     def fetch(self, fen, requested_depth):
         # Returns {Best Move, Value, Type, Depth}
@@ -66,6 +69,8 @@ class TranspositionTable:
             transpo = self._flip_transposition(transpo)
 
         entry = self._get_entry(dh.flip_to_white(fen), create=True)
+        if search_depth not in entry.value_dict:
+            self.num_transpositions += 1
         entry.add_depth(search_depth, transpo)
 
     def exists(self, fen):
@@ -120,8 +125,6 @@ class TranpositionEntry:
 
     def add_depth(self, depth, transposition):
         # Update value dict and deepest
-        if depth in self.value_dict:
-            raise ValueError("Should never try to update an existing depth!")
         self.value_dict[depth] = transposition
 
         self.deepest = max(depth, self.deepest)

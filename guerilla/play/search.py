@@ -32,6 +32,14 @@ class TranspositionTable:
         return "[TT] {} entries | {} transpositions".format(len(self.table), self.num_transpositions)
 
     def fetch(self, fen, requested_depth):
+        """
+        Fetches the transposition for the input FEN
+        :param fen: [String] Input FEN for which depth is queried.
+        :param requested_depth: [Int] Requested depth. Effect depends on self.exact_depth:
+            (True): Returns a transposition for which the input FEN was searched to EXACTLY requested_depth.
+            (False): Return a transposition for which the input FEN was search to AT LEAST requested_depth.
+        :return:
+        """
         # Returns {Best Move, Value, Type, Depth}
 
         # Check for entry in table
@@ -120,7 +128,7 @@ class TranspositionTable:
 
 class TranpositionEntry:
     def __init__(self):
-        self.value_dict = {}  # {Depth: {Best Move (UCI), Value, Leaf FEN, Node Type,}}
+        self.value_dict = {}  # {Depth: Transposition}
         self.deepest = None
 
     def add_depth(self, depth, transposition):
@@ -290,7 +298,7 @@ class IterativeDeepening(Search):
         result = self.tt.fetch(node.fen, requested_depth=self.depth_limit - node.depth)
         if result:
             if result.node_type == PV_NODE:
-                return result.value, result.best_move, result.leaf_fen
+                return result.value, self._uci_to_move(result.best_move), result.leaf_fen
             elif result.node_type == CUT_NODE:
                 # lower bound
                 alpha = max(alpha, result.value)
@@ -320,7 +328,7 @@ class IterativeDeepening(Search):
             node.value = self.evaluate(node.fen)
 
             # Update transposition table
-            self.tt.update(node.fen, self.depth_limit - node.depth, None, node.value, node.fen, LEAF_NODE)
+            self.tt.update(node.fen, 0, None, node.value, node.fen, LEAF_NODE)
 
             return node.value, None, node.fen
 
@@ -432,6 +440,8 @@ class IterativeDeepening(Search):
             moves = leaf_node_moves + pv_node_moves + cut_node_moves + killer_moves + all_node_moves + other_moves
         else:
             moves = pv_node_moves + cut_node_moves + leaf_node_moves + killer_moves + all_node_moves + other_moves
+
+        assert(len(moves) == len(node.child_moves))
 
         move_order = [x[0] for x in moves]
 

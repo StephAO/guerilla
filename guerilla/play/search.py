@@ -24,7 +24,7 @@ class TranspositionTable:
         self.table = {}  # Main transposition table {FEN: Transposition Entry}
         self.exact_depth = exact_depth  # If we require an exact depth match
 
-        self.cache_hits = 0
+        self.cache_hits = {} # Cache hits by depth
         self.cache_miss = 0
         self.num_transpositions = 0
 
@@ -36,7 +36,7 @@ class TranspositionTable:
         Fetches the transposition for the input FEN
         :param fen: [String] Input FEN for which depth is queried.
         :param requested_depth: [Int] Requested depth. Effect depends on self.exact_depth:
-            (True): Returns a transposition for which the input FEN was searched to EXACTLY requested_depth.
+            (True): Returns a transposi tion for which the input FEN was searched to EXACTLY requested_depth.
             (False): Return a transposition for which the input FEN was search to AT LEAST requested_depth.
         :return:
         """
@@ -56,7 +56,10 @@ class TranspositionTable:
 
         # Fetch depth result from table
         if requested_depth in entry.value_dict:
-            self.cache_hits += 1
+            if requested_depth not in self.cache_hits:
+                self.cache_hits[requested_depth]= 0
+            self.cache_hits[requested_depth] += 1
+
             transpo = entry.value_dict[requested_depth]
 
             # If black is next then flip move AND leaf fen
@@ -100,28 +103,31 @@ class TranspositionTable:
     def clear(self):
         # Clears the transposition table
         self.table.clear()
-        self.cache_hits = self.cache_miss = 0
+        self.cache_hits = {}
+        self.cache_miss = 0
 
-    def best_estimate(self, fen):
+    def get_eval_value(self, fen):
         """
-        Returns the current best estimate for the input FEN (deepest score).
+        Returns the evaluation value for the input FEN.
         :param fen: [String] FEN.
         :return: [Transposition] If FEN exists in cache else [None]
         """
 
-        # Get entry
+        transpo = None
+
+        # Check for entry entry
         white_fen = dh.flip_to_white(fen)
         entry = self._get_entry(white_fen)
 
-        if entry is None:
-            return entry
+        # Get deepest transposition with an exact score
+        if entry is not None and entry.value_dict[0]:
+            transpo = entry.value_dict[0]
 
-        # Get deepest transposition
-        transpo = entry.value_dict[entry.deepest]
+            assert transpo.node_type == LEAF_NODE # Shouly be true, since search depth == 0 implies a leaf node
 
-        # Flip if necessary
-        if dh.black_is_next(fen):
-            transpo = self._flip_transposition(transpo)
+            # Flip if necessary
+            if dh.black_is_next(fen):
+                transpo = self._flip_transposition(transpo)
 
         return transpo
 
@@ -129,7 +135,7 @@ class TranspositionTable:
 class TranpositionEntry:
     def __init__(self):
         self.value_dict = {}  # {Depth: Transposition}
-        self.deepest = None
+        self.deepest = None # Deepest transposition
 
     def add_depth(self, depth, transposition):
         # Update value dict and deepest
@@ -248,8 +254,9 @@ class IterativeDeepening(Search):
         self.use_partial_search = use_partial_search
 
         # Holds the Killer Moves by depth. Each Entry is (set of moves, sorted array of (value, moves)).
-        self.killer_table = [{'moves': set(), 'values': list()}]
+        self.killer_table = None
         self.num_killer = 2  # Number of killer moves store for each depth
+        self._reset_killer()
 
         # Move value for ordering when board not found in transposition table
         self.order_fn_fast = material_balance
@@ -376,70 +383,40 @@ class IterativeDeepening(Search):
     def get_ordered_moves(self, node):
         """
         Orders the child moves of the node.
-        Ordering is done as follows:
-            (*) Leaf nodes if at max depth
-            (2) PV Nodes
-            (3) Cut Nodes
-            (*) Leaf Nodes if NOT at max depth
-            (5) Killer moves
-            (6) All Nodes (note: "All Nodes" are specific type of node)
-            (7) Other nodes
+        Ordering is based on:
+            (1) Killer mvoes
+            (2) Moves for which we have a value
+            (3) Other moves
         :param node: [SearchNode] Node who's child moves we need to order.
         :return: [List of Strings] Ordered moves
         """
-        pv_node_moves = []
-        cut_node_moves = []
-        all_node_moves = []
-        leaf_node_moves = []
         killer_moves = []  # Children that are "killer" moves
+        value_moves = [] # Moves with values
         other_moves = []
 
         for move in node.child_moves:
-            child = node.children[move]
+            child_fen = node.children[move].fen
 
-            # If max depth reached and have exact score then use that
-            if self.depth_limit == child.depth:
-                result = self.tt.fetch(child.fen, 0)
-                if result:
-                    leaf_node_moves.append((move, result.value))
-                    continue
+            # Favor killer moves
+            if self.is_killer(move, node.depth):
+                killer_moves.append((move, self.order_fn_fast(child_fen)))
+                continue
 
-            # Otherwise use best estimate if possible
-            result = self.tt.best_estimate(child.fen)
+            # Check if we have an estimate for the move value
+            #   Assign it to a group accordingly
+            result = self.tt.get_eval_value(child_fen)
             if result:
-                move_inf = (move, result.value)
-                if result.node_type == PV_NODE:
-                    pv_node_moves.append(move_inf)
-                elif result.node_type == CUT_NODE:
-                    cut_node_moves.append(move_inf)
-                elif result.node_type == LEAF_NODE:
-                    leaf_node_moves.append(move_inf)
-                elif self.is_killer(move, node.depth):
-                    # Favor killer moves above all node moves
-                    killer_moves.append(move_inf)
-                else:
-                    all_node_moves.append(move_inf)
+                value_moves.append((move, result.value))
             else:
-                move_inf = (move, self.order_fn_fast(child.fen))
-                if self.is_killer(move, node.depth):
-                    killer_moves.append(move_inf)
-                else:
-                    other_moves.append(move_inf)
+                other_moves.append((move, self.order_fn_fast(child_fen)))
+
 
         # Order in ascending order (want to check boards which are BAD for opponent first
-        pv_node_moves.sort(key=lambda x: x[1])
-        cut_node_moves.sort(key=lambda x: x[1])
-        all_node_moves.sort(key=lambda x: x[1])
-        leaf_node_moves.sort(key=lambda x: x[1])
         killer_moves.sort(key=lambda x: x[1])
+        value_moves.sort(key=lambda x: x[1])
         other_moves.sort(key=lambda x: x[1])
 
-        # If child has met depth, then favor leaf nodes the most
-        #   Otherwise they are favored right above killer moves
-        if self.depth_limit == (node.depth + 1):
-            moves = leaf_node_moves + pv_node_moves + cut_node_moves + killer_moves + all_node_moves + other_moves
-        else:
-            moves = pv_node_moves + cut_node_moves + leaf_node_moves + killer_moves + all_node_moves + other_moves
+        moves = killer_moves + value_moves + other_moves
 
         assert(len(moves) == len(node.child_moves))
 
@@ -503,6 +480,14 @@ class IterativeDeepening(Search):
         """
         return move in self.killer_table[depth]['moves']
 
+    def _reset_killer(self):
+        """
+        Resets the killer moves table.
+        :return:
+        """
+        self.killer_table = [{'moves': set(), 'values': list()}]
+
+
     def prune(self, node):
         """
             Recursive pruning of nodes
@@ -551,6 +536,7 @@ class IterativeDeepening(Search):
         self.num_evals = 0
         self.eval_time = 0
         self.num_visits = []
+        self._reset_killer()
 
         # Start timing
         if time_limit is not None:

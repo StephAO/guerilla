@@ -106,42 +106,47 @@ class TranspositionTable:
         self.cache_hits = {}
         self.cache_miss = 0
 
-    def get_eval_value(self, fen):
+    def get_value(self, fen):
         """
-        Returns the evaluation value for the input FEN.
+        Returns the value for the input FEN, and the depth where that value comes from.
         :param fen: [String] FEN.
-        :return: [Transposition] If FEN exists in cache else [None]
+        :return:
+            [(Transposition, depth)] If FEN exists in cache else [(None, None)]
         """
 
-        transpo = None
+        result = (None, None)
 
         # Check for entry entry
         white_fen = dh.flip_to_white(fen)
         entry = self._get_entry(white_fen)
 
-        # Get deepest transposition with an exact score
-        if entry is not None and entry.value_dict[0]:
-            transpo = entry.value_dict[0]
-
-            assert transpo.node_type == LEAF_NODE # Shouly be true, since search depth == 0 implies a leaf node
+        # Get deepest transposition with an exact value
+        if entry is not None and entry.deepest_value is not None:
+            transpo = entry.value_dict[entry.deepest_value]
 
             # Flip if necessary
             if dh.black_is_next(fen):
                 transpo = self._flip_transposition(transpo)
 
-        return transpo
+            result = (transpo, entry.deepest_value)
+
+        return result
 
 
 class TranpositionEntry:
     def __init__(self):
         self.value_dict = {}  # {Depth: Transposition}
         self.deepest = None # Deepest transposition
+        self.deepest_value = None # Deepest transposition for which we have an exact value (Leaf or PV Node)
 
     def add_depth(self, depth, transposition):
         # Update value dict and deepest
         self.value_dict[depth] = transposition
-
         self.deepest = max(depth, self.deepest)
+
+        # Update deepest value
+        if transposition.node_type == PV_NODE or transposition.node_type == LEAF_NODE:
+            self.deepest_value = max(depth, self.deepest_value)
 
 
 class Search:
@@ -384,8 +389,8 @@ class IterativeDeepening(Search):
         """
         Orders the child moves of the node.
         Ordering is based on:
-            (1) Killer mvoes
-            (2) Moves for which we have a value
+            (1) Killer moves
+            (2) Moves for which we have a value, ordering by (-depth, value) in increasing order
             (3) Other moves
         :param node: [SearchNode] Node who's child moves we need to order.
         :return: [List of Strings] Ordered moves
@@ -404,14 +409,14 @@ class IterativeDeepening(Search):
 
             # Check if we have an estimate for the move value
             #   Assign it to a group accordingly
-            result = self.tt.get_eval_value(child_fen)
-            if result:
-                value_moves.append((move, result.value))
+            transpo, depth = self.tt.get_value(child_fen)
+            if transpo:
+                # Note: take negative of depth since want to look at moves scored deeper first
+                value_moves.append((move, (-depth, transpo.value)))
             else:
                 other_moves.append((move, self.order_fn_fast(child_fen)))
 
-
-        # Order in ascending order (want to check boards which are BAD for opponent first
+        # Order in ascending order (want to check boards which are BAD for opponent first)
         killer_moves.sort(key=lambda x: x[1])
         value_moves.sort(key=lambda x: x[1])
         other_moves.sort(key=lambda x: x[1])

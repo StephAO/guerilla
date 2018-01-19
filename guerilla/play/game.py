@@ -5,7 +5,7 @@ from guerilla.players import *
 import os
 import time
 from pkg_resources import resource_filename
-from guerilla.play.gui.chess_gui import ChessGUI
+# from guerilla.play.gui.chess_gui import ChessGUI
 
 
 class Game:
@@ -23,7 +23,7 @@ class Game:
     except NameError:
         pass
 
-    def __init__(self, players, num_games=1, use_gui=True):
+    def __init__(self, players, num_games=1, use_gui=False):
         """ 
             Note: p1 is white, p2 is black
             Input:
@@ -46,7 +46,7 @@ class Game:
 
         self.use_gui = use_gui or any(isinstance(p, Human) for p in players.itervalues())
         # Initialize gui
-        if use_gui:
+        if self.use_gui:
             self.gui = ChessGUI()
             for p in players.itervalues():
                 if isinstance(p, Human):
@@ -222,7 +222,7 @@ def main():
     players = {'w': None, 'b': None}
     if choose_players == 'd':
 
-        players['w'] = Human('You')
+        players['w'] = Stockfish('test', time_limit=1)
         players['b'] = Guerilla('Harambe', search_type='minimax', load_file='7034.p', search_params={'max_depth': 2})
 
     elif choose_players == 'c':

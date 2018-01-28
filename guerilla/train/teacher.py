@@ -1030,7 +1030,7 @@ class Teacher:
                 self.guerilla.search.max_depth = 0
 
             # NOTE: Cache gets cleared when weights are updated
-            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=False)
+            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), reset=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
 
@@ -1113,7 +1113,7 @@ class Teacher:
             self.td_update_weights()
             self.td_game_index = 0
             self.td_w_update = None
-            self.guerilla.search.clear_cache()  # clear cache
+            self.guerilla.search.reset()  # clear cache
 
     # ---------- GAMEPLAY TRAINING METHODS
 

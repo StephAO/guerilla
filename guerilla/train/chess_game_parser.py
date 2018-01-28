@@ -110,43 +110,77 @@ def get_fens(generate_time, num_random=0, store_prob=0.0):
     with open(resource_filename('guerilla', 'data/extracted_data/game_num.txt'), 'w') as num_file:
         num_file.write(str(game_num))
 
+def iter_pgncollection(pgn_col):
+    """
+    Iterator for games in the provided PGN collection. A PGN collection is a single file with multiple PGNs.
+    :param pgn_col: [File Object] File object for PGN collection. (i.e. already opened file)
+    :return: [chess.pgn.Game] yields chess games.
+    """
+    new_pgn_key = '[Event'
+    temp_file = 'temp.pgn'
+
+    # Iterate through lines of pgn collection
+    pgn_lines = []
+    for line in pgn_col:
+        # We've reached a new pgn!
+        if line.split(' ')[0] == new_pgn_key:
+            # If we just completed reading a pgn, write PGN to file, read PGN and yield game
+            if pgn_lines:
+                with open(temp_file, 'w') as f:
+                    f.writelines(pgn_lines)
+                with open(temp_file, 'r') as f:
+                    game = chess.pgn.read_game(f)
+                yield game
+                # Reset PGN buffer
+                pgn_lines = []
+
+        # Add to PGN buffer
+        pgn_lines.append(line)
+
+    # Remove tempfile
+    os.remove(temp_file)
 
 def get_checkmate_fens():
     """
-    Extracts checkmate and pre-mate FEN files from games. Saves them to separate files.
-    Will read from all games in folder /pgn_files/single_game_pgns.
+    Extracts checkmate and pre-mate FEN files from PGN collections.
+    Reads all PGN collections in pgn_files/kingbase/.
+    Can directly read KingBase files. Download from http://www.kingbase-chess.net/ then extract into kingbase directory.
     """
-    games_path = resource_filename('guerilla', 'data/pgn_files/single_game_pgns')
+    db_path = resource_filename('guerilla', 'data/pgn_files/kingbase')
 
-    mate_count = 0
-    with open(resource_filename('guerilla', 'data/extracted_data/checkmate_fens.csv'), 'w') as mate_file, \
-            open(resource_filename('guerilla', 'data/extracted_data/premate_fens.csv'), 'w') as pre_file:
+    game_count = mate_count = 0
+    pgn_collections = [join(db_path, f) for f in os.listdir(db_path) if join(db_path, f)]
+
+    with open(resource_filename('guerilla', 'data/extracted_data/checkmate_fens_temp.csv'), 'w') as mate_file, \
+         open(resource_filename('guerilla', 'data/extracted_data/premate_fens_temp.csv'), 'w') as pre_file:
+
         print "Opened checkmate and premate fens output file..."
-        for i, file in enumerate(os.listdir(games_path)):
-            if not os.path.isfile(join(games_path, file)):
-                continue
-            with open(games_path + '/' + file, 'r') as pgn:
-                game = chess.pgn.read_game(pgn)
-                result = game.headers['Result']
-                if result != '1/2-1/2':
-                    # Game was not a draw
-                    last_board = game.end().board()
-                    pre_board = game.end().parent.board()
 
-                    if last_board.is_checkmate():
-                        if result == '1-0':
-                            # White checkmated black
-                            mate_file.write(dh.flip_board(last_board.fen()) + '\n')
-                            pre_file.write(pre_board.fen() + '\n')
-                        else:
-                            # Black checkmated white
-                            mate_file.write(last_board.fen() + '\n')
-                            pre_file.write(dh.flip_board(pre_board.fen()) + '\n')
+        for f in pgn_collections:
+            print "Reading through collection {}...".format(f)
+            with open(f, 'r') as pgn_col:
+                for game in iter_pgncollection(pgn_col):
+                    result = game.headers['Result']
+                    if result != '1/2-1/2':
+                        # Game was not a draw
+                        last_board = game.end().board()
+                        pre_board = game.end().parent.board()
 
-                        mate_count += 1
+                        if last_board.is_checkmate():
+                            if result == '1-0':
+                                # White checkmated black
+                                mate_file.write(dh.flip_board(last_board.fen()) + '\n')
+                                pre_file.write(pre_board.fen() + '\n')
+                            else:
+                                # Black checkmated white
+                                mate_file.write(last_board.fen() + '\n')
+                                pre_file.write(dh.flip_board(pre_board.fen()) + '\n')
 
-            if i % 10000 == 0:
-                print "%d %d" % (i, mate_count)
+                            mate_count += 1
+
+                    game_count += 1
+                    if game_count % 1000 == 0:
+                        print "%d %d" % (game_count, mate_count)
 
 
 def load_fens(filename='fens.csv', num_values=None):

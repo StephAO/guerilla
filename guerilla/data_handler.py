@@ -6,7 +6,6 @@ LOSE_VALUE = -20000
 DRAW_VALUE = 0
 
 # Data handler constants + Variables
-
 piece_indices = {
     'q': 0,
     'r': 1,
@@ -37,6 +36,7 @@ GF_FULL_SIZE = 350
 MOVEMAP_TILE_SIZE = 30
 BITMAP_TILE_SIZE = NUM_PIECE_TYPE
 
+# create list of all possible piece movements
 crosswise_fn = [
     lambda x: np.array([0, -x - 1]),  # left
     lambda x: np.array([0, +x + 1]),  # right

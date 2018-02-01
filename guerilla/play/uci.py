@@ -141,7 +141,7 @@ class UCI:
 
 
 def main():
-    with Guerilla('Harambe', load_file='7034.p', search_type='iterativedeepening',
+    with Guerilla('Harambe', load_file='default.p', search_type='iterativedeepening',
                   search_params={'time_limit': 1}) as g:
         uci = UCI(g)
         # Get commands

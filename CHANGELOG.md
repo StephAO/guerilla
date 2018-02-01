@@ -23,5 +23,17 @@
   - Neural Net
   - Bitmap input type
 
+## Released
+### [1.0.0] - 2018-01-29 (added late, so condensed changes)
+### Added
+  - Transposition tables
+  - Improved fen generation
+  - UCI compatibility
+  - Gameplay training
+  - Proper Release
+### Removed
+  - Game GUI
+
+
 
 

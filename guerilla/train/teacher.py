@@ -1,10 +1,10 @@
 import math
+from operator import add
 import os
 import pickle
 import random
 import sys
 import time
-from operator import add
 import warnings
 
 import chess
@@ -15,9 +15,9 @@ from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
 from guerilla.play.game import Game
+from guerilla.players import *
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
-from guerilla.players import *
 from guerilla.train.sts import eval_sts, sts_strat_files
 
 
@@ -146,8 +146,9 @@ class Teacher:
                                                        and self.guerilla.nn.hp['USE_CONV'])
                                                   else '',
                                                   str(self.nn.hp['NUM_FC']))
-
-    # ---------- RUNNING AND RESUMING METHODS
+####################################
+### RUNNING AND RESUMING METHODS ###
+####################################
 
     def run(self, actions, training_time=None):
         """
@@ -301,6 +302,10 @@ class Teacher:
 
         return fens, true_values
 
+####################################
+### HELPERS ###
+####################################
+
     def _set_hyper_params_from_file(self, file):
         """
             Updates hyper parameters from a yaml file.
@@ -352,6 +357,10 @@ class Teacher:
                     hyperparameters to update with
         """
         self.hp.update(hyper_parameters)
+
+########################
+### SAVE/LOAD/RESUME ###
+########################
 
     def save_state(self, state, filename="state.p", is_checkpoint=False):
         """
@@ -548,7 +557,9 @@ class Teacher:
         """
         return self.checkpoint_interval is not None and time.time() - self.prev_checkpoint >= self.checkpoint_interval
 
-    # ---------- BOOTSTRAP TRAINING METHODS
+##################################
+### BOOTSTRAP TRAINING METHODS ###
+##################################
 
     def set_bootstrap_params(self, num_bootstrap=None, use_check_pre=True):
         self.num_bootstrap = num_bootstrap
@@ -773,7 +784,9 @@ class Teacher:
 
         return True
 
-    # ---------- TD-LEAF TRAINING METHODS
+################################
+### TD-LEAF TRAINING METHODS ###
+################################
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
                       end_length=None, full_length=None):
@@ -1115,7 +1128,9 @@ class Teacher:
             self.td_w_update = None
             self.guerilla.search.reset()  # clear cache
 
-    # ---------- GAMEPLAY TRAINING METHODS
+#################################
+### GAMEPLAY TRAINING METHODS ###
+#################################
 
     def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None):
         """
@@ -1283,7 +1298,7 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}, load_file='6811.p') as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
@@ -1299,7 +1314,7 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=5.5 * 3600)
+        t.run(['train_bootstrap'], training_time=0.001 * 3600)
         # print eval_sts(g)
 
 

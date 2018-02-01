@@ -1,5 +1,5 @@
 """
-Uses Stockfish to score board states in the range (0,1).
+Uses Stockfish to provide centipawn scores.
 """
 
 import subprocess
@@ -163,7 +163,8 @@ def get_stockfish_score(fen, seconds, threads=None, memory=None, num_attempt=1, 
 
 
 def sigmoid_array(values):
-    """ NOTE: Not in use since switched to linear output.
+    """ NO LONGER USED
+        NOTE: Not in use since switched to linear output.
         From: http://chesscomputer.tumblr.com/post/98632536555/using-the-stockfish-position-evaluation-score-to
         1000 cp lead almost guarantees a win (a sigmoid within that). From the looking at the graph to gather a
         few data points and using a sigmoid curve fitter an inaccurate function of 1/(1+e^(-0.00547x)) was decided
@@ -175,6 +176,7 @@ def sigmoid_array(values):
 
 def logit(value):
     """
+    NO LONGER USED
     Inverse of sigmoid array function. Converts from P(win) to centipawn advantage.
     """
     if value <= 0.0000000000015:

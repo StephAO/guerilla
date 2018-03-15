@@ -11,6 +11,10 @@ import guerilla.data_handler as dh
 class NeuralNet:
     training_modes = ['adagrad', 'adadelta', 'gradient_descent']
 
+#######################
+### INITIALIZATIONS ###
+#######################
+
     def __init__(self, load_file=None, hp_load_file=None, seed=None, verbose=True, hp=None):
         """
             Initializes neural net. Generates session, placeholders, variables,
@@ -153,6 +157,63 @@ class NeuralNet:
                 print "Initializing variables from a normal distribution."
             self.sess.run(tf.global_variables_initializer())
 
+    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, batch_size, decay_rate=None):
+        """
+        Initializes the training optimizer, loss function and training step.
+        Input:
+            training_mode [String]
+                Training mode to use. See NeuralNet.training_modes for options.
+            learning_rate [Float]
+                Learning rate to use in training.
+            reg_const [Float]
+                Regularization constant. To not use regularization simply input 0.
+            loss_fn [Tensor]
+                Loss function to use.
+            decay_rate [String]
+                Decay rate. Input is only necessary when training mode is 'adadelta'.
+        """
+
+        if training_mode not in NeuralNet.training_modes:
+            raise ValueError("Invalid training mode input!" \
+                             " Please refer to NeuralNet.training_modes " \
+                             "for valid inputs.")
+
+        # Regularization Term
+        regularization = tf.add_n([tf.nn.l2_loss(w) for w in self.all_weights]) * reg_const
+
+        base_learning_rate = learning_rate
+        # Exponentionally decaying learning rate
+        learning_rate = tf.train.exponential_decay(learning_rate,  # Base learning rate.
+                                                   self.global_step * batch_size,  # Current index into the dataset.
+                                                   self.hp["LEARNING_RATE_DECAY_STEP"], # Decay step.
+                                                   self.hp["LEARNING_RATE_DECAY_RATE"],  # Decay rate.
+                                                   staircase=True)
+        learning_rate = tf.maximum(learning_rate, 0.01 * base_learning_rate) # clip learning rate
+
+        # Set tensorflow training method for bootstrap training
+        if training_mode == 'adagrad':
+            self.train_optimizer = tf.train.AdagradOptimizer(learning_rate)
+        elif training_mode == 'adadelta':
+            if decay_rate is None:
+                raise ValueError("When the training mode is 'adadelta' the decay rate must be specified!")
+            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=decay_rate)
+        elif training_mode == 'gradient_descent':
+            self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
+        self.train_saver = tf.train.Saver(
+            var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
+
+        # initialize training variables if necessary
+        train_vars = self.get_training_vars()
+        if train_vars is not None:
+            self.sess.run(tf.variables_initializer(train_vars.values()))
+
+        return train_step, self.global_step
+
+###############
+### CONTROL ###
+###############
+
     def start_session(self):
         """ Starts tensorflow session """
 
@@ -177,6 +238,9 @@ class NeuralNet:
         if self.verbose:
             print "Default graph reset."
 
+######################
+### VARIABLE TYPES ###
+###################### 
     def weight_variable(self, name, shape, use_xavier=True, wd=None):
         """
         Create an initialized weight Variable with weight decay.
@@ -209,10 +273,10 @@ class NeuralNet:
         self.bias_pl.append(tf.placeholder(tf.float32, shape=shape))
         return bias
 
-    ######################
-    ### NN LAYER TYPES ###
-    ###################### 
-    # (see https://github.com/okraus/DeepLoc/blob/master/nn_layers.py) on how to extend them
+######################
+### NN LAYER TYPES ###
+###################### 
+# (see https://github.com/okraus/DeepLoc/blob/master/nn_layers.py) on how to extend them
     def fc_layer(self, input_tensor, input_dim, output_dim, layer_name,
                  activation_fn=tf.nn.relu, is_training=True, batch_norm=False,
                  batch_norm_decay=None):
@@ -372,52 +436,9 @@ class NeuralNet:
         """
         return self.batch_norm_template(inputs, is_training, scope, [0, 1, 2], bn_decay)
 
-    # END OF LAYERS
-
-    def _set_hyper_params_from_file(self, file):
-        """
-            Updates hyper parameters from a yaml file.
-            Will only affect hyper parameters that are provided. Unspecified
-            hyper parameters will not change.
-            WARNING: This can only be called at the start of init, since
-                     that is where the shape of the neural net is defined.
-
-            Inputs:
-                file[String]:
-                    filename to use. File must be in data/hyper_params/teacher/
-        """
-        relative_filepath = 'data/hyper_params/neural_net/' + file
-        filepath = resource_filename('guerilla', relative_filepath)
-        with open(filepath, 'r') as yaml_file:
-            self.hp.update(ruamel.yaml.safe_load(yaml_file))
-
-    def _set_hyper_params(self, hyper_parameters):
-        """
-            Updates hyper parameters from arguments.
-            Will only affect hyper parameters that are provided. Unspecified
-            hyper parameters will not change.
-            WARNING: This can only be called at the start of init, since
-                     that is where the shape of the neural net is defined.
-
-            Hyper parameters that are used:
-                "NUM_FEAT" - Number of times the output nodes of the convolution
-                             are repeated
-                "NN_INPUT_TYPE" - How the state of the chess board is presented
-                                  to the neural net. options are:
-                                  1. "bitmap"
-                                  2. "giraffe"
-                "MIN_NUM_NODES" - Minimum number of nodes for a given input type
-                "NUM_HIDDEN" - Number of hidden nodes used in FC layers
-                "NUM_FC" - Number of fully connected (FC) layers
-                           Excludes any convolutional layers
-                "USE_CONV" - Use convolution for bitmap representation
-
-            Inputs:
-                hyperparmeters[dict]:
-                    hyperparameters to update with
-        """
-        self.hp.update(hyper_parameters)
-
+#############
+### MODEL ###
+#############
     def mae_loss(self, batch_size):
         """
         Returns a MAE loss Tensor
@@ -449,170 +470,6 @@ class NeuralNet:
             tf.reshape(self.pred_value, shape=tf.shape(self.true_value)), self.true_value), 2))
 
         return tf.div(err, batch_size)
-
-    def init_training(self, training_mode, learning_rate, reg_const, loss_fn, batch_size, decay_rate=None):
-        """
-        Initializes the training optimizer, loss function and training step.
-        Input:
-            training_mode [String]
-                Training mode to use. See NeuralNet.training_modes for options.
-            learning_rate [Float]
-                Learning rate to use in training.
-            reg_const [Float]
-                Regularization constant. To not use regularization simply input 0.
-            loss_fn [Tensor]
-                Loss function to use.
-            decay_rate [String]
-                Decay rate. Input is only necessary when training mode is 'adadelta'.
-        """
-
-        if training_mode not in NeuralNet.training_modes:
-            raise ValueError("Invalid training mode input!" \
-                             " Please refer to NeuralNet.training_modes " \
-                             "for valid inputs.")
-
-        # Regularization Term
-        regularization = tf.add_n([tf.nn.l2_loss(w) for w in self.all_weights]) * reg_const
-
-        base_learning_rate = learning_rate
-        # Exponentionally decaying learning rate
-        learning_rate = tf.train.exponential_decay(learning_rate,  # Base learning rate.
-                                                   self.global_step * batch_size,  # Current index into the dataset.
-                                                   self.hp["LEARNING_RATE_DECAY_STEP"], # Decay step.
-                                                   self.hp["LEARNING_RATE_DECAY_RATE"],  # Decay rate.
-                                                   staircase=True)
-        learning_rate = tf.maximum(learning_rate, 0.01 * base_learning_rate) # clip learning rate
-
-        # Set tensorflow training method for bootstrap training
-        if training_mode == 'adagrad':
-            self.train_optimizer = tf.train.AdagradOptimizer(learning_rate)
-        elif training_mode == 'adadelta':
-            if decay_rate is None:
-                raise ValueError("When the training mode is 'adadelta' the decay rate must be specified!")
-            self.train_optimizer = tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=decay_rate)
-        elif training_mode == 'gradient_descent':
-            self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-        train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
-        self.train_saver = tf.train.Saver(
-            var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
-
-        # initialize training variables if necessary
-        train_vars = self.get_training_vars()
-        if train_vars is not None:
-            self.sess.run(tf.variables_initializer(train_vars.values()))
-
-        return train_step, self.global_step
-
-    def get_training_vars(self):
-        """
-        Returns the training variables associated with the current training mode.
-        Returns None if there are no associated variables.
-        Output:
-            var_dict [Dict] or [None]:
-                Dictionary of variables.
-        """
-        var_dict = dict()
-        train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
-        for name in slot_names:
-            for var in train_vars:
-                val = self.train_optimizer.get_slot(var, name)
-                if val:
-                    var_dict[val.name] = val
-
-        if var_dict == {}:
-            return None
-
-        return var_dict
-
-    def save_training_vars(self, path):
-        """
-        Saves the training variables associated with the current training mode to a file in path.
-        Returns the file name.
-        Input:
-            path [String]:
-                Path specifying where the variables should be saved.
-        Ouput:
-            filename [String]:
-                Filename specifying where the training variables were saved.
-        """
-        filename = None
-        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
-            return None
-        else:
-            filename = self.train_saver.save(self.sess, path)
-
-        if self.verbose:
-            print "Saved training vars to %s" % filename
-        return filename
-
-    def load_training_vars(self, filename):
-        """
-        Loads the training variable associated with the current training mode.
-        Input:
-            filename [String]:
-                Filename where training variables are stored.
-        """
-        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
-            return None
-        else:
-            self.train_saver.restore(self.sess, filename)
-
-        if self.verbose:
-            print "Loaded training vars from %s " % filename
-
-    def load_weight_values(self, _filename='weight_values.p'):
-        """
-            Sets all variables to values loaded from a file
-            Input:
-                filename[String]:
-                    Name of the file to load weight values from
-        """
-
-        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
-        if self.verbose:
-            print "Loading weights values from %s" % pickle_path
-        values_dict = pickle.load(open(pickle_path, 'rb'))
-
-        weight_values = []
-
-        weight_values.extend(values_dict['weights'])
-        weight_values.extend(values_dict['biases'])
-
-        self.set_all_weights(weight_values)
-
-    def save_weight_values(self, _filename='weight_values.p'):
-        """
-            Saves all variable values a pickle file
-            Input:
-                filename[String]:
-                    Name of the file to save weight values to
-        """
-
-        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
-        pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
-        if self.verbose:
-            print "Weights saved to %s" % _filename
-
-    def get_weight_values(self):
-        """
-            Returns values of weights as a dictionary
-        """
-        weight_values = dict()
-
-        # Get all weight values
-        weight_values['weights'] = [None] * len(self.all_weights)
-        result = self.get_weights(self.all_weights)
-        for i in xrange(len(result)):
-            weight_values['weights'][i] = result[i]
-
-        # Get all bias values
-        weight_values['biases'] = [None] * len(self.all_biases)
-        result = self.get_weights(self.all_biases)
-        for i in xrange(len(result)):
-            weight_values['biases'][i] = result[i]
-
-        return weight_values
 
     def model(self):
         """
@@ -656,6 +513,32 @@ class NeuralNet:
 
         # final_output
         self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value", activation_fn=None)
+
+    def evaluate(self, fen):
+        """
+        Evaluates chess board.
+             Input:
+                 fen [String]:
+                     FEN of chess board.
+             Output:
+                 Score between 0 and 1. Represents probability of White (current player) winning.
+        """
+        if dh.black_is_next(fen):
+            raise ValueError("Invalid evaluate input, white must be next to play.")
+
+        output = self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
+
+        if np.isnan(output):
+            raise RuntimeError("Neural network output NaN! Most likely due to bad training parameters.")
+        if np.isinf(output):
+            raise RuntimeError("Neural network output %s infinity! Most likely due to bad training parameters." %
+                               ('positive' if output > 0 else 'negative'))
+
+        return output
+
+#######################
+### GETTERS/SETTERS ###
+#######################
 
     def get_weights(self, weight_vars):
         """
@@ -730,6 +613,125 @@ class NeuralNet:
         # calculate gradient
         return self.sess.run(self.grad_all_op, feed_dict=self.board_to_feed(fen))
 
+    def get_weight_values(self):
+        """
+            Returns values of weights as a dictionary
+        """
+        weight_values = dict()
+
+        # Get all weight values
+        weight_values['weights'] = [None] * len(self.all_weights)
+        result = self.get_weights(self.all_weights)
+        for i in xrange(len(result)):
+            weight_values['weights'][i] = result[i]
+
+        # Get all bias values
+        weight_values['biases'] = [None] * len(self.all_biases)
+        result = self.get_weights(self.all_biases)
+        for i in xrange(len(result)):
+            weight_values['biases'][i] = result[i]
+
+        return weight_values
+
+    def get_training_vars(self):
+        """
+        Returns the training variables associated with the current training mode.
+        Returns None if there are no associated variables.
+        Output:
+            var_dict [Dict] or [None]:
+                Dictionary of variables.
+        """
+        var_dict = dict()
+        train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
+        for name in slot_names:
+            for var in train_vars:
+                val = self.train_optimizer.get_slot(var, name)
+                if val:
+                    var_dict[val.name] = val
+
+        if var_dict == {}:
+            return None
+
+        return var_dict
+
+#################
+### SAVE/LOAD ###
+#################
+
+    def save_training_vars(self, path):
+        """
+        Saves the training variables associated with the current training mode to a file in path.
+        Returns the file name.
+        Input:
+            path [String]:
+                Path specifying where the variables should be saved.
+        Ouput:
+            filename [String]:
+                Filename specifying where the training variables were saved.
+        """
+        filename = None
+        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
+            return None
+        else:
+            filename = self.train_saver.save(self.sess, path)
+
+        if self.verbose:
+            print "Saved training vars to %s" % filename
+        return filename
+
+    def load_training_vars(self, filename):
+        """
+        Loads the training variable associated with the current training mode.
+        Input:
+            filename [String]:
+                Filename where training variables are stored.
+        """
+        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
+            return None
+        else:
+            self.train_saver.restore(self.sess, filename)
+
+        if self.verbose:
+            print "Loaded training vars from %s " % filename
+
+    def load_weight_values(self, _filename='weight_values.p'):
+        """
+            Sets all variables to values loaded from a file
+            Input:
+                filename[String]:
+                    Name of the file to load weight values from
+        """
+
+        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
+        if self.verbose:
+            print "Loading weights values from %s" % pickle_path
+        values_dict = pickle.load(open(pickle_path, 'rb'))
+
+        weight_values = []
+
+        weight_values.extend(values_dict['weights'])
+        weight_values.extend(values_dict['biases'])
+
+        self.set_all_weights(weight_values)
+
+    def save_weight_values(self, _filename='weight_values.p'):
+        """
+            Saves all variable values a pickle file
+            Input:
+                filename[String]:
+                    Name of the file to save weight values to
+        """
+
+        pickle_path = resource_filename('guerilla', 'data/weights/' + _filename)
+        pickle.dump(self.get_weight_values(), open(pickle_path, 'wb'))
+        if self.verbose:
+            print "Weights saved to %s" % _filename
+
+###############
+### HELPERS ###
+###############
+
     def board_to_feed(self, fen):
         """
         Converts the FEN of a SINGLE board to the required feed input for the neural net.
@@ -752,27 +754,49 @@ class NeuralNet:
 
         return feed_dict
 
-    def evaluate(self, fen):
+    def _set_hyper_params_from_file(self, file):
         """
-        Evaluates chess board.
-             Input:
-                 fen [String]:
-                     FEN of chess board.
-             Output:
-                 Score between 0 and 1. Represents probability of White (current player) winning.
+            Updates hyper parameters from a yaml file.
+            Will only affect hyper parameters that are provided. Unspecified
+            hyper parameters will not change.
+            WARNING: This can only be called at the start of init, since
+                     that is where the shape of the neural net is defined.
+
+            Inputs:
+                file[String]:
+                    filename to use. File must be in data/hyper_params/teacher/
         """
-        if dh.black_is_next(fen):
-            raise ValueError("Invalid evaluate input, white must be next to play.")
+        relative_filepath = 'data/hyper_params/neural_net/' + file
+        filepath = resource_filename('guerilla', relative_filepath)
+        with open(filepath, 'r') as yaml_file:
+            self.hp.update(ruamel.yaml.safe_load(yaml_file))
 
-        output = self.pred_value.eval(feed_dict=self.board_to_feed(fen), session=self.sess)[0][0]
+    def _set_hyper_params(self, hyper_parameters):
+        """
+            Updates hyper parameters from arguments.
+            Will only affect hyper parameters that are provided. Unspecified
+            hyper parameters will not change.
+            WARNING: This can only be called at the start of init, since
+                     that is where the shape of the neural net is defined.
 
-        if np.isnan(output):
-            raise RuntimeError("Neural network output NaN! Most likely due to bad training parameters.")
-        if np.isinf(output):
-            raise RuntimeError("Neural network output %s infinity! Most likely due to bad training parameters." %
-                               ('positive' if output > 0 else 'negative'))
+            Hyper parameters that are used:
+                "NUM_FEAT" - Number of times the output nodes of the convolution
+                             are repeated
+                "NN_INPUT_TYPE" - How the state of the chess board is presented
+                                  to the neural net. options are:
+                                  1. "bitmap"
+                                  2. "giraffe"
+                "MIN_NUM_NODES" - Minimum number of nodes for a given input type
+                "NUM_HIDDEN" - Number of hidden nodes used in FC layers
+                "NUM_FC" - Number of fully connected (FC) layers
+                           Excludes any convolutional layers
+                "USE_CONV" - Use convolution for bitmap representation
 
-        return output
+            Inputs:
+                hyperparmeters[dict]:
+                    hyperparameters to update with
+        """
+        self.hp.update(hyper_parameters)
 
 
 if __name__ == 'main':

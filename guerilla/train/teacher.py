@@ -1,10 +1,10 @@
 import math
+from operator import add
 import os
 import pickle
 import random
 import sys
 import time
-from operator import add
 import warnings
 
 import chess
@@ -15,9 +15,9 @@ from pkg_resources import resource_filename
 
 import guerilla.data_handler as dh
 from guerilla.play.game import Game
+from guerilla.players import *
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
-from guerilla.players import *
 from guerilla.train.sts import eval_sts, sts_strat_files
 
 
@@ -152,8 +152,9 @@ class Teacher:
                                                        and self.guerilla.nn.hp['USE_CONV'])
                                                   else '',
                                                   str(self.nn.hp['NUM_FC']))
-
-    # ---------- RUNNING AND RESUMING METHODS
+####################################
+### RUNNING AND RESUMING METHODS ###
+####################################
 
     def run(self, actions, training_time=None):
         """
@@ -307,6 +308,10 @@ class Teacher:
 
         return fens, true_values
 
+####################################
+### HELPERS ###
+####################################
+
     def _set_hyper_params_from_file(self, file):
         """
             Updates hyper parameters from a yaml file.
@@ -358,6 +363,10 @@ class Teacher:
                     hyperparameters to update with
         """
         self.hp.update(hyper_parameters)
+
+########################
+### SAVE/LOAD/RESUME ###
+########################
 
     def save_state(self, state, filename="state.p", is_checkpoint=False):
         """
@@ -566,7 +575,9 @@ class Teacher:
         """
         return self.checkpoint_interval is not None and time.time() - self.prev_checkpoint >= self.checkpoint_interval
 
-    # ---------- BOOTSTRAP TRAINING METHODS
+##################################
+### BOOTSTRAP TRAINING METHODS ###
+##################################
 
     def set_bootstrap_params(self, num_bootstrap=None, use_check_pre=True):
         self.num_bootstrap = num_bootstrap
@@ -791,7 +802,9 @@ class Teacher:
 
         return True
 
-    # ---------- TD-LEAF TRAINING METHODS
+################################
+### TD-LEAF TRAINING METHODS ###
+################################
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
                       end_length=None, full_length=None):
@@ -1002,7 +1015,7 @@ class Teacher:
 
         self.nn.add_to_all_weights(weight_update)
 
-    def td_leaf(self, game, restrict_td=False, only_own_boards=None, leaf=False, full_move=False, num_update=None,
+    def td_leaf(self, game, restrict_td=True, only_own_boards=None, leaf=True, full_move=False, num_update=None,
                 force_divergence=False):
         """
         Trains neural net using TD-Leaf algorithm.
@@ -1066,7 +1079,7 @@ class Teacher:
 
             # NOTE: Cache gets cleared when weights are updated
             # TODO: properly handle move in 'restrict_td' when target network is being used
-            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), clear_cache=False)
+            value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), reset=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
 
@@ -1161,7 +1174,7 @@ class Teacher:
             self.td_update_weights()
             self.td_game_index = 0
             self.td_w_update = None
-            self.guerilla.search.clear_cache()  # clear cache
+            self.guerilla.search.reset()  # clear cache
 
             # set weights to value network
             if self.use_target:
@@ -1171,7 +1184,9 @@ class Teacher:
                                        + new_weights[w] * (self.target_learn_rate) for w in
                                        range(len(self.target_weights))]
 
-    # ---------- GAMEPLAY TRAINING METHODS
+#################################
+### GAMEPLAY TRAINING METHODS ###
+#################################
 
     def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None, target_learn_rate=None):
         """
@@ -1261,7 +1276,7 @@ class Teacher:
                 players[guerilla_player] = self.guerilla
                 opponent_player = 'w' if guerilla_player == 'b' else 'b'
                 players[opponent_player] = self.opponent
-                game = Game(players, use_gui=False)
+                game = Game(players, use_gui=False) #TODO: REmove
                 game.set_board(fen)
 
                 game_fens, _ = game.play(dh.strip_fen(fen, keep_idxs=1), moves_left=max_len, verbose=False)
@@ -1277,7 +1292,7 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, leaf=False, restrict_td=False)
+            self.td_leaf(game_fens, leaf=True, restrict_td=True)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
@@ -1341,15 +1356,15 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}, load_file='6811.p') as g, \
-            Stockfish('test', time_limit=0.5) as sf_player:
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}) as g, \
+            Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
         # g.search.max_depth = 1
         # print eval_sts(g) # [4414], 4378,4319,4381,4408
         # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=1e6, use_check_pre=True)
+        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=12, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1357,7 +1372,8 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_gameplay'], training_time=8 * 3600)
+        t.run(['train_bootstrap'], training_time=0.001 * 3600)
+        # print eval_sts(g)
 
 
 if __name__ == '__main__':

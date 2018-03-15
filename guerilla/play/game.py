@@ -1,11 +1,11 @@
-import sys
+import os
 import chess
 import chess.pgn
-from guerilla.players import *
-import os
+import sys
 import time
+
 from pkg_resources import resource_filename
-from guerilla.play.gui.chess_gui import ChessGUI
+from guerilla.players import *
 
 
 class Game:
@@ -15,21 +15,16 @@ class Game:
     }
 
     try:
-        player_types['sunfish'] = Sunfish
-    except NameError:
-        pass
-    try:
         player_types['stockfish'] = Stockfish
     except NameError:
         pass
 
-    def __init__(self, players, num_games=1, use_gui=True):
+    def __init__(self, players, num_games=1):
         """ 
             Note: p1 is white, p2 is black
             Input:
                 [player1, player2] [Class that derives Abstract Player Class]
         """
-
         assert all(isinstance(p, Player) for p in players.itervalues())
 
         # Initialize players
@@ -44,13 +39,6 @@ class Game:
         self.data['wins'] = {p.name: 0 for p in players.itervalues()}
         self.data['draws'] = 0
 
-        self.use_gui = use_gui or any(isinstance(p, Human) for p in players.itervalues())
-        # Initialize gui
-        if use_gui:
-            self.gui = ChessGUI()
-            for p in players.itervalues():
-                if isinstance(p, Human):
-                    p.gui = self.gui
 
     def swap_colours(self):
         """ Swap colours."""
@@ -66,10 +54,7 @@ class Game:
 
         # Start game
         while not self.board.is_game_over(claim_draw=True) and moves_left != 0:
-            if self.use_gui:
-                self.gui.draw(self.board)
-            elif verbose:
-                Game.pretty_print_board(self.board)
+            Game.pretty_print_board(self.board)
 
             # Get move
             st = time.time()
@@ -84,16 +69,10 @@ class Game:
                 continue
 
             while move not in self.board.legal_moves:
-                if self.use_gui:
-                    self.gui.print_msg("Error: Move is not legal, try again")
-                else:
-                    print "Error: Move is not legal"
+                print "Error: Move is not legal"
                 move = self.players[curr_player].get_move(self.board)
             self.board.push(move)
-            if self.use_gui:
-                self.gui.print_msg("%s played %s" % (self.players[curr_player].name, move))
-            elif verbose:
-                print "%s played %s" % (self.players[curr_player].name, move)
+            print "%s played %s" % (self.players[curr_player].name, move)
 
             if game_pgn is not None:
                 game_pgn.add_main_variation(move)
@@ -124,13 +103,6 @@ class Game:
                                                                          type(self.players['w']).__name__,
                                                                          self.players['b'].name,
                                                                          type(self.players['b']).__name__)
-                if self.use_gui:
-                    self.gui.print_msg("Game %d:" % (game + 1))
-                    self.gui.print_msg("%s [%s] (White)" % (self.players['w'].name,
-                                                            type(self.players['w']).__name__))
-                    self.gui.print_msg("VS:")
-                    self.gui.print_msg("%s [%s] (Black)" % (self.players['b'].name,
-                                                            type(self.players['b']).__name__))
                 # Reset board
                 self.board.reset()
 
@@ -157,15 +129,11 @@ class Game:
                 else:
                     winner = None
                     self.data['draws'] += 1
-                    if self.use_gui:
-                        self.gui.print_msg("Draw.")
-                        print "Draw."                        
+                    print "Draw."                        
 
                 if winner is not None:
                     self.data['wins'][winner.name] += 1
-                    if self.use_gui:
-                        self.gui.print_msg("%s wins." % winner.name)
-                        print "%s wins." % winner.name
+                    print "%s wins." % winner.name
 
                 for color, p in self.players.iteritems():
                     print "Player %s took %f seconds in total" % (p.name, time_taken[color])
@@ -179,11 +147,6 @@ class Game:
                         pgn.write(str(game_pgn))
                     except AttributeError as e:
                         print "Error writing pgn file: %s" % (e)
-
-                if self.use_gui:
-                    self.gui.end_of_game = True
-                    self.gui.draw(self.board)
-                    self.gui.wait_for_endgame_input()
 
                 self.swap_colours()
                 game += 1
@@ -202,19 +165,6 @@ class Game:
 
         return
 
-        # @staticmethod
-        # def get_gui_board_representation(fen):
-        #     board = [[]]
-        #     for i, char in enumerate(fen.split()[0]):
-        #         if char == '/':
-        #             board.append([])
-        #             i += 1
-        #         elif char.isdigit():
-        #             for j in xrange(int(char)):
-        #                 board[i].append('e')
-        #         else:
-        #             prefix = 'w' if char.isupper() else 'b'
-
 
 def main():
     num_inputs = len(sys.argv)
@@ -222,7 +172,7 @@ def main():
     players = {'w': None, 'b': None}
     if choose_players == 'd':
 
-        players['w'] = Human('You')
+        players['w'] = Stockfish('test', time_limit=1)
         players['b'] = Guerilla('Harambe', search_type='minimax', load_file='7034.p', search_params={'max_depth': 2})
 
     elif choose_players == 'c':

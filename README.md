@@ -2,59 +2,44 @@
 
 Guerilla is a deep learning chess engine developed by Miguel and Stephane Aroca-Ouellette. More details on the project can be found at [here](https://unarresteddev.wordpress.com/2017/02/23/guerilla-a-chess-engine-part-1/).
   
-The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructions below are for linux systems. If someone gets it running on a different operating system successfully, a pull request with the instructions would be appreciated.  
+The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructions below are for linux systems. If someone gets it running on a different operating system successfully, a pull request with the instructions would be appreciated. 
 
+## To Play
+### Install
+- Install Tensorflow 1.x.x (https://www.tensorflow.org/install/)
+- run `pip install --user Guerilla`
+### Play
+- Add Guerilla to your favorite UCI Compatible chess GUI (after the pip installation, the command for the GUI to run Guerilla is `Guerilla`). 
+- Currenlty only supports time limit and depth limit (depth 4 ~= 1 minutes per move).
+- Example using Chess Arena (http://www.playwitharena.com/):
+  - Run Chess Arena
+  - In the Menu Bar (top bar), select `Engines->Install New Engine...`
+  - Go to `~/.local/bin/` (or `\usr\local\bin\` if installed without the `--user` option) and select `Guerilla`
+  - A window asking UCI or Winboard should appear. Select UCI.
+  - In the Menu Bar (top bar), select `Levels->Adjust`.
+  - In the window, choose either `Fixed search depth` or `Time per move` and input desired value.
+  - In the Menu Bar (top bar), select `File->New`.
+
+
+## Improve Guerilla
 ## Dependencies
 Packages and programs required for things to work.
 
 ### Required Packages to Play
 - python-chess:
-  - `sudo pip install python-chess`
+  - `pip install --user python-chess`
 - tensorflow 1.0:
   - https://www.tensorflow.org/install/
 - numpy
   - `sudo apt-get install python-numpy`
-- pygame (for gui):
-  - `sudo apt-get build-dep python-pygame`
-    - If this does not work check the 2nd answer here: https://askubuntu.com/questions/312767/installing-pygame-with-pip
-  - `sudo apt-get install python-pygame`
-- ruamel.yaml:
-  - `sudo pip install ruamel.yaml`
-- futures:
-  - `sudo pip install futures`
+- ruamel.yaml <= 0.15:
+  - `pip install --user ruamel.yaml`
 
 ### Required Packages to Train
 - stockfish:
   - `sudo apt-get install stockfish`
 - psutil (used when calling stockfish):
-  - `sudo pip install psutil`
-
-### Required Packages for Testing
-- guppy:
-  - `sudo pip install guppy`
-
-### Optional other chess engines
-- stockfish:
-  - `sudo apt-get install stockfish` (if installed to train, no need to do this again)
-- sunfish:
-  - `cd ../guerilla/other_engines/`
-  - `git clone https://github.com/thomasahle/sunfish.git`
-  - `touch sunfish/__init__.py`
-
-## Usage
-### How to Play
-To get the current best version, please contact [us](#authors). We will provide you with the latest pickle file of the weights for neural net. Replace the default.p in /path/to/guerilla/guerilla/data/weights/ with the new file.
-
-1. Go to guerilla directory (outer guerilla directory)
-  - `cd /path/to/guerilla`
-2. Run game by running:
-  - `python -m guerilla.play.game`
-3. Select players:
-  - Typing 'd' then \<ENTER>, will choose defaults, which is a game against the current best version of the Guerilla engine. You will start as white, Guerilla as white. After each game, opponents will swap colors
-  - Typing 'c' then \<ENTER>, will let you choose the players. Player 1 (first inputted) will start as white. The terminal will prompt you to input the following:   
-    - Player name (i.e. Donkey Kong)
-    - Player type ['human', 'guerilla', 'Stockfish' (if installed), 'Sunfish' (if installed)]
-    - If guerilla selected, weight file to load from. 'd' will default to the best current version of guerilla
+  - `pip install --user psutil`
 
 ### How to Train
 1. Go to guerilla directory (outer guerilla directory)
@@ -85,3 +70,4 @@ Licensed under MIT license. Refer to [LICENSE.md](LICENSE.md).
 ## Authors
   - Miguel Aroca-Ouellette: mig_ao[at]live[dot]com
   - Stephane Aroca-Ouellette: stephanearocaouellette[at]gmail[dot].com
+  - Google LLC

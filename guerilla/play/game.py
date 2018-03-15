@@ -54,7 +54,8 @@ class Game:
 
         # Start game
         while not self.board.is_game_over(claim_draw=True) and moves_left != 0:
-            Game.pretty_print_board(self.board)
+            if verbose:
+                Game.pretty_print_board(self.board)
 
             # Get move
             st = time.time()
@@ -72,7 +73,8 @@ class Game:
                 print "Error: Move is not legal"
                 move = self.players[curr_player].get_move(self.board)
             self.board.push(move)
-            print "%s played %s" % (self.players[curr_player].name, move)
+            if verbose:
+                print "%s played %s" % (self.players[curr_player].name, move)
 
             if game_pgn is not None:
                 game_pgn.add_main_variation(move)

@@ -1,24 +1,20 @@
 import math
-from operator import add
 import os
 import pickle
-import random
 import sys
 import time
 import warnings
 
-import chess
 import chess.pgn
 import numpy as np
 import ruamel.yaml
 from pkg_resources import resource_filename
 
-import guerilla.data_handler as dh
 from guerilla.play.game import Game
 from guerilla.players import *
 import guerilla.train.chess_game_parser as cgp
 import guerilla.train.stockfish_eval as sf
-from guerilla.train.sts import eval_sts, sts_strat_files
+from guerilla.train.sts import eval_sts
 
 
 class Teacher:
@@ -111,11 +107,12 @@ class Teacher:
 
         self.loss_fn = self.nn.mae_loss(self.hp['BATCH_SIZE'])
         self.training_mode = bootstrap_training_mode
-        self.train_step, self.global_step = self.nn.init_training(self.training_mode, learning_rate=self.hp['LEARNING_RATE'],
-                                                reg_const=self.hp['REGULARIZATION_CONST'],
-                                                loss_fn=self.loss_fn,
-                                                batch_size=self.hp['BATCH_SIZE'],
-                                                decay_rate=self.hp['DECAY_RATE'])
+        self.train_step, self.global_step = self.nn.init_training(self.training_mode,
+                                                                  learning_rate=self.hp['LEARNING_RATE'],
+                                                                  reg_const=self.hp['REGULARIZATION_CONST'],
+                                                                  loss_fn=self.loss_fn,
+                                                                  batch_size=self.hp['BATCH_SIZE'],
+                                                                  decay_rate=self.hp['DECAY_RATE'])
 
         if self.verbose:
             print "Bootstrap training neural net using %s." % self.training_mode
@@ -131,7 +128,6 @@ class Teacher:
         if self.td_training_mode == 'adadelta' and self.hp['TD_LRN_RATE'] != 1.0:
             warnings.warn(
                 "TD Training mode is adadelta and initial learning rate is %f != 1.0" % self.hp['TD_LRN_RATE'])
-
 
         # Self-play parameters
         self.gp_num = 1  # The number of games to play against itself
@@ -152,9 +148,10 @@ class Teacher:
                                                        and self.guerilla.nn.hp['USE_CONV'])
                                                   else '',
                                                   str(self.nn.hp['NUM_FC']))
-####################################
-### RUNNING AND RESUMING METHODS ###
-####################################
+
+    ####################################
+    ### RUNNING AND RESUMING METHODS ###
+    ####################################
 
     def run(self, actions, training_time=None):
         """
@@ -308,9 +305,9 @@ class Teacher:
 
         return fens, true_values
 
-####################################
-### HELPERS ###
-####################################
+    ####################################
+    ### HELPERS ###
+    ####################################
 
     def _set_hyper_params_from_file(self, file):
         """
@@ -364,9 +361,9 @@ class Teacher:
         """
         self.hp.update(hyper_parameters)
 
-########################
-### SAVE/LOAD/RESUME ###
-########################
+    ########################
+    ### SAVE/LOAD/RESUME ###
+    ########################
 
     def save_state(self, state, filename="state.p", is_checkpoint=False):
         """
@@ -478,7 +475,6 @@ class Teacher:
             self.td_grad_acc = state['training']['grad_acc']
             self.td_param_acc = state['training']['param_acc']
 
-
         # Load STS evaluation parameters
         self.sts_on = state['sts_on']
         self.sts_interval = state['sts_interval']
@@ -575,9 +571,9 @@ class Teacher:
         """
         return self.checkpoint_interval is not None and time.time() - self.prev_checkpoint >= self.checkpoint_interval
 
-##################################
-### BOOTSTRAP TRAINING METHODS ###
-##################################
+    ##################################
+    ### BOOTSTRAP TRAINING METHODS ###
+    ##################################
 
     def set_bootstrap_params(self, num_bootstrap=None, use_check_pre=True):
         self.num_bootstrap = num_bootstrap
@@ -777,7 +773,6 @@ class Teacher:
             # Get batch loss
             error += self.nn.sess.run(self.loss_fn, feed_dict=_feed_dict) / num_batches
 
-
         return error
 
     def is_converged(self, loss):
@@ -802,9 +797,9 @@ class Teacher:
 
         return True
 
-################################
-### TD-LEAF TRAINING METHODS ###
-################################
+    ################################
+    ### TD-LEAF TRAINING METHODS ###
+    ################################
 
     def set_td_params(self, num_end=None, num_full=None, randomize=None, pgn_folder=None,
                       end_length=None, full_length=None):
@@ -936,6 +931,7 @@ class Teacher:
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
                 original_depth = self.guerilla.search.max_depth
                 self.guerilla.search.max_depth = self.sts_depth
+                self.guerilla.search.reset()
                 sts_scores.append(eval_sts(self.guerilla, mode=self.sts_mode)[0])
                 self.guerilla.search.max_depth = original_depth
                 if self.verbose:
@@ -1043,6 +1039,14 @@ class Teacher:
         game_info = [{'value': 0, 'gradient': 0, 'move': None, 'leaf_board': None}
                      for _ in range(num_boards)]
 
+        if restrict_td and self.use_target:
+            #   Explanation: The move and score are fetched during search when using the target network.
+            #       This move is then used by restrict TD to minimize blunders when a bad move by the opponent is not
+            #       predicted (i.e. the bad move was not intentionally forced). This could potentially causes issues
+            #       because the move used to check for prediction comes from the target network, but the gameplay
+            #       situation it is compared against comes from the gameplay network.
+            warnings.warn("Restrict TD + Target network may have unexpected behaviour! See comment for explanation.")
+
         if not leaf and restrict_td:
             raise ValueError("Invalid td_leaf input combination! If no_leaf is True then restrict_td must be False.")
 
@@ -1064,7 +1068,7 @@ class Teacher:
             self.nn.set_all_weights(self.target_weights)
 
             # clear cache
-            self.guerilla.search.clear_cache()
+            self.guerilla.search.reset()
 
         # Pre-calculate leaf value (J_d(x,w)) of search applied to each board
         # Get new board state from leaf
@@ -1078,7 +1082,6 @@ class Teacher:
                 self.guerilla.search.max_depth = 0
 
             # NOTE: Cache gets cleared when weights are updated
-            # TODO: properly handle move in 'restrict_td' when target network is being used
             value, move, leaf_board = self.guerilla.search.run(chess.Board(root_board), reset=False)
             game_info[i]['move'] = move
             game_info[i]['leaf_board'] = leaf_board
@@ -1101,7 +1104,7 @@ class Teacher:
             self.nn.set_all_weights(gameplay_weights)
 
             # clear cache
-            self.guerilla.search.clear_cache()
+            self.guerilla.search.reset()
 
         for i, leaf_board in enumerate(leaf_boards):
             # Get gradient of prediction on leaf board
@@ -1138,7 +1141,7 @@ class Teacher:
                 dt = game_info[j + step_size]['value'] - game_info[j]['value']
 
                 if force_divergence:
-                    dt *= 1 + np.exp(-(game_info[j + step_size]['value']**2)/(2*(500**2)))
+                    dt *= 1 + np.exp(-(game_info[j + step_size]['value'] ** 2) / (2 * (500 ** 2)))
 
                 if restrict_td:
                     for i in range(step_size):
@@ -1184,9 +1187,9 @@ class Teacher:
                                        + new_weights[w] * (self.target_learn_rate) for w in
                                        range(len(self.target_weights))]
 
-#################################
-### GAMEPLAY TRAINING METHODS ###
-#################################
+    #################################
+    ### GAMEPLAY TRAINING METHODS ###
+    #################################
 
     def set_gp_params(self, num_gameplay=None, max_length=None, opponent=None, target_learn_rate=None):
         """
@@ -1199,8 +1202,9 @@ class Teacher:
                 opponent [Player or None]
                     The opponent to play when generating the gameplay for training. By default the opponent is the
                     version of Guerilla currently being trained (self.guerilla).
+                target_learn_rate [Float]
+                    Learning rate for target network.
         """
-        # TODO: Document
 
         if num_gameplay:
             self.gp_num = num_gameplay
@@ -1276,7 +1280,7 @@ class Teacher:
                 players[guerilla_player] = self.guerilla
                 opponent_player = 'w' if guerilla_player == 'b' else 'b'
                 players[opponent_player] = self.opponent
-                game = Game(players, use_gui=False) #TODO: REmove
+                game = Game(players)
                 game.set_board(fen)
 
                 game_fens, _ = game.play(dh.strip_fen(fen, keep_idxs=1), moves_left=max_len, verbose=False)
@@ -1292,12 +1296,13 @@ class Teacher:
             # Send game for TD-leaf training
             if self.verbose:
                 print "Training on %d boards (%d halfmoves)..." % (len(game_fens), len(game_fens) - 1)
-            self.td_leaf(game_fens, leaf=True, restrict_td=True)
+            self.td_leaf(game_fens, leaf=True, restrict_td=False)
 
             # Evaluate on STS if necessary
             if self.sts_on and ((i + 1) % self.sts_interval == 0):
                 original_depth = self.guerilla.search.max_depth
                 self.guerilla.search.max_depth = self.sts_depth
+                self.guerilla.search.reset()
                 sts_scores.append(eval_sts(self.guerilla, mode=self.sts_mode)[0])
                 self.guerilla.search.max_depth = original_depth
                 print "[Games Played: %d] STS Result: %s" % (i + 1, str(sts_scores[-1]))
@@ -1356,15 +1361,13 @@ def main():
     if run_time == 0:
         run_time = None
 
-    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 3}) as g, \
+    with Guerilla('Harambe', search_type='minimax', search_params={'max_depth': 2}) as g, \
             Stockfish('test', time_limit=1) as sf_player:
         t = Teacher(g, bootstrap_training_mode='adadelta', td_training_mode='adadelta')
-        # g.search.max_depth = 1
-        # print eval_sts(g) # [4414], 4378,4319,4381,4408
-        # g.search.max_depth = 2
-        t.set_bootstrap_params(num_bootstrap=3000000, use_check_pre=True)
+
+        t.set_bootstrap_params(num_bootstrap=5000000, use_check_pre=True)
         t.set_td_params(num_end=100, num_full=1000, randomize=False, end_length=5, full_length=12)
-        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player)
+        t.set_gp_params(num_gameplay=10000, max_length=3, opponent=sf_player, target_learn_rate=1e-4)
 
         # Gameplay STS aparams
         t.sts_on = True
@@ -1372,8 +1375,8 @@ def main():
         t.sts_depth = 2
 
         # t.checkpoint_interval = None
-        t.run(['train_bootstrap'], training_time=0.001 * 3600)
-        # print eval_sts(g)
+        t.run(['train_bootstrap'], training_time=11*3600)
+        print eval_sts(g)
 
 
 if __name__ == '__main__':

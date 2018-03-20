@@ -491,11 +491,20 @@ class NeuralNet:
                                     'conv2_' + str(i))
                 conv3 = self.conv2d(conv2, 2 * self.hp['NUM_FEAT'], 4 * self.hp['NUM_FEAT'], [3, 3],
                                     'conv3_' + str(i))
-                conv4 = self.conv2d(conv3, 4 * self.hp['NUM_FEAT'], 4 * self.hp['NUM_FEAT'], [3, 3],
-                                    'conv4_' + str(i))
 
-                mid_output.append(tf.reshape(conv4, [batch_size, 64 * 4 * self.hp['NUM_FEAT']]))
+                mid_output.append(tf.reshape(conv3, [batch_size, 64 * 4 * self.hp['NUM_FEAT']]))
                 num_mid_nodes += 64 * 4 * self.hp['NUM_FEAT']
+
+                # Also add non convolved tower
+                input_shape = [batch_size, np.prod(input_size[0])]
+                input_tensor = tf.reshape(self.input_data_placeholders[i], input_shape)
+                num_hidden_tower = int(self.hp['NUM_HIDDEN'] * input_size[1])
+                l1 = self.fc_layer(input_tensor, np.prod(input_size[0]), num_hidden_tower, "l1_mid_" + str(i))
+                l2 = self.fc_layer(l1, num_hidden_tower, num_hidden_tower, "l2_mid_" + str(i))
+                l3 = self.fc_layer(l2, num_hidden_tower, num_hidden_tower, "l3_mid_" + str(i))
+
+                mid_output.append(tf.reshape(l3, [batch_size, int(self.hp['NUM_HIDDEN'] * input_size[1])]))
+                num_mid_nodes += self.hp['NUM_HIDDEN'] * input_size[1]
 
             else:
                 input_shape = [batch_size, np.prod(input_size[0])]
@@ -504,9 +513,8 @@ class NeuralNet:
                 l1 = self.fc_layer(input_tensor, np.prod(input_size[0]), num_hidden_tower, "layer1_" + str(i))
                 l2 = self.fc_layer(l1, num_hidden_tower, num_hidden_tower, "layer2_" + str(i))
                 l3 = self.fc_layer(l2, num_hidden_tower, num_hidden_tower, "layer3_" + str(i))
-                l4 = self.fc_layer(l3, num_hidden_tower, num_hidden_tower, "layer4_" + str(i))
 
-                mid_output.append(tf.reshape(l4, [batch_size, int(self.hp['NUM_HIDDEN'] * input_size[1])]))
+                mid_output.append(tf.reshape(l3, [batch_size, int(self.hp['NUM_HIDDEN'] * input_size[1])]))
                 num_mid_nodes += self.hp['NUM_HIDDEN'] * input_size[1]
 
 

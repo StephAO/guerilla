@@ -302,7 +302,7 @@ class NeuralNet:
 
     def conv2d(self, input_tensor, num_in_feat_maps, num_out_feat_maps, kernel_size,
                layer_name, stride=[1, 1], padding='SAME', use_xavier=False,
-               stddev=1e-3, activation_fn=tf.nn.relu, batch_norm=False,
+               activation_fn=tf.nn.relu, batch_norm=False,
                batch_norm_decay=None, is_training=None):
         """
         2D convolution with non-linear operation.
@@ -323,7 +323,7 @@ class NeuralNet:
         Returns:
             Variable tensor
         """
-        with tf.variable_scope(layer_name) as sc:
+        with tf.variable_scope(layer_name):
             kernel_h, kernel_w = kernel_size
             kernel_shape = [kernel_h, kernel_w, num_in_feat_maps, num_out_feat_maps]
             weights = self.weight_variable(layer_name + "_weights", shape=kernel_shape)
@@ -489,30 +489,33 @@ class NeuralNet:
                                     'conv1_' + str(i))
                 conv2 = self.conv2d(conv1, self.hp['NUM_FEAT'], 2 * self.hp['NUM_FEAT'], [3, 3],
                                     'conv2_' + str(i))
-                conv2 = self.conv2d(conv2, 2 * self.hp['NUM_FEAT'], 4 * self.hp['NUM_FEAT'], [3, 3],
+                conv3 = self.conv2d(conv2, 2 * self.hp['NUM_FEAT'], 4 * self.hp['NUM_FEAT'], [3, 3],
                                     'conv3_' + str(i))
 
-                mid_output.append(tf.reshape(conv2, [batch_size, 64 * 4 * self.hp['NUM_FEAT']]))
+                mid_output.append(tf.reshape(conv3, [batch_size, 64 * 4 * self.hp['NUM_FEAT']]))
                 num_mid_nodes += 64 * 4 * self.hp['NUM_FEAT']
 
             else:
                 input_shape = [batch_size, np.prod(input_size[0])]
                 input_tensor = tf.reshape(self.input_data_placeholders[i], input_shape)
-                l1 = self.fc_layer(input_tensor, np.prod(input_size[0]), int(self.hp['NUM_HIDDEN'] * input_size[1]),
-                                   "layer1_" + str(i))
+                num_hidden_tower = int(self.hp['NUM_HIDDEN'] * input_size[1])
+                l1 = self.fc_layer(input_tensor, np.prod(input_size[0]), num_hidden_tower, "layer1_" + str(i))
+                l2 = self.fc_layer(l1, num_hidden_tower, num_hidden_tower, "layer2_" + str(i))
+                l3 = self.fc_layer(l2, num_hidden_tower, num_hidden_tower, "layer3_" + str(i))
 
-                mid_output.append(tf.reshape(l1, [batch_size, int(self.hp['NUM_HIDDEN'] * input_size[1])]))
+                mid_output.append(tf.reshape(l3, [batch_size, int(self.hp['NUM_HIDDEN'] * input_size[1])]))
                 num_mid_nodes += self.hp['NUM_HIDDEN'] * input_size[1]
 
 
         # output of first layer
-        mid_output = tf.concat(values=mid_output, axis=1)
+        layer_input = tf.concat(values=mid_output, axis=1)
         # output of fully connected layers
-        fc1 = self.fc_layer(mid_output, num_mid_nodes, self.hp['NUM_HIDDEN'], "fc1")
-        fc2 = self.fc_layer(fc1, self.hp['NUM_HIDDEN'], self.hp['NUM_HIDDEN'] / 2 , "fc2")
+        for i in range(self.hp['NUM_FC']):
+            layer_input = self.fc_layer(layer_input, num_mid_nodes if i == 0 else self.hp['NUM_HIDDEN'],
+                                        self.hp['NUM_HIDDEN'], "fc_{}".format(i))
 
         # final_output
-        self.pred_value = self.fc_layer(fc2, self.hp['NUM_HIDDEN'] / 2, 1, "predicted_value", activation_fn=None)
+        self.pred_value = self.fc_layer(layer_input, self.hp['NUM_HIDDEN'], 1, "predicted_value", activation_fn=None)
 
     def evaluate(self, fen):
         """

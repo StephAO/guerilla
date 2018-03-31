@@ -427,11 +427,10 @@ class Teacher:
         state['sts_mode'] = self.sts_mode
         state['sts_depth'] = self.sts_depth
 
-        # Save training variables
-        train_var_path = resource_filename('guerilla', 'data/train_checkpoint/in_training_vars.vars')
-        train_var_file = self.nn.save_training_vars(train_var_path)
-        if train_var_file:
-            state['train_var_file'] = train_var_file
+        # Save graph variables
+        graph_var_path = resource_filename('guerilla', 'data/train_checkpoint/in_training_vars.vars')
+        graph_var_file = self.nn.save_graph_vars(graph_var_path)
+        state['graph_var_file'] = graph_var_file
 
         pickle_path = resource_filename('guerilla', 'data/train_checkpoint/' + filename)
         self.nn.save_weight_values(_filename='in_training_weight_values.p')
@@ -481,9 +480,8 @@ class Teacher:
         self.sts_mode = state['sts_mode']
         self.sts_depth = state['sts_depth']
 
-        # Load training variables
-        if 'train_var_file' in state:
-            self.nn.load_training_vars(state['train_var_file'])
+        # Load all graph variables
+        self.nn.load_graph_vars(state['graph_var_file'])
 
         # Load target weigths
         if self.use_target:
@@ -495,7 +493,6 @@ class Teacher:
 
         self.curr_action_idx = state['curr_action_idx']
         self.actions = state['actions'] + self.actions[1:]
-        self.nn.load_weight_values(_filename='in_training_weight_values.p')
 
         return state
 

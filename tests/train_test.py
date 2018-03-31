@@ -489,7 +489,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}, seed=seed) as g:
             g.search.max_depth = 1
-            t = Teacher(g, test=True, verbose=verbose, hp=hp, seed=seed)
+            t = Teacher(g, test=True, verbose=verbose, hp=hp, bootstrap_training_mode='adadelta', seed=seed)
 
             t.set_bootstrap_params(num_bootstrap=50)  # 488037
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
@@ -505,8 +505,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
             weights = g.nn.get_weight_values()
             target_weights = {'all_weights': t.target_weights}
 
-            # Save graph training variables
-            train_vars = g.nn.sess.run(g.nn.get_training_vars())
+            # Save graph trainable variables
+            train_vars = g.nn.sess.run(g.nn.get_trainable_vars())
 
         # Reset graph
         tf.reset_default_graph()
@@ -514,7 +514,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run resume
         with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}) as g:
-            t = Teacher(g, test=True, verbose=verbose, hp=hp)
+            t = Teacher(g, test=True, verbose=verbose, hp=hp, bootstrap_training_mode='adadelta')
 
             # Run
             t.run(['load_and_resume'])
@@ -522,8 +522,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
             # Save final weight data
             final_w_lr = g.nn.get_weight_values()
 
-            # Save final training variables
-            final_train_vars_lr = g.nn.sess.run(g.nn.get_training_vars())
+            # Save final trainable variables
+            final_train_vars_lr = g.nn.sess.run(g.nn.get_trainable_vars())
 
             # Save loaded current action
             state = t.load_state()  # resets weights and training vars to start of resume values
@@ -534,8 +534,8 @@ def load_and_resume_test(nn_input_type, verbose=False):
             new_weights = g.nn.get_weight_values()
             new_target_weights = {'all_weights': t.target_weights}
 
-            # Save new training variables
-            new_train_vars = g.nn.sess.run(g.nn.get_training_vars())
+            # Save new trainable variables
+            new_train_vars = g.nn.sess.run(g.nn.get_trainable_vars())
 
         with open(loss_path + 'loss_test.p', 'r') as f:
             loss_data_lr = pickle.load(f)
@@ -543,8 +543,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
         # Run same test but without pausing
         with Guerilla('Harambe', verbose=verbose, nn_params={'NN_INPUT_TYPE': nn_input_type},
                       search_params={'max_depth': 1}, seed=seed) as g:
-            t = Teacher(g, test=True, verbose=verbose, hp=hp, seed=seed)
-            t.set_bootstrap_params(num_bootstrap=50)
+            t = Teacher(g, test=True, verbose=verbose, hp=hp, seed=seed, bootstrap_training_mode='adadelta')
 
             t.set_bootstrap_params(num_bootstrap=50)
             t.set_td_params(num_end=3, num_full=3, randomize=False, end_length=2, full_length=2)
@@ -557,7 +556,7 @@ def load_and_resume_test(nn_input_type, verbose=False):
             final_w = g.nn.get_weight_values()
 
             # Save graph training variables
-            final_train_vars = g.nn.sess.run(g.nn.get_training_vars())
+            final_train_vars = g.nn.sess.run(g.nn.get_trainable_vars())
 
         with open(loss_path + 'loss_test.p', 'r') as f:
             loss_data = pickle.load(f)

@@ -140,6 +140,12 @@ class NeuralNet:
         # Blank training variables. Call 'init_training' to initialize them
         self.train_optimizer = None
 
+    def _init_non_weight_bias_vars(self):
+        """
+        Initializes non weight/bias variables.
+        """
+        self.sess.run(tf.variables_initializer(set(tf.global_variables()) - set(self.all_weights_biases)))
+
     def init_graph(self):
         """
         Initializes the weights and assignment ops of the neural net, either from a file or a truncated Gaussian.
@@ -150,8 +156,8 @@ class NeuralNet:
         # initialize or load variables
         if self.load_file:
             self.load_weight_values(self.load_file)
-            # Initialize un-initialized variables (non-weight variables)
-            self.sess.run(tf.variables_initializer(set(tf.global_variables()) - set(self.all_weights_biases)))
+            # Initialize un-initialized variables (non-weight/bias variables)
+            self._init_non_weight_bias_vars()
         else:
             if self.verbose:
                 print "Initializing variables from a normal distribution."
@@ -200,13 +206,12 @@ class NeuralNet:
         elif training_mode == 'gradient_descent':
             self.train_optimizer = tf.train.GradientDescentOptimizer(learning_rate)
         train_step = self.train_optimizer.minimize(loss_fn + regularization, global_step=self.global_step)
-        self.train_saver = tf.train.Saver(
-            var_list=self.get_training_vars())  # TODO: Combine var saving with "in_training" weight saving
 
-        # initialize training variables if necessary
-        train_vars = self.get_training_vars()
-        if train_vars is not None:
-            self.sess.run(tf.variables_initializer(train_vars.values()))
+        # initialize non-weight/bias variables if necessary
+        self._init_non_weight_bias_vars()
+
+        # Create saver
+        self.train_saver = tf.train.Saver()
 
         return train_step, self.global_step
 
@@ -636,25 +641,17 @@ class NeuralNet:
 
         return weight_values
 
-    def get_training_vars(self):
+    def get_trainable_vars(self):
         """
-        Returns the training variables associated with the current training mode.
-        Returns None if there are no associated variables.
+        Returns all trainable variables.
         Output:
-            var_dict [Dict] or [None]:
+            var_dict [Dict]:
                 Dictionary of variables.
         """
         var_dict = dict()
         train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        slot_names = self.train_optimizer.get_slot_names()  # Result should just be accumulator
-        for name in slot_names:
-            for var in train_vars:
-                val = self.train_optimizer.get_slot(var, name)
-                if val:
-                    var_dict[val.name] = val
-
-        if var_dict == {}:
-            return None
+        for var in train_vars:
+            var_dict[var.name] = var
 
         return var_dict
 
@@ -662,9 +659,9 @@ class NeuralNet:
 ### SAVE/LOAD ###
 #################
 
-    def save_training_vars(self, path):
+    def save_graph_vars(self, path):
         """
-        Saves the training variables associated with the current training mode to a file in path.
+        Saves all graph variables to a  file in the specified path.
         Returns the file name.
         Input:
             path [String]:
@@ -673,34 +670,29 @@ class NeuralNet:
             filename [String]:
                 Filename specifying where the training variables were saved.
         """
-        filename = None
-        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
-            return None
-        else:
-            filename = self.train_saver.save(self.sess, path)
+        filename = self.train_saver.save(self.sess, path)
 
         if self.verbose:
             print "Saved training vars to %s" % filename
+
         return filename
 
-    def load_training_vars(self, filename):
+    def load_graph_vars(self, filename):
         """
-        Loads the training variable associated with the current training mode.
+        Loads graph variables from the specified file.
         Input:
             filename [String]:
                 Filename where training variables are stored.
         """
-        if isinstance(self.train_optimizer, tf.train.GradientDescentOptimizer):
-            return None
-        else:
-            self.train_saver.restore(self.sess, filename)
+
+        self.train_saver.restore(self.sess, filename)
 
         if self.verbose:
             print "Loaded training vars from %s " % filename
 
     def load_weight_values(self, _filename='weight_values.p'):
         """
-            Sets all variables to values loaded from a file
+            Sets all weight and bias variables to values loaded from a file.
             Input:
                 filename[String]:
                     Name of the file to load weight values from
@@ -720,7 +712,7 @@ class NeuralNet:
 
     def save_weight_values(self, _filename='weight_values.p'):
         """
-            Saves all variable values a pickle file
+            Saves all weight variable values a pickle file
             Input:
                 filename[String]:
                     Name of the file to save weight values to

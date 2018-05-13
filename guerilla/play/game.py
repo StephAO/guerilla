@@ -169,13 +169,12 @@ class Game:
 
 
 def main():
-    num_inputs = len(sys.argv)
     choose_players = raw_input("Choose players (c) or use defaults (d): ")
     players = {'w': None, 'b': None}
     if choose_players == 'd':
 
-        players['w'] = Stockfish('test', time_limit=1)
-        players['b'] = Guerilla('Harambe', search_type='minimax', load_file='7034.p', search_params={'max_depth': 2})
+        players['w'] = Human('Human')
+        players['b'] = Guerilla('Harambe', search_type='iterativedeepening', load_file='default.p', search_params={'time_limit': 1})
 
     elif choose_players == 'c':
         for i in ['w', 'b']:

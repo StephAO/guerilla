@@ -1,13 +1,23 @@
 # Guerilla
 
-Guerilla is a deep learning chess engine developed by Miguel and Stephane Aroca-Ouellette. More details on the project can be found at [here](https://unarresteddev.wordpress.com/2017/02/23/guerilla-a-chess-engine-part-1/).
-  
+Guerilla is a deep learning chess engine developed by Miguel and Stephane Aroca-Ouellette. More details on the project can be found in the following blog posts:
+
+ [**PART 1**](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-part-1/)
+
+ [**PART 2**](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-part-2/)
+
+ [**POST-MORTEM**](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-post-mortem/)
+
 The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructions below are for linux systems. If someone gets it running on a different operating system successfully, a pull request with the instructions would be appreciated. 
 
 ## To Play
 ### Install
 - Install Tensorflow 1.x.x (https://www.tensorflow.org/install/)
-- run `pip install --user Guerilla`
+- Install Pip package: `pip install --user Guerilla`
+- Due to Pip package size limits, the version of Guerilla provided by Pip is weaker than the one in this repo. To make it as strong simply copy over the network weight and hyperparameters:
+    - Extract weights: `tar -xzvf guerilla/data/weights/default.tar.gz`
+    - Copy over weights: `mv guerilla/data/weights/default.p ~/.local/lib/python2.7/site-packages/guerilla/data/weights/default.p`
+    - Copy over hyperparameters: `mv guerilla/data/hyper_params/neural_net/default.yaml ~/.local/lib/python2.7/site-packages/guerilla/data/hyper_params/neural_net/default.yaml`
 ### Play
 - Add Guerilla to your favorite UCI Compatible chess GUI (after the pip installation, the command for the GUI to run Guerilla is `Guerilla`). 
 - Currenlty only supports time limit and depth limit (depth 4 ~= 1 minutes per move).

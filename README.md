@@ -1,12 +1,6 @@
 # Guerilla
 
-Guerilla is a deep learning chess engine developed by Miguel and Stephane Aroca-Ouellette. More details on the project can be found in the following blog posts:
-
- [**PART 1**](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-part-1/)
-
- [**PART 2**](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-part-2/)
-
- [**POST-MORTEM**](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-post-mortem/)
+Guerilla is a deep learning chess engine developed by Miguel and Stephane Aroca-Ouellette. More details on the project can be found in the following blog posts: [Part 1](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-part-1/), [Part 2](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-part-2/), and [Post-Mortem](https://unarresteddev.wordpress.com/guerilla-a-chess-engine-post-mortem/).
 
 The project was developed in Python 2.7 on Linux systems (Ubuntu). All instructions below are for linux systems. If someone gets it running on a different operating system successfully, a pull request with the instructions would be appreciated. 
 
